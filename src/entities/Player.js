@@ -35,6 +35,7 @@ export class Player {
     this.scene = scene;
     this.gm = gameManager;
     this.input = inputManager;
+    this.cameraController = null; // Set via setCameraController()
 
     this.state = STATES.IDLE;
     this.stateTimer = 0;
@@ -356,13 +357,16 @@ export class Player {
     this.stateTimer = 0;
   }
 
+  setCameraController(cameraController) {
+    this.cameraController = cameraController;
+  }
+
   _getCameraYaw() {
-    // Get from camera controller via scene traversal
-    const cam = this.scene.getObjectByProperty('type', 'PerspectiveCamera');
-    if (!cam) return 0;
-    const dir = new THREE.Vector3();
-    cam.getWorldDirection(dir);
-    return Math.atan2(-dir.x, -dir.z);
+    // Get yaw directly from camera controller
+    if (this.cameraController) {
+      return this.cameraController.yaw;
+    }
+    return 0;
   }
 
   // Called when respawning

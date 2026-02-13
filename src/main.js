@@ -34,6 +34,7 @@ const world = new World(scene);
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
 const cameraController = new CameraController(camera, player.mesh, inputManager);
+player.setCameraController(cameraController); // Wire camera controller for movement direction
 const enemyManager = new EnemyManager(scene, gameManager, player);
 
 // --- Checkpoint ---
