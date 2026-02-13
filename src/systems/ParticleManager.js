@@ -13,12 +13,16 @@ export class ParticleManager {
     this.particles = [];
     this.slashTrails = [];
     this.embers = [];
+    this.dustMotes = [];
     
     // Shared geometries and materials for performance
     this._initSharedAssets();
     
     // Start ember system
     this._initEmbers();
+    
+    // Add floating dust motes for atmospheric lighting
+    this._initDustMotes();
   }
 
   _initSharedAssets() {
@@ -116,6 +120,47 @@ export class ParticleManager {
       life: Math.random() * 10,
       maxLife: 8 + Math.random() * 6,
     });
+  }
+
+  _initDustMotes() {
+    // Floating dust particles visible in light shafts
+    // These make light feel tangible and add atmosphere
+    const dustCount = 80;
+    
+    // Dust mote geometry - tiny plane that always faces camera
+    this.dustGeo = new THREE.PlaneGeometry(0.03, 0.03);
+    
+    // Subtle white/gold dust material
+    this.dustMat = new THREE.MeshBasicMaterial({
+      color: 0xffffee,
+      transparent: true,
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    
+    for (let i = 0; i < dustCount; i++) {
+      const mesh = new THREE.Mesh(this.dustGeo, this.dustMat.clone());
+      
+      // Spread throughout playable area
+      mesh.position.set(
+        (Math.random() - 0.5) * 40,
+        0.5 + Math.random() * 5, // Float at various heights
+        (Math.random() - 0.5) * 80 - 20
+      );
+      
+      this.scene.add(mesh);
+      
+      this.dustMotes.push({
+        mesh,
+        baseY: mesh.position.y,
+        driftSpeed: 0.1 + Math.random() * 0.2,
+        driftAmplitude: 0.3 + Math.random() * 0.5,
+        phase: Math.random() * Math.PI * 2,
+        rotateSpeed: (Math.random() - 0.5) * 2,
+      });
+    }
   }
 
   /**
@@ -476,6 +521,24 @@ export class ParticleManager {
         e.maxLife = 8 + Math.random() * 6;
       }
     }
+    
+    // Update dust motes - gentle floating animation
+    const time = Date.now() * 0.001; // Current time in seconds
+    for (const dust of this.dustMotes) {
+      // Gentle vertical bob
+      dust.mesh.position.y = dust.baseY + Math.sin(time * dust.driftSpeed + dust.phase) * dust.driftAmplitude;
+      
+      // Slow horizontal drift
+      dust.mesh.position.x += Math.sin(time * 0.5 + dust.phase) * 0.002;
+      dust.mesh.position.z += Math.cos(time * 0.3 + dust.phase) * 0.002;
+      
+      // Gentle rotation to catch light
+      dust.mesh.rotation.z += dust.rotateSpeed * delta;
+      
+      // Subtle opacity flicker (like dust catching light)
+      const flicker = 0.3 + Math.sin(time * 3 + dust.phase * 5) * 0.15;
+      dust.mesh.material.opacity = flicker;
+    }
   }
 
   /**
@@ -698,5 +761,12 @@ export class ParticleManager {
       e.mesh.material?.dispose();
     });
     this.embers = [];
+    
+    this.dustMotes.forEach(d => {
+      this.scene.remove(d.mesh);
+      d.mesh.geometry?.dispose();
+      d.mesh.material?.dispose();
+    });
+    this.dustMotes = [];
   }
 }
