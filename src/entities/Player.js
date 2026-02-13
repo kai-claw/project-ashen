@@ -576,8 +576,9 @@ export class Player {
     this.mesh.rotation.y = camYaw;
     
     if (this.gm.particleManager) {
-      const attackDir = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
-      this.gm.particleManager.spawnSlashTrail(this.mesh.position.clone(), attackDir, isHeavy);
+      // Slash trail disabled - was creating visual artifacts
+      // const attackDir = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+      // this.gm.particleManager.spawnSlashTrail(this.mesh.position.clone(), attackDir, isHeavy);
     }
     
     this._changeState(isHeavy ? STATES.HEAVY_ATTACKING : STATES.ATTACKING);
