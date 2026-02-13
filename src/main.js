@@ -79,7 +79,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.5;  // Balanced for visibility
+renderer.toneMappingExposure = 2.0;  // Boosted to brighten dark environment
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
@@ -87,8 +87,8 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 // No fog - clean visibility
 scene.fog = null;
-// Dark atmospheric background
-scene.background = new THREE.Color(0x0a0a0f);
+// Lighter background so environment is more visible
+scene.background = new THREE.Color(0x151525);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, 5, 15);
@@ -112,12 +112,12 @@ const composer = new EffectComposer(renderer, renderTarget);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-// Bloom pass - makes emissive materials glow beautifully
+// Bloom pass - very subtle, only for true emissives
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.5,   // strength - subtle but visible
-  0.4,   // radius - soft glow spread
-  0.85   // threshold - only bright/emissive parts bloom
+  0.15,  // strength - minimal bloom
+  0.2,   // radius - tight glow
+  0.95   // threshold - only very bright things bloom
 );
 composer.addPass(bloomPass);
 

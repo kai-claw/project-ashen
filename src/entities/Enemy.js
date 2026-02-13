@@ -12,6 +12,13 @@ const STATES = {
   DEAD: 'dead',
   DORMANT: 'dormant',  // Ambush enemies waiting to be triggered
   RISING: 'rising',    // Ambush enemies emerging from sarcophagus
+  // Boss-specific states
+  BOSS_SLAM: 'boss_slam',         // Greatsword overhead slam
+  BOSS_SWEEP: 'boss_sweep',       // Horizontal sweep
+  BOSS_COMBO: 'boss_combo',       // 3-hit combo
+  BOSS_CHARGE: 'boss_charge',     // Shoulder bash/charge
+  BOSS_GRAB: 'boss_grab',         // Grab attack
+  BOSS_TRANSITION: 'boss_transition', // Phase transition
 };
 
 // Animation name mapping for robot_expressive.glb
@@ -26,6 +33,13 @@ const ENEMY_ANIM_MAP = {
   [STATES.DEAD]: 'Death',
   [STATES.DORMANT]: 'Idle',   // Hidden/inactive
   [STATES.RISING]: 'ThumbsUp', // Rising from sarcophagus (reuse standing animation)
+  // Boss animations (mapped to available animations)
+  [STATES.BOSS_SLAM]: 'Punch',
+  [STATES.BOSS_SWEEP]: 'Punch',
+  [STATES.BOSS_COMBO]: 'Punch',
+  [STATES.BOSS_CHARGE]: 'Running',
+  [STATES.BOSS_GRAB]: 'Punch',
+  [STATES.BOSS_TRANSITION]: 'No',
 };
 
 // Enemy type presets with model info
@@ -159,6 +173,47 @@ export const ENEMY_TYPES = {
     modelScale: 0.45,      // Slightly smaller
     modelTint: 0x8a7a5a,   // Bone-colored tint
     animSpeedMult: 1.4,    // Fast animations
+  },
+  
+  // ========== THE CRYPT LORD - SECOND BOSS ==========
+  // Full boss fight with multi-phase combat
+  CRYPT_LORD: {
+    name: 'The Crypt Lord',
+    health: 600,              // Full boss HP pool
+    damage: 45,               // Phase 1 base damage
+    postureDmg: 35,           // Heavy posture damage
+    moveSpeed: 2.0,           // Phase 1 speed
+    detectionRange: 20,       // Boss arena range
+    attackRange: 3.5,         // Long greatsword reach
+    attackCooldown: 1.8,      // Phase 1 cooldown between attacks
+    attackWindup: 0.8,        // Default windup (varies by attack)
+    attackDuration: 0.3,
+    remnantDrop: 2500,        // Boss-tier reward
+    patrolRadius: 3,
+    bodyColor: 0x1a1a2a,      // Dark blue-black
+    eyeColor: 0xff2222,       // Menacing red eyes
+    canChainAttacks: true,    // Has combos
+    maxChainAttacks: 3,       // 3-hit combo
+    maxPosture: 200,          // Hard to stagger
+    hasShield: false,         // Greatsword only
+    isBoss: true,             // Flag for boss behaviors
+    isElite: true,
+    bossPhase: 1,             // Starts in Phase 1
+    
+    // Attack definitions for Phase 1
+    attacks: {
+      GREATSWORD_SLAM: { damage: 55, postureDmg: 40, windup: 0.8, recovery: 1.5, range: 4.0 },
+      HORIZONTAL_SWEEP: { damage: 45, postureDmg: 35, windup: 0.6, recovery: 1.0, range: 4.5 },
+      THREE_HIT_COMBO: { damages: [35, 35, 50], postureDmg: 25, windup: 0.4, recovery: 2.0, range: 3.5 },
+      SHOULDER_BASH: { damage: 30, postureDmg: 45, windup: 0.5, recovery: 1.2, range: 6.0, isCharge: true },
+      GRAB: { damage: 80, postureDmg: 0, windup: 1.0, recovery: 2.5, range: 2.5, isGrab: true },
+    },
+    
+    // GLTF settings - larger armored model
+    modelPath: 'assets/models/soldier.glb',
+    modelScale: 1.5,          // Large boss model
+    modelTint: 0x2a1a3a,      // Purple-black undead tint
+    animSpeedMult: 0.85,      // Slower, more deliberate
   },
 };
 

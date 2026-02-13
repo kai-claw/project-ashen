@@ -1074,7 +1074,7 @@ export class World {
       { pos: [0, 0.02, -25], size: 4, color: 0x6666cc },   // Main hall center
       { pos: [0, 0.02, -55], size: 3, color: 0xcc8833 },   // Altar
       { pos: [0, 0.02, -95], size: 5, color: 0xcc3333 },   // Boss arena
-      { pos: [0, 0.02, 0], size: 3, color: 0x44aa88 },     // Bonfire area
+      // Bonfire area rune removed - was causing visual artifact
       { pos: [0, 0.02, -42], size: 2.5, color: 0x8866aa }, // Transition hall
       { pos: [0, 0.02, -72], size: 2.5, color: 0x5588cc }, // Crypt area
     ];

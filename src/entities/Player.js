@@ -155,11 +155,27 @@ export class Player {
       this.gltfModel.position.y = 0;
       this.gltfModel.rotation.y = Math.PI; // Face forward
 
-      // Set up materials for damage flash
+      // Set up materials for damage flash and tone down brightness
       this.gltfModel.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          // Tone down the model's brightness significantly to match dark environment
+          if (child.material) {
+            // Darken base color substantially
+            if (child.material.color) {
+              child.material.color.multiplyScalar(0.35);  // Much darker
+            }
+            // Ensure no accidental emission
+            if (child.material.emissive) {
+              child.material.emissive.setHex(0x000000);
+              child.material.emissiveIntensity = 0;
+            }
+            // Reduce metalness to prevent excessive reflections
+            if (child.material.metalness !== undefined) {
+              child.material.metalness = Math.min(0.3, child.material.metalness);
+            }
+          }
           // Store original material for flash effects
           child.userData.originalMaterial = child.material.clone();
         }
