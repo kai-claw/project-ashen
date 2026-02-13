@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    // Auto-click after load
+    window.onload = function() {
+      setTimeout(function() {
+        document.body.click();
+        var canvas = document.querySelector('canvas');
+        if (canvas) {
+          canvas.click();
+          canvas.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+        }
+      }, 2000);
+    };
+  </script>
+</head>
+<body>
+  <iframe src="https://kai-claw.github.io/project-ashen/" style="width:100%;height:100vh;border:none;"></iframe>
+</body>
+</html>

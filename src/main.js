@@ -153,6 +153,7 @@ itemManager.initItems(world.getItemSpawns());
 
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
+player.setWorld(world); // Enable collision detection
 const cameraController = new CameraController(camera, player.mesh, inputManager);
 player.setCameraController(cameraController);
 

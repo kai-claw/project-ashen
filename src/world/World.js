@@ -3,7 +3,9 @@ import * as THREE from 'three';
 export class World {
   constructor(scene) {
     this.scene = scene;
-    this.colliders = []; // For collision detection
+    this.colliders = []; // For collision detection (walls, pillars)
+    this.floorZones = []; // Floor collision zones (walkable areas)
+    this.stairs = []; // Stair/ramp zones for Y transitions
     this.doors = []; // Locked doors
     this.hiddenWalls = []; // Illusory walls
     this.ladders = []; // Climbable ladders
@@ -13,8 +15,196 @@ export class World {
     this._createSkybox();
     this._createCathedral();
     this._createUndergroundCrypt(); // NEW: Underground level
+    this._createFloorCollisionZones(); // Floor and stair collision
     this._createLighting();
     this._createEnvironmentProps();
+  }
+  
+  /**
+   * Create floor collision zones for walkable areas
+   * These define where the player can walk and at what Y level
+   */
+  _createFloorCollisionZones() {
+    const CRYPT_Y = -3;
+    
+    // === CATHEDRAL FLOOR ZONES (Y=0) ===
+    // Entrance courtyard
+    this._addFloorZone(0, 0, 16, 16, 0);
+    // Main hall
+    this._addFloorZone(0, -30, 20, 50, 0);
+    // Left chapel
+    this._addFloorZone(-18, -25, 14, 16, 0);
+    // Right chapel
+    this._addFloorZone(18, -25, 14, 16, 0);
+    // Right chapel secret room
+    this._addFloorZone(21, -38, 8, 10, 0);
+    // Altar room
+    this._addFloorZone(0, -55, 18, 12, 0);
+    // Old crypt area
+    this._addFloorZone(0, -70, 22, 22, 0);
+    // Boss arena
+    this._addFloorZone(0, -95, 26, 20, 0);
+    
+    // === UNDERGROUND CRYPT FLOOR ZONES (Y=-3) ===
+    // Entry Antechamber (circular, approximate as rectangle)
+    this._addFloorZone(0, -25, 14, 14, CRYPT_Y);
+    // West Corridor
+    this._addFloorZone(-12, -33, 6, 18, CRYPT_Y);
+    // Ossuary Chamber
+    this._addFloorZone(-18, -47, 14, 14, CRYPT_Y);
+    // Ritual Chamber (octagonal, approximate)
+    this._addFloorZone(0, -55, 18, 18, CRYPT_Y);
+    // South Corridor
+    this._addFloorZone(0, -70, 6, 22, CRYPT_Y);
+    // Secret Room
+    this._addFloorZone(8, -77, 8, 8, CRYPT_Y);
+    // Shortcut Chamber
+    this._addFloorZone(-6, -78, 10, 10, CRYPT_Y);
+    // Connection from Antechamber to West Corridor
+    this._addFloorZone(-6, -28, 8, 6, CRYPT_Y);
+    // Connection from Ossuary to Ritual Chamber
+    this._addFloorZone(-9, -51, 10, 8, CRYPT_Y);
+    // Connection from Ritual to South Corridor
+    this._addFloorZone(0, -63, 6, 6, CRYPT_Y);
+    // Connection from South Corridor to Shortcut Chamber
+    this._addFloorZone(-3, -76, 8, 6, CRYPT_Y);
+    
+    // === SPIRAL STAIRCASE (ramp from Y=0 to Y=-3) ===
+    this._addStairZone(0, -30, 4, 4, 0, CRYPT_Y);
+  }
+  
+  /**
+   * Add a floor collision zone
+   * @param {number} x - Center X
+   * @param {number} z - Center Z
+   * @param {number} width - Width (X axis)
+   * @param {number} depth - Depth (Z axis)
+   * @param {number} y - Floor Y level
+   */
+  _addFloorZone(x, z, width, depth, y) {
+    this.floorZones.push({
+      minX: x - width / 2,
+      maxX: x + width / 2,
+      minZ: z - depth / 2,
+      maxZ: z + depth / 2,
+      y: y,
+    });
+  }
+  
+  /**
+   * Add a stair/ramp zone for vertical transitions
+   * @param {number} x - Center X
+   * @param {number} z - Center Z
+   * @param {number} width - Width
+   * @param {number} depth - Depth
+   * @param {number} yTop - Top Y level
+   * @param {number} yBottom - Bottom Y level
+   */
+  _addStairZone(x, z, width, depth, yTop, yBottom) {
+    this.stairs.push({
+      minX: x - width / 2,
+      maxX: x + width / 2,
+      minZ: z - depth / 2,
+      maxZ: z + depth / 2,
+      yTop: yTop,
+      yBottom: yBottom,
+      centerZ: z,
+      depth: depth,
+    });
+  }
+  
+  /**
+   * Get the floor Y level at a given XZ position
+   * Used by player for ground collision
+   * @param {number} x - X position
+   * @param {number} z - Z position
+   * @returns {number} - Floor Y level (or 0 if not in any zone)
+   */
+  getFloorY(x, z) {
+    // First check stairs (they take priority for smooth transitions)
+    for (const stair of this.stairs) {
+      if (x >= stair.minX && x <= stair.maxX && 
+          z >= stair.minZ && z <= stair.maxZ) {
+        // Interpolate Y based on Z position within stair
+        const t = (z - stair.minZ) / stair.depth;
+        return THREE.MathUtils.lerp(stair.yTop, stair.yBottom, t);
+      }
+    }
+    
+    // Then check floor zones
+    for (const zone of this.floorZones) {
+      if (x >= zone.minX && x <= zone.maxX && 
+          z >= zone.minZ && z <= zone.maxZ) {
+        return zone.y;
+      }
+    }
+    
+    // Default to Y=0 (cathedral floor)
+    return 0;
+  }
+  
+  /**
+   * Check if a position collides with any wall collider
+   * @param {THREE.Vector3} position - Position to check
+   * @param {number} radius - Collision radius
+   * @returns {THREE.Vector3|null} - Push-out vector if colliding, null otherwise
+   */
+  checkWallCollision(position, radius = 0.4) {
+    const pushOut = new THREE.Vector3();
+    let collided = false;
+    
+    for (const collider of this.colliders) {
+      if (collider.type === 'box' || collider.type === 'door' || collider.type === 'shortcut') {
+        const bounds = collider.bounds;
+        if (!bounds) continue;
+        
+        // Expand bounds by player radius
+        const expanded = bounds.clone();
+        expanded.min.x -= radius;
+        expanded.min.z -= radius;
+        expanded.max.x += radius;
+        expanded.max.z += radius;
+        
+        // Check if position is inside expanded bounds (XZ only for walls)
+        if (position.x > expanded.min.x && position.x < expanded.max.x &&
+            position.z > expanded.min.z && position.z < expanded.max.z &&
+            position.y > bounds.min.y - 1 && position.y < bounds.max.y) {
+          
+          // Calculate push-out direction (shortest path out)
+          const distToMinX = position.x - expanded.min.x;
+          const distToMaxX = expanded.max.x - position.x;
+          const distToMinZ = position.z - expanded.min.z;
+          const distToMaxZ = expanded.max.z - position.z;
+          
+          const minDist = Math.min(distToMinX, distToMaxX, distToMinZ, distToMaxZ);
+          
+          if (minDist === distToMinX) pushOut.x -= distToMinX;
+          else if (minDist === distToMaxX) pushOut.x += distToMaxX;
+          else if (minDist === distToMinZ) pushOut.z -= distToMinZ;
+          else pushOut.z += distToMaxZ;
+          
+          collided = true;
+        }
+      } else if (collider.type === 'cylinder') {
+        // Pillar collision
+        const pillarPos = collider.position;
+        const dx = position.x - pillarPos.x;
+        const dz = position.z - pillarPos.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        const minDist = collider.radius + radius;
+        
+        if (dist < minDist && position.y > pillarPos.y - 4 && position.y < pillarPos.y + 4) {
+          const overlap = minDist - dist;
+          if (dist > 0.001) {
+            pushOut.x += (dx / dist) * overlap;
+            pushOut.z += (dz / dist) * overlap;
+          }
+          collided = true;
+        }
+      }
+    }
+    
+    return collided ? pushOut : null;
   }
   
   _createSkybox() {

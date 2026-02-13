@@ -49,6 +49,7 @@ export class Player {
     this.gm = gameManager;
     this.input = inputManager;
     this.cameraController = null;
+    this.world = null; // Set by GameManager after world is created
 
     this.state = STATES.IDLE;
     this.stateTimer = 0;
@@ -62,6 +63,7 @@ export class Player {
     this.dodgeSpeed = 14;
     this.gravity = -30;
     this.grounded = true;
+    this.collisionRadius = 0.4;
     
     // Movement smoothing
     this.currentMoveVelocity = new THREE.Vector3();
@@ -267,14 +269,42 @@ export class Player {
         break;
     }
 
-    // Gravity
-    if (this.mesh.position.y > 0) {
-      this.velocity.y += this.gravity * delta;
-      this.mesh.position.y += this.velocity.y * delta;
-      if (this.mesh.position.y <= 0) {
-        this.mesh.position.y = 0;
+    // Floor collision and gravity
+    if (this.world) {
+      // Get floor Y at current position
+      const floorY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+      
+      if (this.mesh.position.y > floorY) {
+        // Above floor - apply gravity
+        this.velocity.y += this.gravity * delta;
+        this.mesh.position.y += this.velocity.y * delta;
+        if (this.mesh.position.y <= floorY) {
+          this.mesh.position.y = floorY;
+          this.velocity.y = 0;
+          this.grounded = true;
+        } else {
+          this.grounded = false;
+        }
+      } else if (this.mesh.position.y < floorY) {
+        // Below floor (going up stairs) - smoothly rise
+        this.mesh.position.y = THREE.MathUtils.lerp(this.mesh.position.y, floorY, 8 * delta);
         this.velocity.y = 0;
         this.grounded = true;
+      } else {
+        // On floor
+        this.velocity.y = 0;
+        this.grounded = true;
+      }
+    } else {
+      // Fallback: old gravity behavior (Y=0 floor)
+      if (this.mesh.position.y > 0) {
+        this.velocity.y += this.gravity * delta;
+        this.mesh.position.y += this.velocity.y * delta;
+        if (this.mesh.position.y <= 0) {
+          this.mesh.position.y = 0;
+          this.velocity.y = 0;
+          this.grounded = true;
+        }
       }
     }
   }
@@ -296,6 +326,9 @@ export class Player {
       this.currentMoveVelocity.lerp(targetVelocity, this.moveAcceleration * delta);
       this.mesh.position.addScaledVector(this.currentMoveVelocity, delta);
 
+      // Apply wall collision
+      this._applyWallCollision();
+
       this.facingAngle = Math.atan2(this.moveDir.x, this.moveDir.z);
       this.mesh.rotation.y = THREE.MathUtils.lerp(
         this.mesh.rotation.y,
@@ -308,11 +341,48 @@ export class Player {
       if (this.currentMoveVelocity.length() > 0.01) {
         this.currentMoveVelocity.lerp(new THREE.Vector3(0, 0, 0), this.moveDeceleration * delta);
         this.mesh.position.addScaledVector(this.currentMoveVelocity, delta);
+        
+        // Apply wall collision even when decelerating
+        this._applyWallCollision();
       } else {
         this.currentMoveVelocity.set(0, 0, 0);
       }
       
       if (this.state === STATES.MOVING) this._changeState(STATES.IDLE);
+    }
+  }
+  
+  /**
+   * Apply wall collision - push player out of walls
+   */
+  _applyWallCollision() {
+    if (!this.world) return;
+    
+    const pushOut = this.world.checkWallCollision(this.mesh.position, this.collisionRadius);
+    if (pushOut) {
+      this.mesh.position.add(pushOut);
+    }
+  }
+  
+  /**
+   * Apply floor collision - snap player to correct Y level
+   */
+  _applyFloorCollision() {
+    if (!this.world) return;
+    
+    const floorY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+    
+    // Smooth vertical transition for stairs
+    const yDiff = floorY - this.mesh.position.y;
+    if (Math.abs(yDiff) < 0.1) {
+      // Close enough, snap
+      this.mesh.position.y = floorY;
+    } else if (yDiff > 0) {
+      // Going up (shouldn't happen much)
+      this.mesh.position.y = THREE.MathUtils.lerp(this.mesh.position.y, floorY, 0.3);
+    } else {
+      // Going down (stairs)
+      this.mesh.position.y = THREE.MathUtils.lerp(this.mesh.position.y, floorY, 0.2);
     }
   }
 
@@ -534,6 +604,9 @@ export class Player {
 
     this.mesh.position.addScaledVector(this.dodgeDir, this.dodgeSpeed * speedCurve * delta);
     
+    // Apply wall collision during dodge
+    this._applyWallCollision();
+    
     this.lastGhostSpawnTime += delta;
     if (this.isInvincible && this.lastGhostSpawnTime >= this.ghostSpawnInterval) {
       this._spawnDodgeGhost();
@@ -606,6 +679,8 @@ export class Player {
     const lungeSpeed = isHeavy ? 3 : 2;
     if (this.stateTimer < hitEnd) {
       this.mesh.position.addScaledVector(fwd, lungeSpeed * delta);
+      // Apply wall collision during attack lunge
+      this._applyWallCollision();
     }
 
     if (this.stateTimer >= duration) {
@@ -660,6 +735,10 @@ export class Player {
 
   setCameraController(cameraController) {
     this.cameraController = cameraController;
+  }
+
+  setWorld(world) {
+    this.world = world;
   }
 
   _getCameraYaw() {
