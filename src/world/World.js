@@ -2041,15 +2041,15 @@ export class World {
   
   _createLighting() {
     // Hemisphere light for natural sky/ground bounce
-    const hemiLight = new THREE.HemisphereLight(0xaaaadd, 0x887766, 1.2);
+    const hemiLight = new THREE.HemisphereLight(0xaaaadd, 0x887766, 2.0);  // Boosted from 1.2
     this.scene.add(hemiLight);
     
-    // Ambient for base visibility (dark atmospheric)
-    const ambient = new THREE.AmbientLight(0x8888bb, 0.5);
+    // Ambient for base visibility - bright enough to see geometry
+    const ambient = new THREE.AmbientLight(0xaaaacc, 1.5);  // Boosted from 0.5
     this.scene.add(ambient);
     
     // Moonlight - main directional (silvery blue)
-    const moonLight = new THREE.DirectionalLight(0xaabbee, 1.5);
+    const moonLight = new THREE.DirectionalLight(0xaabbee, 2.5);  // Boosted from 1.5
     moonLight.position.set(-50, 80, -100);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.set(4096, 4096);
@@ -2063,7 +2063,7 @@ export class World {
     this.scene.add(moonLight);
     
     // Secondary fill light (warm, from opposite direction)
-    const fillLight = new THREE.DirectionalLight(0xcc8866, 0.4);
+    const fillLight = new THREE.DirectionalLight(0xcc8866, 1.0);  // Boosted from 0.4
     fillLight.position.set(30, 20, 50);
     this.scene.add(fillLight);
     
