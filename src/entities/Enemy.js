@@ -113,84 +113,487 @@ export class Enemy {
     this.mesh = new THREE.Group();
     this.mesh.position.copy(position);
 
-    // Body - size varies by type
-    const bodyScale = this.config.hasShield ? 1.2 : (this.config.type === 'BERSERKER' ? 0.85 : 1.0);
-    const bodyGeo = new THREE.CapsuleGeometry(0.35 * bodyScale, 0.9 * bodyScale, 8, 16);
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: this.config.bodyColor,
-      roughness: 0.7,
-      metalness: 0.2,
-    });
-    this.body = new THREE.Mesh(bodyGeo, bodyMat);
-    this.body.position.y = 1.0 * bodyScale;
-    this.body.castShadow = true;
-    this.mesh.add(this.body);
+    // Build enemy based on type
+    if (this.config.type === 'BERSERKER') {
+      this._createBerserkerModel();
+    } else if (this.config.hasShield) {
+      this._createSentinelModel();
+    } else {
+      this._createHollowSoldierModel();
+    }
 
-    // Eyes (glowing)
-    const eyeGeo = new THREE.BoxGeometry(0.25 * bodyScale, 0.05, 0.05);
+    scene.add(this.mesh);
+  }
+
+  _createHollowSoldierModel() {
+    // Hollow Soldier: Decrepit undead warrior with tattered armor
+    const bodyGroup = new THREE.Group();
+    
+    // Torso - emaciated, skeletal form
+    const torsoGeo = new THREE.CapsuleGeometry(0.28, 0.6, 8, 16);
+    const torsoMat = new THREE.MeshStandardMaterial({
+      color: 0x3a2828,
+      roughness: 0.85,
+      metalness: 0.1,
+    });
+    const torso = new THREE.Mesh(torsoGeo, torsoMat);
+    torso.position.y = 1.1;
+    torso.castShadow = true;
+    bodyGroup.add(torso);
+    
+    // Tattered chainmail vest
+    const chainmailGeo = new THREE.CylinderGeometry(0.32, 0.35, 0.4, 8);
+    const chainmailMat = new THREE.MeshStandardMaterial({
+      color: 0x444444,
+      roughness: 0.6,
+      metalness: 0.7,
+    });
+    const chainmail = new THREE.Mesh(chainmailGeo, chainmailMat);
+    chainmail.position.y = 1.1;
+    chainmail.castShadow = true;
+    bodyGroup.add(chainmail);
+    
+    // Rusted pauldrons (shoulder plates)
+    const pauldronGeo = new THREE.SphereGeometry(0.15, 8, 6);
+    const pauldronMat = new THREE.MeshStandardMaterial({
+      color: 0x554422,
+      roughness: 0.8,
+      metalness: 0.5,
+    });
+    const leftPauldron = new THREE.Mesh(pauldronGeo, pauldronMat);
+    leftPauldron.position.set(-0.35, 1.35, 0);
+    leftPauldron.scale.set(1, 0.7, 0.8);
+    bodyGroup.add(leftPauldron);
+    
+    const rightPauldron = new THREE.Mesh(pauldronGeo, pauldronMat);
+    rightPauldron.position.set(0.35, 1.35, 0);
+    rightPauldron.scale.set(1, 0.7, 0.8);
+    bodyGroup.add(rightPauldron);
+    
+    // Skeletal head with hollow eye sockets
+    const headGeo = new THREE.SphereGeometry(0.18, 12, 10);
+    const headMat = new THREE.MeshStandardMaterial({
+      color: 0x4a3a2a,
+      roughness: 0.9,
+      metalness: 0.0,
+    });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 1.7;
+    head.scale.set(1, 1.1, 0.9);
+    bodyGroup.add(head);
+    
+    // Dented iron helm
+    const helmGeo = new THREE.SphereGeometry(0.2, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6);
+    const helmMat = new THREE.MeshStandardMaterial({
+      color: 0x505050,
+      roughness: 0.7,
+      metalness: 0.6,
+    });
+    const helm = new THREE.Mesh(helmGeo, helmMat);
+    helm.position.y = 1.75;
+    helm.rotation.x = 0.1;
+    bodyGroup.add(helm);
+    
+    // Glowing eyes in hollow sockets
     const eyeMat = new THREE.MeshStandardMaterial({
+      color: this.config.eyeColor,
+      emissive: this.config.eyeColor,
+      emissiveIntensity: 4,
+    });
+    const leftEyeGeo = new THREE.SphereGeometry(0.04, 8, 8);
+    const leftEye = new THREE.Mesh(leftEyeGeo, eyeMat);
+    leftEye.position.set(-0.07, 1.72, 0.14);
+    bodyGroup.add(leftEye);
+    
+    const rightEye = new THREE.Mesh(leftEyeGeo, eyeMat.clone());
+    rightEye.position.set(0.07, 1.72, 0.14);
+    bodyGroup.add(rightEye);
+    this.eye = leftEye;
+    
+    // Skeletal arms
+    const armGeo = new THREE.CapsuleGeometry(0.06, 0.35, 6, 8);
+    const armMat = new THREE.MeshStandardMaterial({
+      color: 0x3a2a22,
+      roughness: 0.9,
+    });
+    const leftArm = new THREE.Mesh(armGeo, armMat);
+    leftArm.position.set(-0.4, 0.9, 0);
+    leftArm.rotation.z = 0.2;
+    bodyGroup.add(leftArm);
+    
+    const rightArm = new THREE.Mesh(armGeo, armMat);
+    rightArm.position.set(0.4, 0.9, 0);
+    rightArm.rotation.z = -0.2;
+    bodyGroup.add(rightArm);
+    
+    // Legs in tattered pants
+    const legGeo = new THREE.CapsuleGeometry(0.08, 0.4, 6, 8);
+    const legMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2222,
+      roughness: 0.85,
+    });
+    const leftLeg = new THREE.Mesh(legGeo, legMat);
+    leftLeg.position.set(-0.15, 0.35, 0);
+    bodyGroup.add(leftLeg);
+    
+    const rightLeg = new THREE.Mesh(legGeo, legMat);
+    rightLeg.position.set(0.15, 0.35, 0);
+    bodyGroup.add(rightLeg);
+    
+    this.body = bodyGroup;
+    this.mesh.add(bodyGroup);
+    
+    // Rusty notched sword
+    const bladeGeo = new THREE.BoxGeometry(0.05, 0.65, 0.02);
+    const bladeMat = new THREE.MeshStandardMaterial({
+      color: 0x555544,
+      roughness: 0.6,
+      metalness: 0.7,
+    });
+    this.weapon = new THREE.Mesh(bladeGeo, bladeMat);
+    this.weapon.position.set(0.45, 1.0, 0.1);
+    this.weapon.castShadow = true;
+    this.mesh.add(this.weapon);
+    
+    // Sword crossguard
+    const guardGeo = new THREE.BoxGeometry(0.15, 0.03, 0.03);
+    const guard = new THREE.Mesh(guardGeo, bladeMat);
+    guard.position.set(0.45, 0.68, 0.1);
+    this.mesh.add(guard);
+    
+    // Add health bar
+    this._createHealthBar(2.1);
+  }
+  
+  _createBerserkerModel() {
+    // Berserker: Feral, animalistic creature with claws - hunched and aggressive
+    const bodyGroup = new THREE.Group();
+    
+    // Hunched, muscular torso
+    const torsoGeo = new THREE.SphereGeometry(0.35, 12, 10);
+    const torsoMat = new THREE.MeshStandardMaterial({
+      color: 0x551818,
+      roughness: 0.7,
+      metalness: 0.15,
+    });
+    const torso = new THREE.Mesh(torsoGeo, torsoMat);
+    torso.position.y = 0.85;
+    torso.scale.set(1, 0.9, 1.1);
+    torso.castShadow = true;
+    bodyGroup.add(torso);
+    
+    // Spiky ridged spine
+    for (let i = 0; i < 5; i++) {
+      const spikeGeo = new THREE.ConeGeometry(0.04, 0.15, 6);
+      const spikeMat = new THREE.MeshStandardMaterial({
+        color: 0x331111,
+        roughness: 0.5,
+        metalness: 0.3,
+      });
+      const spike = new THREE.Mesh(spikeGeo, spikeMat);
+      spike.position.set(0, 0.85 + i * 0.1, -0.3 + i * 0.02);
+      spike.rotation.x = -0.6;
+      bodyGroup.add(spike);
+    }
+    
+    // Bestial head with elongated snout
+    const headGeo = new THREE.SphereGeometry(0.18, 10, 8);
+    const headMat = new THREE.MeshStandardMaterial({
+      color: 0x441212,
+      roughness: 0.75,
+    });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 1.15, 0.15);
+    head.scale.set(1, 0.9, 1.2);
+    bodyGroup.add(head);
+    
+    // Snout/muzzle
+    const snoutGeo = new THREE.ConeGeometry(0.1, 0.2, 8);
+    const snout = new THREE.Mesh(snoutGeo, headMat);
+    snout.position.set(0, 1.1, 0.32);
+    snout.rotation.x = Math.PI / 2;
+    bodyGroup.add(snout);
+    
+    // Glowing feral eyes
+    const eyeMat = new THREE.MeshStandardMaterial({
+      color: this.config.eyeColor,
+      emissive: this.config.eyeColor,
+      emissiveIntensity: 5,
+    });
+    const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-0.1, 1.2, 0.25);
+    bodyGroup.add(leftEye);
+    
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat.clone());
+    rightEye.position.set(0.1, 1.2, 0.25);
+    bodyGroup.add(rightEye);
+    this.eye = leftEye;
+    
+    // Muscular arms reaching forward (hunched posture)
+    const armGeo = new THREE.CapsuleGeometry(0.08, 0.4, 8, 10);
+    const armMat = new THREE.MeshStandardMaterial({
+      color: 0x4a1818,
+      roughness: 0.7,
+    });
+    const leftArm = new THREE.Mesh(armGeo, armMat);
+    leftArm.position.set(-0.35, 0.7, 0.15);
+    leftArm.rotation.z = 0.5;
+    leftArm.rotation.x = -0.4;
+    bodyGroup.add(leftArm);
+    
+    const rightArm = new THREE.Mesh(armGeo, armMat);
+    rightArm.position.set(0.35, 0.7, 0.15);
+    rightArm.rotation.z = -0.5;
+    rightArm.rotation.x = -0.4;
+    bodyGroup.add(rightArm);
+    
+    // Powerful legs
+    const legGeo = new THREE.CapsuleGeometry(0.1, 0.35, 8, 10);
+    const leftLeg = new THREE.Mesh(legGeo, armMat);
+    leftLeg.position.set(-0.18, 0.3, 0);
+    bodyGroup.add(leftLeg);
+    
+    const rightLeg = new THREE.Mesh(legGeo, armMat);
+    rightLeg.position.set(0.18, 0.3, 0);
+    bodyGroup.add(rightLeg);
+    
+    this.body = bodyGroup;
+    this.mesh.add(bodyGroup);
+    
+    // Vicious claws (right hand)
+    const clawGroup = new THREE.Group();
+    const clawMat = new THREE.MeshStandardMaterial({
+      color: 0x222222,
+      roughness: 0.3,
+      metalness: 0.8,
+    });
+    for (let i = 0; i < 4; i++) {
+      const clawGeo = new THREE.ConeGeometry(0.02, 0.2, 6);
+      const claw = new THREE.Mesh(clawGeo, clawMat);
+      claw.position.set(i * 0.04 - 0.06, 0, 0.08);
+      claw.rotation.x = -0.3;
+      clawGroup.add(claw);
+    }
+    clawGroup.position.set(0.45, 0.55, 0.25);
+    this.weapon = clawGroup;
+    this.mesh.add(clawGroup);
+    
+    // Left hand claws
+    const clawGroup2 = clawGroup.clone();
+    clawGroup2.position.set(-0.45, 0.55, 0.25);
+    this.weapon2 = clawGroup2;
+    this.mesh.add(clawGroup2);
+    
+    // Add health bar
+    this._createHealthBar(1.8);
+  }
+  
+  _createSentinelModel() {
+    // Sentinel: Heavily armored tank - bulky, slow, intimidating
+    const bodyGroup = new THREE.Group();
+    const scale = 1.25;
+    
+    // Massive armored torso
+    const torsoGeo = new THREE.CylinderGeometry(0.4 * scale, 0.45 * scale, 0.8 * scale, 10);
+    const torsoMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2a3a,
+      roughness: 0.4,
+      metalness: 0.8,
+    });
+    const torso = new THREE.Mesh(torsoGeo, torsoMat);
+    torso.position.y = 1.2 * scale;
+    torso.castShadow = true;
+    bodyGroup.add(torso);
+    
+    // Chest plate with emblem indent
+    const chestGeo = new THREE.BoxGeometry(0.5 * scale, 0.4 * scale, 0.15 * scale);
+    const chestMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3a4a,
+      roughness: 0.35,
+      metalness: 0.85,
+    });
+    const chest = new THREE.Mesh(chestGeo, chestMat);
+    chest.position.set(0, 1.25 * scale, 0.25 * scale);
+    bodyGroup.add(chest);
+    
+    // Glowing rune on chest
+    const runeGeo = new THREE.CircleGeometry(0.08 * scale, 6);
+    const runeMat = new THREE.MeshStandardMaterial({
+      color: 0x4466ff,
+      emissive: 0x4466ff,
+      emissiveIntensity: 2,
+    });
+    const rune = new THREE.Mesh(runeGeo, runeMat);
+    rune.position.set(0, 1.25 * scale, 0.33 * scale);
+    bodyGroup.add(rune);
+    
+    // Massive pauldrons
+    const pauldronGeo = new THREE.SphereGeometry(0.22 * scale, 10, 8);
+    const pauldronMat = new THREE.MeshStandardMaterial({
+      color: 0x333344,
+      roughness: 0.4,
+      metalness: 0.8,
+    });
+    const leftPauldron = new THREE.Mesh(pauldronGeo, pauldronMat);
+    leftPauldron.position.set(-0.5 * scale, 1.5 * scale, 0);
+    leftPauldron.scale.set(1, 0.7, 0.9);
+    bodyGroup.add(leftPauldron);
+    
+    const rightPauldron = new THREE.Mesh(pauldronGeo, pauldronMat);
+    rightPauldron.position.set(0.5 * scale, 1.5 * scale, 0);
+    rightPauldron.scale.set(1, 0.7, 0.9);
+    bodyGroup.add(rightPauldron);
+    
+    // Heavy great helm
+    const helmGeo = new THREE.CylinderGeometry(0.2 * scale, 0.22 * scale, 0.35 * scale, 10);
+    const helmMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3a4a,
+      roughness: 0.4,
+      metalness: 0.75,
+    });
+    const helm = new THREE.Mesh(helmGeo, helmMat);
+    helm.position.y = 1.85 * scale;
+    bodyGroup.add(helm);
+    
+    // Helm visor slit with glowing eyes
+    const visorGeo = new THREE.BoxGeometry(0.25 * scale, 0.03 * scale, 0.05 * scale);
+    const visorMat = new THREE.MeshStandardMaterial({
       color: this.config.eyeColor,
       emissive: this.config.eyeColor,
       emissiveIntensity: 3,
     });
-    this.eye = new THREE.Mesh(eyeGeo, eyeMat);
-    this.eye.position.set(0, 1.6 * bodyScale, 0.3 * bodyScale);
-    this.mesh.add(this.eye);
-
-    // Weapon - varies by type
-    let weaponGeo, weaponMat;
-    if (this.config.type === 'BERSERKER') {
-      // Dual claws
-      weaponGeo = new THREE.BoxGeometry(0.04, 0.5, 0.04);
-      weaponMat = new THREE.MeshStandardMaterial({
-        color: 0x884444,
-        metalness: 0.8,
-        roughness: 0.3,
-      });
-      this.weapon = new THREE.Mesh(weaponGeo, weaponMat);
-      this.weapon.position.set(0.35, 0.9, 0.15);
-      
-      this.weapon2 = new THREE.Mesh(weaponGeo, weaponMat);
-      this.weapon2.position.set(-0.35, 0.9, 0.15);
-      this.mesh.add(this.weapon2);
-    } else if (this.config.hasShield) {
-      // Heavy weapon
-      weaponGeo = new THREE.BoxGeometry(0.1, 1.0, 0.1);
-      weaponMat = new THREE.MeshStandardMaterial({
-        color: 0x555566,
-        metalness: 0.7,
-        roughness: 0.3,
-      });
-      this.weapon = new THREE.Mesh(weaponGeo, weaponMat);
-      this.weapon.position.set(0.5, 1.1, 0);
-      
-      // Shield
-      const shieldGeo = new THREE.BoxGeometry(0.1, 0.8, 0.6);
-      const shieldMat = new THREE.MeshStandardMaterial({
-        color: 0x444455,
-        metalness: 0.6,
-        roughness: 0.4,
-      });
-      this.shield = new THREE.Mesh(shieldGeo, shieldMat);
-      this.shield.position.set(-0.45, 1.0, 0.2);
-      this.mesh.add(this.shield);
-    } else {
-      // Standard sword
-      weaponGeo = new THREE.BoxGeometry(0.06, 0.7, 0.06);
-      weaponMat = new THREE.MeshStandardMaterial({
-        color: 0x666666,
-        metalness: 0.6,
-        roughness: 0.4,
-      });
-      this.weapon = new THREE.Mesh(weaponGeo, weaponMat);
-      this.weapon.position.set(0.4, 1.0, 0);
-    }
+    const visor = new THREE.Mesh(visorGeo, visorMat);
+    visor.position.set(0, 1.85 * scale, 0.2 * scale);
+    bodyGroup.add(visor);
+    this.eye = visor;
+    
+    // Heavy armored arms
+    const armGeo = new THREE.CapsuleGeometry(0.1 * scale, 0.35 * scale, 8, 10);
+    const armMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2a3a,
+      roughness: 0.45,
+      metalness: 0.75,
+    });
+    const leftArm = new THREE.Mesh(armGeo, armMat);
+    leftArm.position.set(-0.5 * scale, 1.0 * scale, 0);
+    leftArm.rotation.z = 0.15;
+    bodyGroup.add(leftArm);
+    
+    const rightArm = new THREE.Mesh(armGeo, armMat);
+    rightArm.position.set(0.5 * scale, 1.0 * scale, 0);
+    rightArm.rotation.z = -0.15;
+    bodyGroup.add(rightArm);
+    
+    // Armored legs with greaves
+    const legGeo = new THREE.CapsuleGeometry(0.12 * scale, 0.45 * scale, 8, 10);
+    const leftLeg = new THREE.Mesh(legGeo, armMat);
+    leftLeg.position.set(-0.2 * scale, 0.35 * scale, 0);
+    bodyGroup.add(leftLeg);
+    
+    const rightLeg = new THREE.Mesh(legGeo, armMat);
+    rightLeg.position.set(0.2 * scale, 0.35 * scale, 0);
+    bodyGroup.add(rightLeg);
+    
+    // Armored boots
+    const bootGeo = new THREE.BoxGeometry(0.15 * scale, 0.1 * scale, 0.2 * scale);
+    const bootMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2a3a,
+      roughness: 0.5,
+      metalness: 0.7,
+    });
+    const leftBoot = new THREE.Mesh(bootGeo, bootMat);
+    leftBoot.position.set(-0.2 * scale, 0.05, 0.02);
+    bodyGroup.add(leftBoot);
+    
+    const rightBoot = new THREE.Mesh(bootGeo, bootMat);
+    rightBoot.position.set(0.2 * scale, 0.05, 0.02);
+    bodyGroup.add(rightBoot);
+    
+    this.body = bodyGroup;
+    this.mesh.add(bodyGroup);
+    
+    // Massive war hammer
+    const hammerGroup = new THREE.Group();
+    
+    // Hammer shaft
+    const shaftGeo = new THREE.CylinderGeometry(0.04 * scale, 0.04 * scale, 1.1 * scale, 8);
+    const shaftMat = new THREE.MeshStandardMaterial({
+      color: 0x4a3a2a,
+      roughness: 0.7,
+      metalness: 0.3,
+    });
+    const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+    hammerGroup.add(shaft);
+    
+    // Hammer head
+    const headGeo = new THREE.BoxGeometry(0.2 * scale, 0.15 * scale, 0.3 * scale);
+    const headMat = new THREE.MeshStandardMaterial({
+      color: 0x444455,
+      roughness: 0.3,
+      metalness: 0.85,
+    });
+    const hammerHead = new THREE.Mesh(headGeo, headMat);
+    hammerHead.position.y = 0.55 * scale;
+    hammerGroup.add(hammerHead);
+    
+    // Hammer spike on back
+    const spikeGeo = new THREE.ConeGeometry(0.06 * scale, 0.2 * scale, 6);
+    const spike = new THREE.Mesh(spikeGeo, headMat);
+    spike.position.set(0, 0.55 * scale, -0.2 * scale);
+    spike.rotation.x = Math.PI / 2;
+    hammerGroup.add(spike);
+    
+    hammerGroup.position.set(0.6 * scale, 1.2 * scale, 0);
+    hammerGroup.rotation.z = 0.2;
+    this.weapon = hammerGroup;
     this.weapon.castShadow = true;
-    this.mesh.add(this.weapon);
-
+    this.mesh.add(hammerGroup);
+    
+    // Tower shield
+    const shieldGroup = new THREE.Group();
+    
+    // Shield body
+    const shieldGeo = new THREE.BoxGeometry(0.1 * scale, 0.9 * scale, 0.5 * scale);
+    const shieldMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3a4a,
+      roughness: 0.35,
+      metalness: 0.8,
+    });
+    const shieldBody = new THREE.Mesh(shieldGeo, shieldMat);
+    shieldGroup.add(shieldBody);
+    
+    // Shield boss (center dome)
+    const bossGeo = new THREE.SphereGeometry(0.1 * scale, 10, 8, 0, Math.PI);
+    const bossMesh = new THREE.Mesh(bossGeo, shieldMat);
+    bossMesh.position.set(0.06 * scale, 0, 0);
+    bossMesh.rotation.y = Math.PI / 2;
+    shieldGroup.add(bossMesh);
+    
+    // Shield emblem (glowing)
+    const emblemGeo = new THREE.CircleGeometry(0.06 * scale, 6);
+    const emblemMat = new THREE.MeshStandardMaterial({
+      color: 0x4466ff,
+      emissive: 0x4466ff,
+      emissiveIntensity: 1.5,
+    });
+    const emblem = new THREE.Mesh(emblemGeo, emblemMat);
+    emblem.position.set(0.06 * scale, 0.2 * scale, 0);
+    emblem.rotation.y = Math.PI / 2;
+    shieldGroup.add(emblem);
+    
+    shieldGroup.position.set(-0.55 * scale, 1.1 * scale, 0.2 * scale);
+    this.shield = shieldGroup;
+    this.mesh.add(shieldGroup);
+    
+    // Add health bar
+    this._createHealthBar(2.6);
+  }
+  
+  _createHealthBar(heightOffset) {
     // Health bar (floating above)
     this.healthBarGroup = new THREE.Group();
-    this.healthBarGroup.position.y = 2.4 * bodyScale;
+    this.healthBarGroup.position.y = heightOffset;
 
     const bgGeo = new THREE.PlaneGeometry(1.0, 0.08);
     const bgMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide });
@@ -224,8 +627,6 @@ export class Enemy {
     this.breakIndicator = this._createBreakIndicator();
     this.breakIndicator.visible = false;
     this.mesh.add(this.breakIndicator);
-
-    scene.add(this.mesh);
   }
   
   _createBreakIndicator() {
