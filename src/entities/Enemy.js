@@ -723,6 +723,12 @@ export class Enemy {
       case STATES.BOSS_GRAB:
         this._processBossGrabAttack(delta, player);
         break;
+        
+      case STATES.BOSS_TRANSITION:
+        // Phase transition - invulnerable, transformation handled by _cryptLordTransformSequence
+        // Player can heal/reposition during this 4 second window
+        // The state will be changed to CHASE when transformation completes
+        break;
     }
 
     // Posture regen
@@ -1200,6 +1206,9 @@ export class Enemy {
   takeDamage(amount, postureDmg = 0, attackerPos = null) {
     if (this.state === STATES.DEAD) return 'dead';
     
+    // Boss is invulnerable during phase transition
+    if (this.state === STATES.BOSS_TRANSITION) return 'immune';
+    
     if (this.isBlocking) {
       amount = Math.floor(amount * 0.3);
       postureDmg = Math.floor(postureDmg * 0.5);
@@ -1235,6 +1244,12 @@ export class Enemy {
       return 'died';
     }
 
+    // CRYPT_LORD phase transition at 50% HP
+    if (this.isBoss && this.bossPhase === 1 && this.health <= this.maxHealth * 0.5) {
+      this._enterPhase2CryptLord();
+      return 'phase_transition';
+    }
+
     if (this.posture >= this.maxPosture && this.state !== STATES.STAGGERED) {
       this._triggerPostureBreak();
       return 'staggered';
@@ -1245,6 +1260,119 @@ export class Enemy {
     }
 
     return 'hit';
+  }
+  
+  // ========== CRYPT LORD PHASE 2 TRANSITION ==========
+  _enterPhase2CryptLord() {
+    this.bossPhase = 2;
+    this.posture = 0;
+    this.activeAttack = null;
+    this.hitThisSwing = false;
+    
+    // Start transition state
+    this._changeState(STATES.BOSS_TRANSITION);
+    
+    // Trigger arena phase transition
+    if (this.world && this.world.setBossArenaPhase) {
+      this.world.setBossArenaPhase('transition');
+    }
+    
+    // Play roar sound
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('bossRoar', { position: this.mesh.position, volume: 1.0 });
+    }
+    
+    // Phase 2 stat changes (from design doc)
+    this.config.damage = 55;
+    this.config.postureDmg = 45;
+    this.config.moveSpeed = 2.5;
+    this.config.attackCooldown = 1.2;
+    this.config.maxPosture = 250;
+    this.maxPosture = 250;
+    
+    // Start transformation sequence (4 seconds)
+    this._cryptLordTransformSequence();
+  }
+  
+  _cryptLordTransformSequence() {
+    const transformDuration = 4000; // 4 seconds
+    const startTime = Date.now();
+    const targetModel = this.gltfModel || this.fallbackBody;
+    const originalScale = targetModel ? targetModel.scale.clone() : new THREE.Vector3(1, 1, 1);
+    const targetScale = originalScale.clone().multiplyScalar(1.25); // Scale to 1.5x (1.2 * 1.25 = 1.5)
+    
+    // Camera shake for drama
+    if (this.gm?.cameraController) {
+      this.gm.cameraController.shake(0.3, 4.0);
+    }
+    
+    const animateTransform = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / transformDuration, 1);
+      
+      if (this.state !== STATES.BOSS_TRANSITION) return; // Cancelled
+      
+      // Scale model up
+      if (targetModel) {
+        targetModel.scale.lerpVectors(originalScale, targetScale, progress);
+        // Convulsions
+        targetModel.rotation.z = Math.sin(elapsed * 0.02) * 0.15 * (1 - progress);
+        targetModel.rotation.x = Math.sin(elapsed * 0.015) * 0.1 * (1 - progress);
+      }
+      
+      // Eye glow intensifies
+      if (this.eye) {
+        const intensity = 4 + progress * 6;
+        this.eye.material.emissiveIntensity = intensity;
+        // Shift to purple
+        const r = THREE.MathUtils.lerp(1.0, 1.0, progress);
+        const g = THREE.MathUtils.lerp(0.13, 0.0, progress);
+        const b = THREE.MathUtils.lerp(0.13, 1.0, progress);
+        this.eye.material.emissive.setRGB(r, g, b);
+        this.eye.material.color.setRGB(r, g, b);
+      }
+      
+      // Flash model with purple energy
+      if (elapsed % 300 < 150) {
+        this._flashModel(0x8844cc, 100);
+      }
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateTransform);
+      } else {
+        // Transformation complete
+        this._completeCryptLordTransform(targetModel);
+      }
+    };
+    
+    animateTransform();
+  }
+  
+  _completeCryptLordTransform(targetModel) {
+    // Reset rotation
+    if (targetModel) {
+      targetModel.rotation.z = 0;
+      targetModel.rotation.x = 0;
+    }
+    
+    // Set eye to purple
+    if (this.eye) {
+      this.eye.material.emissive.setHex(0xff00ff);
+      this.eye.material.color.setHex(0xff00ff);
+      this.eye.material.emissiveIntensity = 5;
+    }
+    
+    // Apply purple tint to model
+    this._applyModelTint(0x4422aa);
+    
+    // Switch arena to Phase 2
+    if (this.world && this.world.setBossArenaPhase) {
+      this.world.setBossArenaPhase('phase2');
+    }
+    
+    // Reset attack cooldown and go aggressive
+    this.bossAttackCooldown = 0.5;
+    this._changeState(STATES.CHASE);
   }
 
   _flashModel(color, duration) {
@@ -1365,10 +1493,89 @@ export class Enemy {
     this._playAnimation(STATES.DEAD, { loop: false, clampWhenFinished: true });
     this.healthBarGroup.visible = false;
 
-    // Fade out after death animation
+    // === CRYPT LORD BOSS DEATH ===
+    if (this.isBoss) {
+      this.bossActive = false;
+      
+      // Deactivate boss arena (clears fog gate, spawns victory bonfire)
+      if (this.world && this.world.deactivateBossArena) {
+        this.world.deactivateBossArena();
+      }
+      
+      // Play boss death sound
+      if (this.gm?.audioManager) {
+        this.gm.audioManager.play('bossRoar', { position: this.mesh.position, volume: 0.8 });
+      }
+      
+      // Dramatic death with purple energy dissolution
+      this._cryptLordDeathSequence();
+      return; // Skip normal fade
+    }
+
+    // Fade out after death animation (normal enemies)
     setTimeout(() => {
       this._fadeOutModel();
     }, 2000);
+  }
+  
+  _cryptLordDeathSequence() {
+    const deathDuration = 5000; // 5 seconds
+    const startTime = Date.now();
+    const targetModel = this.gltfModel || this.fallbackBody;
+    
+    // Camera shake
+    if (this.gm?.cameraController) {
+      this.gm.cameraController.shake(0.4, 3.0);
+    }
+    
+    const animateDeath = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / deathDuration, 1);
+      
+      if (targetModel) {
+        // Fall to knees, then dissolve
+        if (progress < 0.3) {
+          // Stumble and fall
+          const fallProgress = progress / 0.3;
+          targetModel.position.y = -fallProgress * 0.5;
+          targetModel.rotation.x = fallProgress * 0.3;
+          targetModel.rotation.z = fallProgress * 0.15;
+        } else {
+          // Dissolve with purple energy
+          const dissolveProgress = (progress - 0.3) / 0.7;
+          
+          // Flash with energy
+          if (elapsed % 200 < 100) {
+            this._flashModel(0x8844cc, 50);
+          }
+          
+          // Fade opacity
+          targetModel.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach(mat => {
+                mat.transparent = true;
+                mat.opacity = 1 - dissolveProgress;
+              });
+            }
+          });
+        }
+      }
+      
+      // Eye fades
+      if (this.eye) {
+        this.eye.material.emissiveIntensity = 5 * (1 - progress);
+        this.eye.material.opacity = 1 - progress;
+      }
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateDeath);
+      } else {
+        this.mesh.visible = false;
+      }
+    };
+    
+    animateDeath();
   }
 
   _fadeOutModel() {

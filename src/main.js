@@ -201,6 +201,22 @@ function animate() {
     player.update(delta);
     enemyManager.update(delta, player);
     particleManager.update(delta);
+    
+    // Boss arena update (ritual circle damage pulse in Phase 2)
+    if (world.bossArena && world.bossArena.active) {
+      const arenaDamage = world.updateBossArena(delta, player.mesh.position);
+      if (arenaDamage > 0 && !player.isInvincible) {
+        gameManager.takeDamage(arenaDamage, 'magical', 0, false);
+        player.flashDamage();
+        if (hud) {
+          hud.flashDamage(0.5);
+        }
+        if (cameraController) {
+          cameraController.shakeLight();
+        }
+        itemManager.showNotification('Ritual Circle burns!', 'damage');
+      }
+    }
   } else {
     // During hitstop: still update camera and particles (for effect continuity)
     particleManager.update(delta * 0.1); // Slow-mo particles during hitstop
