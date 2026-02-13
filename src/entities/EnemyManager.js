@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Enemy } from './Enemy.js';
+import { Enemy, ENEMY_TYPES } from './Enemy.js';
 
 export class EnemyManager {
   constructor(scene, gameManager, player) {
@@ -13,19 +13,30 @@ export class EnemyManager {
   }
 
   _spawnEnemies() {
-    const positions = [
-      new THREE.Vector3(0, 0, -3),   // Close enemy for testing combat
-      new THREE.Vector3(-6, 0, -10),
-      new THREE.Vector3(3, 0, -15),
+    // Mix of enemy types for variety
+    const enemySpawns = [
+      // Close hollow soldier for initial testing
+      { pos: new THREE.Vector3(0, 0, -4), type: 'HOLLOW_SOLDIER' },
+      
+      // Berserker - fast and aggressive
+      { pos: new THREE.Vector3(-5, 0, -8), type: 'BERSERKER' },
+      
+      // Another hollow soldier
+      { pos: new THREE.Vector3(6, 0, -10), type: 'HOLLOW_SOLDIER' },
+      
+      // Sentinel - tanky shield enemy
+      { pos: new THREE.Vector3(0, 0, -15), type: 'SENTINEL' },
+      
+      // Berserker pair
+      { pos: new THREE.Vector3(-8, 0, -18), type: 'BERSERKER' },
+      { pos: new THREE.Vector3(-6, 0, -20), type: 'BERSERKER' },
     ];
 
-    positions.forEach((pos, i) => {
-      const enemy = new Enemy(this.scene, pos, {
-        name: `Hollow Soldier ${i + 1}`,
-        health: 40 + i * 10,
-        damage: 15 + i * 5,
-        remnantDrop: 30 + i * 15,
-        patrolRadius: 3 + i,
+    enemySpawns.forEach((spawn, i) => {
+      const typeConfig = ENEMY_TYPES[spawn.type] || ENEMY_TYPES.HOLLOW_SOLDIER;
+      const enemy = new Enemy(this.scene, spawn.pos, {
+        type: spawn.type,
+        name: `${typeConfig.name} ${i + 1}`,
       });
       this.enemies.push(enemy);
     });
