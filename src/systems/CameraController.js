@@ -21,6 +21,11 @@ export class CameraController {
     this.currentPos = new THREE.Vector3();
     this.lockOnTarget = null;
     
+    // Smooth lock-on transition
+    this.lockOnYaw = 0;
+    this.lockOnTransition = 0; // 0 = free camera, 1 = fully locked
+    this.lockOnTransitionSpeed = 5; // How fast we transition to/from lock-on
+    
     // Camera shake system
     this.shakeIntensity = 0;
     this.shakeDuration = 0;
@@ -53,7 +58,7 @@ export class CameraController {
   }
 
   update(delta) {
-    // Mouse look
+    // Mouse look (always process, even when locked - allows some camera adjustment)
     const mouseDelta = this.input.getMouseDelta();
     this.yaw -= mouseDelta.x * this.sensitivity;
     this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch + mouseDelta.y * this.sensitivity));
@@ -62,21 +67,44 @@ export class CameraController {
     const targetPos = this.target.position.clone();
     targetPos.y += this.height;
 
-    let offsetX, offsetY, offsetZ;
-
-    if (this.lockOnTarget) {
-      // Lock-on camera: keep enemy in view
-      const toEnemy = new THREE.Vector3().subVectors(this.lockOnTarget.position, targetPos);
-      toEnemy.y = 0;
-      const angle = Math.atan2(toEnemy.x, toEnemy.z);
-      offsetX = Math.sin(angle + Math.PI) * this.distance;
-      offsetZ = Math.cos(angle + Math.PI) * this.distance;
-      offsetY = this.distance * Math.sin(this.pitch);
+    // Smooth transition for lock-on
+    if (this.lockOnTarget && this.lockOnTarget.mesh) {
+      // Check if target is still valid (alive and in range)
+      const enemyPos = this.lockOnTarget.mesh.position;
+      const dist = this.target.position.distanceTo(enemyPos);
+      
+      if (this.lockOnTarget.isDead || dist > 25) {
+        // Target invalid - unlock
+        this.lockOnTarget = null;
+        this.lockOnTransition = Math.max(0, this.lockOnTransition - this.lockOnTransitionSpeed * delta);
+      } else {
+        // Update target yaw angle for smooth camera
+        const toEnemy = new THREE.Vector3().subVectors(enemyPos, targetPos);
+        toEnemy.y = 0;
+        this.lockOnYaw = Math.atan2(toEnemy.x, toEnemy.z) + Math.PI; // Behind player, facing enemy
+        
+        // Transition towards locked state
+        this.lockOnTransition = Math.min(1, this.lockOnTransition + this.lockOnTransitionSpeed * delta);
+      }
     } else {
-      offsetX = Math.sin(this.yaw) * this.distance * Math.cos(this.pitch);
-      offsetZ = Math.cos(this.yaw) * this.distance * Math.cos(this.pitch);
-      offsetY = this.distance * Math.sin(this.pitch);
+      // Transition away from locked state
+      this.lockOnTransition = Math.max(0, this.lockOnTransition - this.lockOnTransitionSpeed * delta);
     }
+
+    // Blend between free camera yaw and lock-on yaw
+    let effectiveYaw = this.yaw;
+    if (this.lockOnTransition > 0) {
+      // Smooth angle interpolation (handle wrapping)
+      let angleDiff = this.lockOnYaw - this.yaw;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      effectiveYaw = this.yaw + angleDiff * this.lockOnTransition;
+    }
+
+    // Calculate camera offset with blended yaw
+    const offsetX = Math.sin(effectiveYaw) * this.distance * Math.cos(this.pitch);
+    const offsetZ = Math.cos(effectiveYaw) * this.distance * Math.cos(this.pitch);
+    const offsetY = this.distance * Math.sin(this.pitch);
 
     const desiredPos = new THREE.Vector3(
       targetPos.x + offsetX,
@@ -93,11 +121,12 @@ export class CameraController {
     this.camera.position.copy(this.currentPos);
     this.camera.position.add(this.shakeOffset);
 
-    // Look at target
+    // Look at target - blend between player and enemy
     const lookTarget = targetPos.clone();
-    if (this.lockOnTarget) {
-      lookTarget.lerpVectors(targetPos, this.lockOnTarget.position, 0.3);
-      lookTarget.y += 1;
+    if (this.lockOnTarget && this.lockOnTarget.mesh && this.lockOnTransition > 0) {
+      const enemyLookPos = this.lockOnTarget.mesh.position.clone();
+      enemyLookPos.y += 1; // Look at enemy center mass
+      lookTarget.lerp(enemyLookPos, 0.35 * this.lockOnTransition);
     }
     this.camera.lookAt(lookTarget);
   }
@@ -127,6 +156,23 @@ export class CameraController {
 
   setLockOnTarget(target) {
     this.lockOnTarget = target;
+    // If setting new target, sync yaw to current effective yaw to prevent snap
+    if (target && target.mesh) {
+      const targetPos = this.target.position.clone();
+      targetPos.y += this.height;
+      const toEnemy = new THREE.Vector3().subVectors(target.mesh.position, targetPos);
+      toEnemy.y = 0;
+      this.lockOnYaw = Math.atan2(toEnemy.x, toEnemy.z) + Math.PI;
+    }
+  }
+  
+  isLockedOn() {
+    return this.lockOnTarget !== null && this.lockOnTransition > 0.5;
+  }
+  
+  clearLockOn() {
+    this.lockOnTarget = null;
+    // Don't reset transition - let it smoothly return to free camera
   }
 
   getForwardDirection() {

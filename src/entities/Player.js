@@ -369,6 +369,11 @@ export class Player {
   }
 
   _processCombatInput() {
+    // Lock-on toggle (Q key)
+    if (this.input.lockOn) {
+      this._toggleLockOn();
+    }
+    
     if (this.input.dodge && this.gm.canUseStamina(COSTS.dodge)) {
       this._startDodge();
       return;
@@ -383,6 +388,70 @@ export class Player {
     }
     if (this.input.block) {
       this._changeState(STATES.BLOCKING);
+    }
+  }
+  
+  // Lock-on system: toggle lock, find target, cycle targets
+  _toggleLockOn() {
+    if (!this.cameraController || !this.gm.enemyManager) return;
+    
+    const enemies = this.gm.enemyManager.enemies;
+    const livingEnemies = enemies.filter(e => !e.isDead);
+    
+    // Add boss if exists and alive
+    if (this.gm.enemyManager.boss && !this.gm.enemyManager.boss.isDead) {
+      livingEnemies.push(this.gm.enemyManager.boss);
+    }
+    
+    if (livingEnemies.length === 0) {
+      // No enemies to lock onto
+      this.cameraController.clearLockOn();
+      return;
+    }
+    
+    // Get enemies in range and sort by distance
+    const lockOnRange = 20;
+    const playerPos = this.mesh.position;
+    const validTargets = livingEnemies
+      .map(e => ({
+        enemy: e,
+        dist: playerPos.distanceTo(e.mesh.position)
+      }))
+      .filter(t => t.dist <= lockOnRange)
+      .sort((a, b) => a.dist - b.dist);
+    
+    if (validTargets.length === 0) {
+      this.cameraController.clearLockOn();
+      return;
+    }
+    
+    const currentTarget = this.cameraController.lockOnTarget;
+    
+    if (currentTarget && !currentTarget.isDead) {
+      // Already locked on - cycle to next target or unlock
+      const currentIdx = validTargets.findIndex(t => t.enemy === currentTarget);
+      if (currentIdx !== -1 && validTargets.length > 1) {
+        // Cycle to next target
+        const nextIdx = (currentIdx + 1) % validTargets.length;
+        this.cameraController.setLockOnTarget(validTargets[nextIdx].enemy);
+        // Play lock-on sound
+        if (this.gm.audioManager) {
+          this.gm.audioManager.play('menuSelect', { volume: 0.3 });
+        }
+      } else {
+        // Only one target or not found - unlock
+        this.cameraController.clearLockOn();
+        if (this.gm.audioManager) {
+          this.gm.audioManager.play('menuBack', { volume: 0.3 });
+        }
+      }
+    } else {
+      // Not locked on - lock to nearest
+      this.cameraController.setLockOnTarget(validTargets[0].enemy);
+      // Play lock-on sound
+      if (this.gm.audioManager) {
+        this.gm.audioManager.play('menuSelect', { volume: 0.4 });
+      }
     }
   }
 
