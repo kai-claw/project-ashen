@@ -160,20 +160,16 @@ export class Player {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
-          // Tone down the model's brightness significantly to match dark environment
+          // Adjust materials for daytime scene
           if (child.material) {
-            // Darken base color substantially
+            // Slight color adjustment for balance
             if (child.material.color) {
-              child.material.color.multiplyScalar(0.35);  // Much darker
+              child.material.color.multiplyScalar(0.85);  // Slight darkening only
             }
-            // Ensure no accidental emission
+            // Remove emissive since scene is bright
             if (child.material.emissive) {
               child.material.emissive.setHex(0x000000);
               child.material.emissiveIntensity = 0;
-            }
-            // Reduce metalness to prevent excessive reflections
-            if (child.material.metalness !== undefined) {
-              child.material.metalness = Math.min(0.3, child.material.metalness);
             }
           }
           // Store original material for flash effects

@@ -280,6 +280,26 @@ export class Enemy {
 
     // Load GLTF model asynchronously
     this._loadGLTFModel();
+    
+    // ========== BOSS-SPECIFIC INITIALIZATION ==========
+    if (this.config.isBoss) {
+      this.isBoss = true;
+      this.bossPhase = this.config.bossPhase || 1;
+      this.bossActive = false;     // Becomes true when boss aggros
+      this.currentBossAttack = null;
+      this.bossComboHit = 0;       // For tracking combo progression
+      this.lastBossAttackTime = 0;
+      this.bossAttackCooldown = 0;
+      this.chargeTarget = null;    // For shoulder bash
+      this.chargeProgress = 0;
+      this.grabTarget = null;      // For grab attack
+      
+      // World reference for arena integration (set by EnemyManager)
+      this.world = null;
+      
+      // Larger health bar for boss
+      this._createHealthBar(3.5);
+    }
   }
   
   /**
@@ -557,19 +577,45 @@ export class Enemy {
         break;
 
       case STATES.CHASE:
-        if (distToPlayer > this.config.detectionRange * 1.5) {
+        // Boss aggro activation - activate arena on first chase
+        if (this.isBoss && !this.bossActive) {
+          this.bossActive = true;
+          this.healthBarGroup.visible = true;
+          // Activate boss arena if world reference exists
+          if (this.world && this.world.activateBossArena) {
+            this.world.activateBossArena();
+          }
+          // Play boss roar
+          if (this.gm?.audioManager) {
+            this.gm.audioManager.play('bossRoar', { position: this.mesh.position, volume: 0.9 });
+          }
+        }
+        
+        // Boss doesn't reset aggro easily
+        if (!this.isBoss && distToPlayer > this.config.detectionRange * 1.5) {
           this._changeState(STATES.IDLE);
           this.healthBarGroup.visible = false;
           break;
         }
         
-        if (healthPercent < 0.3 && !this.config.canChainAttacks && Math.random() < 0.01) {
+        if (!this.isBoss && healthPercent < 0.3 && !this.config.canChainAttacks && Math.random() < 0.01) {
           this._changeState(STATES.RETREAT);
           break;
         }
         
-        if (distToPlayer <= this.config.attackRange) {
-          this._changeState(STATES.ATTACK);
+        if (distToPlayer <= this.config.attackRange && this.bossAttackCooldown <= 0) {
+          if (this.isBoss) {
+            // Boss selects from special attacks
+            this._selectBossAttack(distToPlayer, healthPercent);
+          } else {
+            this._changeState(STATES.ATTACK);
+          }
+          break;
+        }
+        
+        // Boss can charge from range
+        if (this.isBoss && distToPlayer > this.config.attackRange && distToPlayer < 8 && this.bossAttackCooldown <= 0 && Math.random() < 0.02) {
+          this._startBossCharge(player);
           break;
         }
         
@@ -656,12 +702,38 @@ export class Enemy {
         // Face player while rising
         this._faceTarget(player.mesh.position, delta * 2);
         break;
+        
+      // ========== BOSS ATTACK STATES ==========
+      case STATES.BOSS_SLAM:
+        this._processBossSlamAttack(delta, player);
+        break;
+        
+      case STATES.BOSS_SWEEP:
+        this._processBossSweepAttack(delta, player);
+        break;
+        
+      case STATES.BOSS_COMBO:
+        this._processBossComboAttack(delta, player);
+        break;
+        
+      case STATES.BOSS_CHARGE:
+        this._processBossChargeAttack(delta, player);
+        break;
+        
+      case STATES.BOSS_GRAB:
+        this._processBossGrabAttack(delta, player);
+        break;
     }
 
     // Posture regen
     if (this.state !== STATES.STAGGERED && this.posture > 0) {
       this.posture = Math.max(0, this.posture - 8 * delta);
       this._updatePostureBar();
+    }
+    
+    // Boss attack cooldown
+    if (this.isBoss && this.bossAttackCooldown > 0) {
+      this.bossAttackCooldown -= delta;
     }
   }
   
@@ -677,6 +749,403 @@ export class Enemy {
     
     const moveDir = perp.add(distCorrection).normalize();
     this.mesh.position.addScaledVector(moveDir, this.config.moveSpeed * 0.7 * delta);
+  }
+
+  // ========== BOSS ATTACK SELECTION ==========
+  _selectBossAttack(distToPlayer, healthPercent) {
+    const attacks = this.config.attacks;
+    if (!attacks) {
+      this._changeState(STATES.ATTACK);
+      return;
+    }
+    
+    // Roll for attack type based on distance and situation
+    const roll = Math.random();
+    
+    // Close range: Slam, Sweep, Combo, or rare Grab
+    if (distToPlayer <= this.config.attackRange) {
+      if (roll < 0.1 && attacks.GRAB) {
+        // 10% chance for grab (punishes passive play)
+        this._changeState(STATES.BOSS_GRAB);
+      } else if (roll < 0.35) {
+        // 25% chance for slam (highest damage, clear telegraph)
+        this._changeState(STATES.BOSS_SLAM);
+      } else if (roll < 0.65) {
+        // 30% chance for combo (multi-hit, teaches patience)
+        this._changeState(STATES.BOSS_COMBO);
+      } else {
+        // 35% chance for sweep (fast, wide arc)
+        this._changeState(STATES.BOSS_SWEEP);
+      }
+    }
+  }
+  
+  _startBossCharge(player) {
+    this.chargeTarget = player.mesh.position.clone();
+    this.chargeProgress = 0;
+    this._changeState(STATES.BOSS_CHARGE);
+  }
+
+  // ========== BOSS SLAM ATTACK ==========
+  // Overhead vertical slam - high damage, 0.8s windup, 1.5s punish window
+  _processBossSlamAttack(delta, player) {
+    const attack = this.config.attacks?.GREATSWORD_SLAM;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const strikeTime = windupTime + 0.3;
+    const recoveryTime = strikeTime + attack.recovery;
+    
+    // Windup - raise weapon high
+    if (this.stateTimer < windupTime) {
+      this._faceTarget(player.mesh.position, delta * 2);
+      // Visual telegraph - model leans back
+      const progress = this.stateTimer / windupTime;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.rotation.x = progress * -0.3; // Lean back
+      }
+      return;
+    }
+    
+    // Strike
+    if (this.stateTimer >= windupTime && this.stateTimer < strikeTime) {
+      if (!this.hitThisSwing) {
+        const attackDir = new THREE.Vector3(
+          Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)
+        );
+        this.activeAttack = {
+          position: this.mesh.position.clone().add(attackDir.multiplyScalar(1.5)).add(new THREE.Vector3(0, 1.5, 0)),
+          range: attack.range,
+          damage: attack.damage,
+          postureDmg: attack.postureDmg,
+          isHeavy: true,
+        };
+        // Play swing sound
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('swordSwing', { position: this.mesh.position, volume: 0.8, pitch: 0.6 });
+        }
+      }
+      // Strike animation - lean forward
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        const strikeProgress = (this.stateTimer - windupTime) / 0.3;
+        targetModel.rotation.x = THREE.MathUtils.lerp(-0.3, 0.2, strikeProgress);
+      }
+    }
+    
+    // Recovery - long punish window
+    if (this.stateTimer >= strikeTime && this.stateTimer < recoveryTime) {
+      this.activeAttack = null;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.rotation.x = THREE.MathUtils.lerp(targetModel.rotation.x, 0, 0.08);
+      }
+    }
+    
+    // End attack
+    if (this.stateTimer >= recoveryTime) {
+      this._endBossAttack();
+    }
+  }
+
+  // ========== BOSS SWEEP ATTACK ==========
+  // Horizontal sweep - wide arc, 0.6s windup, 1.0s punish
+  _processBossSweepAttack(delta, player) {
+    const attack = this.config.attacks?.HORIZONTAL_SWEEP;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const strikeTime = windupTime + 0.25;
+    const recoveryTime = strikeTime + attack.recovery;
+    
+    // Windup - pull weapon to side
+    if (this.stateTimer < windupTime) {
+      this._faceTarget(player.mesh.position, delta * 2);
+      const progress = this.stateTimer / windupTime;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.rotation.z = progress * 0.3; // Lean into swing
+      }
+      return;
+    }
+    
+    // Strike - wide arc
+    if (this.stateTimer >= windupTime && this.stateTimer < strikeTime) {
+      if (!this.hitThisSwing) {
+        // Sweep covers 180 degrees in front
+        this.activeAttack = {
+          position: this.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)),
+          range: attack.range,
+          damage: attack.damage,
+          postureDmg: attack.postureDmg,
+          isHeavy: false,
+        };
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('swordSwing', { position: this.mesh.position, volume: 0.7 });
+        }
+      }
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        const strikeProgress = (this.stateTimer - windupTime) / 0.25;
+        targetModel.rotation.z = THREE.MathUtils.lerp(0.3, -0.25, strikeProgress);
+      }
+    }
+    
+    // Recovery
+    if (this.stateTimer >= strikeTime && this.stateTimer < recoveryTime) {
+      this.activeAttack = null;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.rotation.z = THREE.MathUtils.lerp(targetModel.rotation.z, 0, 0.1);
+      }
+    }
+    
+    if (this.stateTimer >= recoveryTime) {
+      this._endBossAttack();
+    }
+  }
+
+  // ========== BOSS COMBO ATTACK ==========
+  // 3-hit combo - sweep, sweep, overhead finisher
+  _processBossComboAttack(delta, player) {
+    const attack = this.config.attacks?.THREE_HIT_COMBO;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const hitDuration = 0.3;
+    const hitTotalTime = windupTime + hitDuration;
+    const nextHitDelay = 0.15;
+    
+    // Calculate which hit we're on (0, 1, or 2)
+    const hitIndex = this.bossComboHit || 0;
+    const hitStartTime = hitIndex * (hitTotalTime + nextHitDelay);
+    const localTimer = this.stateTimer - hitStartTime;
+    
+    // Windup for current hit
+    if (localTimer < windupTime) {
+      this._faceTarget(player.mesh.position, delta * 3); // Fast tracking during combo
+      const progress = localTimer / windupTime;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        const swingDir = hitIndex % 2 === 0 ? 1 : -1;
+        targetModel.rotation.z = progress * 0.25 * swingDir;
+      }
+      return;
+    }
+    
+    // Strike
+    if (localTimer >= windupTime && localTimer < hitTotalTime) {
+      if (!this.hitThisSwing) {
+        const damages = attack.damages || [35, 35, 50];
+        const damage = damages[hitIndex] || attack.damage;
+        
+        this.activeAttack = {
+          position: this.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)),
+          range: attack.range,
+          damage: damage,
+          postureDmg: attack.postureDmg,
+          isHeavy: hitIndex === 2, // Final hit is heavy
+          isCombo: true,
+        };
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('swordSwing', { 
+            position: this.mesh.position, 
+            volume: 0.65,
+            pitch: 0.85 + hitIndex * 0.1 
+          });
+        }
+        this.hitThisSwing = true;
+      }
+      
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        const strikeProgress = (localTimer - windupTime) / hitDuration;
+        const swingDir = hitIndex % 2 === 0 ? 1 : -1;
+        targetModel.rotation.z = THREE.MathUtils.lerp(0.25 * swingDir, -0.2 * swingDir, strikeProgress);
+      }
+    }
+    
+    // Check for next hit or recovery
+    if (localTimer >= hitTotalTime) {
+      this.activeAttack = null;
+      this.hitThisSwing = false;
+      
+      const distToPlayer = this.mesh.position.distanceTo(player.mesh.position);
+      
+      // Continue combo if player still in range and not final hit
+      if (hitIndex < 2 && distToPlayer < this.config.attackRange * 1.3) {
+        this.bossComboHit = hitIndex + 1;
+        // Step forward during combo
+        const fwd = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+        this.mesh.position.addScaledVector(fwd, 0.5);
+      } else {
+        // End combo - long recovery after full combo
+        const targetModel = this.gltfModel || this.fallbackBody;
+        if (targetModel) targetModel.rotation.z = 0;
+        
+        // Recovery time after combo
+        if (localTimer >= hitTotalTime + attack.recovery) {
+          this.bossComboHit = 0;
+          this._endBossAttack();
+        }
+      }
+    }
+  }
+
+  // ========== BOSS CHARGE ATTACK ==========
+  // Shoulder bash - closes distance, high posture damage
+  _processBossChargeAttack(delta, player) {
+    const attack = this.config.attacks?.SHOULDER_BASH;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const chargeDuration = 0.4;
+    const chargeTime = windupTime + chargeDuration;
+    const recoveryTime = chargeTime + attack.recovery;
+    
+    // Windup - crouch and lower shoulder
+    if (this.stateTimer < windupTime) {
+      this._faceTarget(player.mesh.position, delta * 2);
+      this.chargeTarget = player.mesh.position.clone();
+      const progress = this.stateTimer / windupTime;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.position.y = -progress * 0.3; // Crouch
+        targetModel.rotation.x = progress * 0.2; // Lean forward
+      }
+      return;
+    }
+    
+    // Charge
+    if (this.stateTimer >= windupTime && this.stateTimer < chargeTime) {
+      if (!this.hitThisSwing) {
+        this.activeAttack = {
+          position: this.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)),
+          range: 2.0,
+          damage: attack.damage,
+          postureDmg: attack.postureDmg,
+          isHeavy: true,
+          isCharge: true,
+        };
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('dash', { position: this.mesh.position, volume: 0.8 });
+        }
+      }
+      
+      // Move toward charge target
+      const chargeSpeed = attack.range / chargeDuration;
+      this._moveToward(this.chargeTarget, chargeSpeed, delta);
+      
+      // Update attack position as we move
+      if (this.activeAttack) {
+        this.activeAttack.position = this.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
+      }
+    }
+    
+    // Recovery - slide to stop
+    if (this.stateTimer >= chargeTime && this.stateTimer < recoveryTime) {
+      this.activeAttack = null;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.position.y = THREE.MathUtils.lerp(targetModel.position.y, 0, 0.15);
+        targetModel.rotation.x = THREE.MathUtils.lerp(targetModel.rotation.x, 0, 0.15);
+      }
+    }
+    
+    if (this.stateTimer >= recoveryTime) {
+      this._endBossAttack();
+    }
+  }
+
+  // ========== BOSS GRAB ATTACK ==========
+  // Grab - unblockable, high damage, rare, long recovery
+  _processBossGrabAttack(delta, player) {
+    const attack = this.config.attacks?.GRAB;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const grabTime = windupTime + 0.3;
+    const slamTime = grabTime + 0.5;
+    const recoveryTime = slamTime + attack.recovery;
+    
+    // Windup - arms spread wide (clear telegraph)
+    if (this.stateTimer < windupTime) {
+      this._faceTarget(player.mesh.position, delta * 1.5);
+      const progress = this.stateTimer / windupTime;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        // Spread arms animation (simulated)
+        targetModel.scale.x = 1 + progress * 0.15;
+      }
+      return;
+    }
+    
+    // Grab attempt
+    if (this.stateTimer >= windupTime && this.stateTimer < grabTime) {
+      if (!this.hitThisSwing) {
+        const distToPlayer = this.mesh.position.distanceTo(player.mesh.position);
+        if (distToPlayer < attack.range) {
+          // Grab connects - unblockable damage
+          this.activeAttack = {
+            position: this.mesh.position.clone(),
+            range: attack.range,
+            damage: attack.damage,
+            postureDmg: 0,
+            isGrab: true,
+            isUnblockable: true,
+          };
+          this.grabTarget = player;
+          if (this.gm?.audioManager) {
+            this.gm.audioManager.play('criticalHit', { position: this.mesh.position, volume: 0.9 });
+          }
+        }
+        this.hitThisSwing = true;
+      }
+    }
+    
+    // Slam animation (if grab connected)
+    if (this.stateTimer >= grabTime && this.stateTimer < slamTime) {
+      this.activeAttack = null;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.scale.x = THREE.MathUtils.lerp(targetModel.scale.x, 1, 0.1);
+      }
+    }
+    
+    // Recovery - very long punish window
+    if (this.stateTimer >= slamTime && this.stateTimer < recoveryTime) {
+      this.grabTarget = null;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.scale.x = 1;
+      }
+    }
+    
+    if (this.stateTimer >= recoveryTime) {
+      this._endBossAttack();
+    }
+  }
+  
+  // End boss attack and set cooldown
+  _endBossAttack() {
+    this.hitThisSwing = false;
+    this.activeAttack = null;
+    this.bossComboHit = 0;
+    this.chargeTarget = null;
+    this.grabTarget = null;
+    this.bossAttackCooldown = this.config.attackCooldown;
+    
+    // Reset model transforms
+    const targetModel = this.gltfModel || this.fallbackBody;
+    if (targetModel) {
+      targetModel.rotation.x = 0;
+      targetModel.rotation.z = 0;
+      targetModel.position.y = 0;
+      targetModel.scale.x = 1;
+    }
+    
+    this._changeState(STATES.CHASE);
   }
 
   _processAttack(delta, player) {

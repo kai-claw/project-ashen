@@ -11,6 +11,7 @@ export class EnemyManager {
     this.particleManager = particleManager;
     this.enemies = [];
     this.boss = null;
+    this.cryptLord = null;  // Second boss - The Crypt Lord
 
     // Spawn enemies from world data or fallback
     this._spawnEnemies();
@@ -31,8 +32,18 @@ export class EnemyManager {
       const typeConfig = ENEMY_TYPES[spawn.type] || ENEMY_TYPES.HOLLOW_SOLDIER;
       const enemy = new Enemy(this.scene, spawn.pos, {
         type: spawn.type,
-        name: `${typeConfig.name} ${i + 1}`,
+        name: typeConfig.name,
+        behavior: spawn.behavior,
+        triggerRadius: spawn.triggerRadius,
       }, this.gm);
+      
+      // Special handling for Crypt Lord (second boss)
+      if (spawn.type === 'CRYPT_LORD' || spawn.isCryptLord) {
+        this.cryptLord = enemy;
+        // Give Crypt Lord world reference for arena activation
+        enemy.world = this.world;
+      }
+      
       this.enemies.push(enemy);
     });
   }
@@ -309,5 +320,23 @@ export class EnemyManager {
   // Get boss reference for HUD
   getBoss() {
     return this.boss;
+  }
+  
+  // Get Crypt Lord reference for HUD (second boss)
+  getCryptLord() {
+    return this.cryptLord;
+  }
+  
+  // Get currently active boss (whichever is in combat)
+  getActiveBoss() {
+    // Prioritize Crypt Lord if active
+    if (this.cryptLord && this.cryptLord.bossActive && !this.cryptLord.isDead) {
+      return this.cryptLord;
+    }
+    // Fall back to original boss
+    if (this.boss && this.boss.isActive && !this.boss.isDead) {
+      return this.boss;
+    }
+    return null;
   }
 }

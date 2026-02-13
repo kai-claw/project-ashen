@@ -132,43 +132,72 @@ export class HUD {
   _updateBossUI() {
     if (!this.enemyManager || !this.bossContainer) return;
     
-    const boss = this.enemyManager.getBoss();
-    if (!boss) {
+    // Check for Crypt Lord first, then original boss
+    const cryptLord = this.enemyManager.getCryptLord();
+    const originalBoss = this.enemyManager.getBoss();
+    
+    // Determine which boss to show
+    let activeBoss = null;
+    let isCryptLord = false;
+    
+    if (cryptLord && cryptLord.bossActive && !cryptLord.isDead) {
+      activeBoss = cryptLord;
+      isCryptLord = true;
+    } else if (originalBoss && originalBoss.isActive && !originalBoss.isDead) {
+      activeBoss = originalBoss;
+    }
+    
+    if (!activeBoss) {
       this.bossContainer.style.display = 'none';
       return;
     }
     
-    // Show boss bar only when boss is active
-    if (boss.isActive && !boss.isDead) {
-      this.bossContainer.style.display = 'block';
+    // Show boss bar
+    this.bossContainer.style.display = 'block';
+    
+    if (this.bossName) {
+      this.bossName.textContent = isCryptLord ? activeBoss.config.name : activeBoss.name;
+    }
+    
+    if (this.bossHealthBar) {
+      const healthPercent = (activeBoss.health / activeBoss.maxHealth) * 100;
+      this.bossHealthBar.style.width = `${healthPercent}%`;
       
-      if (this.bossName) {
-        this.bossName.textContent = boss.name;
-      }
-      
-      if (this.bossHealthBar) {
-        const healthPercent = (boss.health / boss.maxHealth) * 100;
-        this.bossHealthBar.style.width = `${healthPercent}%`;
-        
-        // Color changes with phase
-        if (boss.phase === 2) {
+      // Color based on boss type and phase
+      if (isCryptLord) {
+        // Crypt Lord: Purple/dark theme
+        const phase = activeBoss.bossPhase || 1;
+        if (phase === 2) {
+          this.bossHealthBar.style.background = 'linear-gradient(90deg, #8844cc, #aa66ff)';
+        } else {
+          this.bossHealthBar.style.background = 'linear-gradient(90deg, #882222, #cc4444)';
+        }
+      } else {
+        // Original boss
+        if (activeBoss.phase === 2) {
           this.bossHealthBar.style.background = 'linear-gradient(90deg, #ff4400, #ff6622)';
         } else {
           this.bossHealthBar.style.background = 'linear-gradient(90deg, #cc2222, #ff4444)';
         }
       }
       
-      if (this.bossPostureBar) {
-        const posturePercent = (boss.posture / boss.maxPosture) * 100;
-        this.bossPostureBar.style.width = `${posturePercent}%`;
+      // Phase marker at 50%
+      if (healthPercent <= 50 && healthPercent > 0) {
+        this.bossHealthBar.classList.add('phase-two');
+      } else {
+        this.bossHealthBar.classList.remove('phase-two');
       }
-      
-      if (this.bossPhase) {
-        this.bossPhase.textContent = boss.phase === 2 ? 'PHASE 2' : '';
-        this.bossPhase.style.color = boss.phase === 2 ? '#ff4400' : '#ffcc00';
-      }
-    } else {
-      this.bossContainer.style.display = 'none';
+    }
+    
+    if (this.bossPostureBar) {
+      const posturePercent = (activeBoss.posture / activeBoss.maxPosture) * 100;
+      this.bossPostureBar.style.width = `${posturePercent}%`;
+    }
+    
+    if (this.bossPhase) {
+      const phase = isCryptLord ? (activeBoss.bossPhase || 1) : activeBoss.phase;
+      this.bossPhase.textContent = phase === 2 ? 'PHASE 2' : '';
+      this.bossPhase.style.color = phase === 2 ? (isCryptLord ? '#aa66ff' : '#ff4400') : '#ffcc00';
     }
   }
 }

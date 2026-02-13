@@ -2560,15 +2560,15 @@ export class World {
   
   _createLighting() {
     // Hemisphere light for natural sky/ground bounce - BOOSTED
-    const hemiLight = new THREE.HemisphereLight(0xccccff, 0xaa9988, 3.5);  // Cranked up
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xccccaa, 6.0);  // Daytime bright
     this.scene.add(hemiLight);
     
     // Ambient for base visibility - VERY bright so everything is visible
-    const ambient = new THREE.AmbientLight(0xccccdd, 3.0);  // Cranked up for visibility
+    const ambient = new THREE.AmbientLight(0xffffff, 5.0);  // Bright daytime
     this.scene.add(ambient);
     
     // Moonlight - main directional (silvery blue)
-    const moonLight = new THREE.DirectionalLight(0xaabbee, 2.5);  // Boosted from 1.5
+    const moonLight = new THREE.DirectionalLight(0xffffee, 4.0);  // Bright sunlight
     moonLight.position.set(-50, 80, -100);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.set(4096, 4096);
@@ -2582,7 +2582,7 @@ export class World {
     this.scene.add(moonLight);
     
     // Secondary fill light (warm, from opposite direction)
-    const fillLight = new THREE.DirectionalLight(0xcc8866, 1.0);  // Boosted from 0.4
+    const fillLight = new THREE.DirectionalLight(0xffeedd, 2.5);  // Warm fill
     fillLight.position.set(30, 20, 50);
     this.scene.add(fillLight);
     
@@ -2794,8 +2794,8 @@ export class World {
       { pos: new THREE.Vector3(-20, CRYPT_Y, -45), type: 'BONE_REVENANT', behavior: 'ambush', triggerRadius: 6 },
       { pos: new THREE.Vector3(-16, CRYPT_Y, -49), type: 'BONE_REVENANT', behavior: 'ambush', triggerRadius: 6 },
       
-      // Ritual Chamber - Crypt Guardian elite (mini-boss guarding the ritual circle)
-      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'CRYPT_GUARDIAN', behavior: 'guard' },
+      // Ritual Chamber - THE CRYPT LORD (Second Boss)
+      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'CRYPT_LORD', behavior: 'guard', isCryptLord: true },
     ];
   }
   

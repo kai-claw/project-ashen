@@ -87,8 +87,8 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 // No fog - clean visibility
 scene.fog = null;
-// Lighter background so environment is more visible
-scene.background = new THREE.Color(0x151525);
+// Bright sky background for daytime visibility
+scene.background = new THREE.Color(0x87CEEB);  // Sky blue
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, 5, 15);
