@@ -6,10 +6,13 @@ export class World {
     this.colliders = []; // For collision detection
     this.doors = []; // Locked doors
     this.hiddenWalls = []; // Illusory walls
+    this.ladders = []; // Climbable ladders
+    this.shortcuts = []; // Unlockable shortcuts
     this.bonfirePosition = new THREE.Vector3(0, 0, 5);
     
     this._createSkybox();
     this._createCathedral();
+    this._createUndergroundCrypt(); // NEW: Underground level
     this._createLighting();
     this._createEnvironmentProps();
   }
@@ -635,6 +638,950 @@ export class World {
     this._scatterDebris(0, -30, 40, 60, 30, stoneMat);
   }
   
+  /**
+   * UNDERGROUND CRYPT - Deep level beneath cathedral
+   * Accessed via spiral stairs from main hall (z:-30)
+   * All geometry at Y=-3 (3 meters below cathedral floor)
+   */
+  _createUndergroundCrypt() {
+    const CRYPT_Y = -3; // Crypt floor level
+    
+    // Create ancient crypt stone material (older, darker than cathedral)
+    const cryptStoneCanvas = document.createElement('canvas');
+    cryptStoneCanvas.width = 256;
+    cryptStoneCanvas.height = 256;
+    const cctx = cryptStoneCanvas.getContext('2d');
+    
+    // Very dark base with greenish tint (ancient, damp)
+    cctx.fillStyle = '#1a1820';
+    cctx.fillRect(0, 0, 256, 256);
+    
+    // Weathered stone texture
+    for (let i = 0; i < 3000; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 256;
+      const size = Math.random() * 4 + 1;
+      const brightness = Math.floor(Math.random() * 20);
+      const greenTint = Math.floor(Math.random() * 8);
+      cctx.fillStyle = `rgb(${22 + brightness}, ${24 + brightness + greenTint}, ${28 + brightness})`;
+      cctx.fillRect(x, y, size, size);
+    }
+    
+    // Cracks and age marks
+    cctx.strokeStyle = '#0a0810';
+    cctx.lineWidth = 1;
+    for (let i = 0; i < 10; i++) {
+      cctx.beginPath();
+      let x = Math.random() * 256;
+      let y = Math.random() * 256;
+      cctx.moveTo(x, y);
+      for (let j = 0; j < 5; j++) {
+        x += (Math.random() - 0.5) * 40;
+        y += (Math.random() - 0.5) * 40;
+        cctx.lineTo(x, y);
+      }
+      cctx.stroke();
+    }
+    
+    const cryptTexture = new THREE.CanvasTexture(cryptStoneCanvas);
+    cryptTexture.wrapS = THREE.RepeatWrapping;
+    cryptTexture.wrapT = THREE.RepeatWrapping;
+    cryptTexture.repeat.set(2, 2);
+    
+    const cryptStoneMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1820,
+      roughness: 0.95,
+      metalness: 0.02,
+      map: cryptTexture,
+    });
+    
+    // Crypt floor material (cobblestones with moss)
+    const cryptFloorCanvas = document.createElement('canvas');
+    cryptFloorCanvas.width = 256;
+    cryptFloorCanvas.height = 256;
+    const cfctx = cryptFloorCanvas.getContext('2d');
+    
+    cfctx.fillStyle = '#151318';
+    cfctx.fillRect(0, 0, 256, 256);
+    
+    // Irregular flagstones
+    for (let i = 0; i < 20; i++) {
+      const x = (i % 4) * 64 + Math.random() * 10;
+      const y = Math.floor(i / 4) * 52 + Math.random() * 10;
+      const w = 50 + Math.random() * 12;
+      const h = 40 + Math.random() * 10;
+      const brightness = Math.floor(Math.random() * 15);
+      cfctx.fillStyle = `rgb(${18 + brightness}, ${20 + brightness}, ${22 + brightness})`;
+      cfctx.beginPath();
+      cfctx.roundRect(x, y, w, h, 3);
+      cfctx.fill();
+      cfctx.strokeStyle = '#0a080c';
+      cfctx.lineWidth = 2;
+      cfctx.stroke();
+      
+      // Moss patches
+      if (Math.random() > 0.7) {
+        cfctx.fillStyle = `rgba(30, 50, 35, ${0.3 + Math.random() * 0.3})`;
+        cfctx.beginPath();
+        cfctx.ellipse(x + w/2, y + h/2, 10 + Math.random() * 15, 8 + Math.random() * 10, 0, 0, Math.PI * 2);
+        cfctx.fill();
+      }
+    }
+    
+    const cryptFloorTexture = new THREE.CanvasTexture(cryptFloorCanvas);
+    cryptFloorTexture.wrapS = THREE.RepeatWrapping;
+    cryptFloorTexture.wrapT = THREE.RepeatWrapping;
+    cryptFloorTexture.repeat.set(3, 3);
+    
+    const cryptFloorMat = new THREE.MeshStandardMaterial({
+      color: 0x151318,
+      roughness: 0.98,
+      metalness: 0.01,
+      map: cryptFloorTexture,
+    });
+    
+    // Bone material for ossuary
+    const boneMat = new THREE.MeshStandardMaterial({
+      color: 0xd8d0c0,
+      roughness: 0.7,
+      emissive: 0x201815,
+      emissiveIntensity: 0.1,
+    });
+    
+    // === SPIRAL STAIRCASE ENTRANCE ===
+    // Located in cathedral main hall at z:-30
+    this._createSpiralStairs(0, 0, -30, CRYPT_Y, 3, 2);
+    
+    // === 1. ENTRY ANTECHAMBER ===
+    // Circular chamber, radius 6, at x:0, z:-25, y:-3
+    this._createCircularRoom(0, CRYPT_Y, -25, 6, 4, cryptFloorMat, cryptStoneMat);
+    
+    // Central unlit brazier
+    this._createBrazier(0, CRYPT_Y, -25, false);
+    
+    // Four statue alcoves (two crumbled)
+    const statueAngles = [0, Math.PI/2, Math.PI, Math.PI * 1.5];
+    statueAngles.forEach((angle, i) => {
+      const x = Math.cos(angle) * 4.5;
+      const z = -25 + Math.sin(angle) * 4.5;
+      if (i < 2) {
+        this._createStatue(x, CRYPT_Y, z, cryptStoneMat, false); // Intact
+      } else {
+        this._createCrumbledStatue(x, CRYPT_Y, z, cryptStoneMat); // Crumbled
+      }
+    });
+    
+    // Bioluminescent moss on north wall
+    this._createGlowingMoss(0, CRYPT_Y + 2, -19, 0x44ffaa, 2);
+    
+    // === 2. WEST CORRIDOR ===
+    // 4 units wide, 16 units long, with burial alcoves
+    this._createCryptFloorSection(-12, CRYPT_Y, -33, 4, 16, cryptFloorMat);
+    this._createWall(-14, CRYPT_Y + 2, -33, 0.5, 4, 16, cryptStoneMat);
+    this._createWall(-10, CRYPT_Y + 2, -33, 0.5, 4, 16, cryptStoneMat);
+    
+    // Burial alcoves (4 per side, 8 total)
+    for (let i = 0; i < 4; i++) {
+      const alcoveZ = -27 - i * 4;
+      // Left alcoves
+      this._createBurialAlcove(-15, CRYPT_Y, alcoveZ, 'left', cryptStoneMat, i === 1);
+      // Right alcoves
+      this._createBurialAlcove(-9, CRYPT_Y, alcoveZ, 'right', cryptStoneMat, i === 2);
+    }
+    
+    // One sarcophagus contains item (alcove 3)
+    // (Item spawns handled in getItemSpawns)
+    
+    // === 3. OSSUARY CHAMBER ===
+    // 12x12 units, bone pillars, skull walls
+    this._createCryptFloorSection(-18, CRYPT_Y, -47, 12, 12, cryptFloorMat);
+    this._createWall(-24, CRYPT_Y + 2, -47, 0.5, 4, 12, cryptStoneMat);
+    this._createWall(-12, CRYPT_Y + 2, -47, 0.5, 4, 12, cryptStoneMat);
+    this._createWall(-18, CRYPT_Y + 2, -53, 12, 4, 0.5, cryptStoneMat);
+    this._createWall(-18, CRYPT_Y + 2, -41, 12, 4, 0.5, cryptStoneMat);
+    
+    // Four bone pillars
+    const bonePillarPositions = [
+      [-21, -44], [-15, -44],
+      [-21, -50], [-15, -50],
+    ];
+    bonePillarPositions.forEach(([x, z]) => {
+      this._createBonePillar(x, CRYPT_Y, z, boneMat);
+    });
+    
+    // Central pit (visual, deep)
+    this._createPit(-18, CRYPT_Y, -47, 3);
+    
+    // Skull-lined walls (decorative)
+    this._createSkullWall(-24, CRYPT_Y + 1, -47, 0.5, 2, 10);
+    this._createSkullWall(-12, CRYPT_Y + 1, -47, 0.5, 2, 10);
+    
+    // Blue fungal glow
+    this._createGlowingMoss(-20, CRYPT_Y + 0.5, -45, 0x4488ff, 3);
+    this._createGlowingMoss(-16, CRYPT_Y + 0.5, -49, 0x44aaff, 2);
+    
+    // === 4. RITUAL CHAMBER ===
+    // Octagonal, 16 diameter, center at x:0, z:-50
+    this._createOctagonalRoom(0, CRYPT_Y, -55, 8, 5, cryptFloorMat, cryptStoneMat);
+    
+    // 8 stone pillars in octagon
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const x = Math.cos(angle) * 6;
+      const z = -55 + Math.sin(angle) * 6;
+      this._createPillar(x, z, cryptStoneMat, 5, CRYPT_Y);
+    }
+    
+    // Central ritual circle (glowing red)
+    this._createRitualCircle(0, CRYPT_Y + 0.02, -55, 4, 0xcc2222);
+    
+    // Raised dais/altar in center
+    const daisGeo = new THREE.CylinderGeometry(1.5, 1.8, 0.5, 8);
+    const dais = new THREE.Mesh(daisGeo, cryptStoneMat);
+    dais.position.set(0, CRYPT_Y + 0.25, -55);
+    dais.castShadow = true;
+    dais.receiveShadow = true;
+    this.scene.add(dais);
+    
+    // Chains hanging from ceiling (environmental storytelling)
+    this._createHangingChains(0, CRYPT_Y + 4, -55, 4);
+    
+    // === 5. SOUTH CORRIDOR ===
+    // 4 units wide, 20 long, oldest stonework
+    this._createCryptFloorSection(0, CRYPT_Y, -70, 4, 20, cryptFloorMat);
+    this._createWall(-2, CRYPT_Y + 2, -70, 0.5, 4, 20, cryptStoneMat);
+    this._createWall(2, CRYPT_Y + 2, -70, 0.5, 4, 20, cryptStoneMat);
+    this._createWall(0, CRYPT_Y + 2, -80, 4, 4, 0.5, cryptStoneMat); // Dead end (illusory!)
+    
+    // Wall niches with skeletal remains
+    for (let i = 0; i < 5; i++) {
+      this._createWallNiche(-2.3, CRYPT_Y + 1.5, -62 - i * 3.5, 'left');
+      this._createWallNiche(2.3, CRYPT_Y + 1.5, -63 - i * 3.5, 'right');
+    }
+    
+    // Frost effect on surfaces (visual)
+    this._createFrostPatches(0, CRYPT_Y + 0.01, -70, 4, 20);
+    
+    // SECRET ROOM behind illusory wall at east side of corridor end
+    this._createHiddenWall(4, CRYPT_Y + 2, -77, 0.5, 4, 6, cryptStoneMat, 'crypt-secret');
+    
+    // Secret room (6x6)
+    this._createCryptFloorSection(8, CRYPT_Y, -77, 6, 6, cryptFloorMat);
+    this._createWall(11, CRYPT_Y + 2, -77, 0.5, 4, 6, cryptStoneMat);
+    this._createWall(8, CRYPT_Y + 2, -80, 6, 4, 0.5, cryptStoneMat);
+    this._createWall(8, CRYPT_Y + 2, -74, 6, 4, 0.5, cryptStoneMat);
+    
+    // Golden glow in secret room
+    const secretLight = new THREE.PointLight(0xffdd44, 1.5, 8);
+    secretLight.position.set(8, CRYPT_Y + 2, -77);
+    this.scene.add(secretLight);
+    
+    // Kneeling skeleton reaching toward shard
+    this._createKneelingSkeletonProp(7, CRYPT_Y, -77);
+    
+    // === 6. SHORTCUT CHAMBER ===
+    // 8x8 units, southwest terminus
+    this._createCryptFloorSection(-6, CRYPT_Y, -78, 8, 8, cryptFloorMat);
+    this._createWall(-10, CRYPT_Y + 2, -78, 0.5, 4, 8, cryptStoneMat);
+    this._createWall(-2, CRYPT_Y + 2, -81, 0.5, 4, 2, cryptStoneMat); // Partial wall
+    this._createWall(-6, CRYPT_Y + 2, -82, 8, 4, 0.5, cryptStoneMat);
+    this._createWall(-6, CRYPT_Y + 2, -74, 8, 4, 0.5, cryptStoneMat);
+    
+    // Rusty ladder going up
+    this._createLadder(-6, CRYPT_Y, -81, 0, 8, 'shortcut-ladder');
+    
+    // Locked shortcut door (unlockable from crypt side)
+    this._createShortcutDoor(-6, CRYPT_Y + 2, -74.5, 2, 3.5, 0.3, 'crypt-shortcut');
+    
+    // Small workbench (lore prop)
+    const benchGeo = new THREE.BoxGeometry(1.5, 0.8, 0.8);
+    const benchMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.9 });
+    const bench = new THREE.Mesh(benchGeo, benchMat);
+    bench.position.set(-8, CRYPT_Y + 0.4, -79);
+    bench.castShadow = true;
+    this.scene.add(bench);
+    
+    // === CRYPT CEILING (low, oppressive) ===
+    // Create ceiling sections over major rooms
+    this._createCeiling(0, CRYPT_Y + 4, -25, 14, 14, cryptStoneMat); // Antechamber
+    this._createCeiling(-12, CRYPT_Y + 3.5, -33, 6, 18, cryptStoneMat); // West corridor
+    this._createCeiling(-18, CRYPT_Y + 3.5, -47, 14, 14, cryptStoneMat); // Ossuary
+    this._createCeiling(0, CRYPT_Y + 5, -55, 18, 18, cryptStoneMat); // Ritual chamber
+    this._createCeiling(0, CRYPT_Y + 3.5, -70, 6, 22, cryptStoneMat); // South corridor
+    this._createCeiling(8, CRYPT_Y + 3.5, -77, 8, 8, cryptStoneMat); // Secret room
+    this._createCeiling(-6, CRYPT_Y + 3.5, -78, 10, 10, cryptStoneMat); // Shortcut chamber
+    
+    // === CRYPT LIGHTING ===
+    this._addCryptLighting(CRYPT_Y);
+  }
+  
+  // === CRYPT HELPER METHODS ===
+  
+  _createCryptFloorSection(x, y, z, width, depth, mat) {
+    const geo = new THREE.PlaneGeometry(width, depth);
+    const floor = new THREE.Mesh(geo, mat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(x, y, z);
+    floor.receiveShadow = true;
+    this.scene.add(floor);
+  }
+  
+  _createCeiling(x, y, z, width, depth, mat) {
+    const geo = new THREE.PlaneGeometry(width, depth);
+    const ceiling = new THREE.Mesh(geo, mat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(x, y, z);
+    ceiling.receiveShadow = true;
+    this.scene.add(ceiling);
+  }
+  
+  _createSpiralStairs(x, yTop, z, yBottom, width, radius) {
+    // Create spiral staircase geometry
+    const steps = 16;
+    const heightPerStep = (yTop - yBottom) / steps;
+    const anglePerStep = (Math.PI * 2) / 8; // 2 full rotations
+    
+    const stepMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3840,
+      roughness: 0.85,
+    });
+    
+    for (let i = 0; i < steps; i++) {
+      const angle = i * anglePerStep;
+      const stepY = yTop - (i + 0.5) * heightPerStep;
+      const stepX = x + Math.cos(angle) * radius * 0.5;
+      const stepZ = z + Math.sin(angle) * radius * 0.5;
+      
+      // Step geometry (wedge shape approximated with box)
+      const stepGeo = new THREE.BoxGeometry(width, 0.2, 1.2);
+      const step = new THREE.Mesh(stepGeo, stepMat);
+      step.position.set(stepX, stepY, stepZ);
+      step.rotation.y = -angle;
+      step.castShadow = true;
+      step.receiveShadow = true;
+      this.scene.add(step);
+    }
+    
+    // Central pillar
+    const pillarGeo = new THREE.CylinderGeometry(0.4, 0.4, yTop - yBottom + 1, 8);
+    const pillar = new THREE.Mesh(pillarGeo, stepMat);
+    pillar.position.set(x, (yTop + yBottom) / 2, z);
+    pillar.castShadow = true;
+    this.scene.add(pillar);
+    
+    // Opening in cathedral floor (visual)
+    const holeGeo = new THREE.RingGeometry(0.5, width, 16);
+    const holeMat = new THREE.MeshBasicMaterial({ color: 0x0a0808, side: THREE.DoubleSide });
+    const hole = new THREE.Mesh(holeGeo, holeMat);
+    hole.rotation.x = -Math.PI / 2;
+    hole.position.set(x, yTop - 0.05, z);
+    this.scene.add(hole);
+  }
+  
+  _createCircularRoom(x, y, z, radius, height, floorMat, wallMat) {
+    // Circular floor
+    const floorGeo = new THREE.CircleGeometry(radius, 24);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(x, y, z);
+    floor.receiveShadow = true;
+    this.scene.add(floor);
+    
+    // Cylindrical wall (using segments)
+    const wallSegments = 24;
+    for (let i = 0; i < wallSegments; i++) {
+      const angle = (i / wallSegments) * Math.PI * 2;
+      const nextAngle = ((i + 1) / wallSegments) * Math.PI * 2;
+      const wx = x + Math.cos(angle) * radius;
+      const wz = z + Math.sin(angle) * radius;
+      
+      const segWidth = 2 * radius * Math.sin(Math.PI / wallSegments);
+      const wallGeo = new THREE.BoxGeometry(segWidth, height, 0.5);
+      const wall = new THREE.Mesh(wallGeo, wallMat);
+      wall.position.set(wx, y + height/2, wz);
+      wall.rotation.y = -angle + Math.PI/2;
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      this.scene.add(wall);
+    }
+  }
+  
+  _createOctagonalRoom(x, y, z, radius, height, floorMat, wallMat) {
+    // Octagonal floor
+    const floorGeo = new THREE.CircleGeometry(radius, 8);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(x, y, z);
+    floor.receiveShadow = true;
+    this.scene.add(floor);
+    
+    // 8 wall segments
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      const wx = x + Math.cos(angle) * radius;
+      const wz = z + Math.sin(angle) * radius;
+      
+      const segWidth = 2 * radius * Math.sin(Math.PI / 8);
+      const wallGeo = new THREE.BoxGeometry(segWidth, height, 0.5);
+      const wall = new THREE.Mesh(wallGeo, wallMat);
+      wall.position.set(wx, y + height/2, wz);
+      wall.rotation.y = -angle + Math.PI/2;
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      this.scene.add(wall);
+    }
+  }
+  
+  _createBrazier(x, y, z, lit = false) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    
+    // Stone base
+    const baseGeo = new THREE.CylinderGeometry(0.6, 0.7, 0.4, 8);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.y = 0.2;
+    base.castShadow = true;
+    group.add(base);
+    
+    // Bowl
+    const bowlGeo = new THREE.CylinderGeometry(0.5, 0.4, 0.3, 8, 1, true);
+    const bowl = new THREE.Mesh(bowlGeo, baseMat);
+    bowl.position.y = 0.55;
+    group.add(bowl);
+    
+    // Ash inside
+    const ashGeo = new THREE.CircleGeometry(0.4, 8);
+    const ashMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const ash = new THREE.Mesh(ashGeo, ashMat);
+    ash.rotation.x = -Math.PI / 2;
+    ash.position.y = 0.5;
+    group.add(ash);
+    
+    if (lit) {
+      const light = new THREE.PointLight(0xff6622, 1.5, 8);
+      light.position.y = 1;
+      group.add(light);
+    }
+    
+    this.scene.add(group);
+    return group;
+  }
+  
+  _createStatue(x, y, z, mat, damaged = false) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    
+    // Base
+    const baseGeo = new THREE.BoxGeometry(0.8, 0.3, 0.8);
+    const base = new THREE.Mesh(baseGeo, mat);
+    base.position.y = 0.15;
+    base.castShadow = true;
+    group.add(base);
+    
+    // Body (simplified humanoid)
+    const bodyGeo = new THREE.CylinderGeometry(0.25, 0.3, 1.5, 6);
+    const body = new THREE.Mesh(bodyGeo, mat);
+    body.position.y = 1.05;
+    body.castShadow = true;
+    group.add(body);
+    
+    // Head
+    const headGeo = new THREE.SphereGeometry(0.2, 8, 6);
+    const head = new THREE.Mesh(headGeo, mat);
+    head.position.y = 2.0;
+    head.castShadow = true;
+    group.add(head);
+    
+    if (damaged) {
+      // Missing arm
+      group.rotation.y = Math.random() * Math.PI * 2;
+    }
+    
+    this.scene.add(group);
+  }
+  
+  _createCrumbledStatue(x, y, z, mat) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    
+    // Just rubble
+    for (let i = 0; i < 6; i++) {
+      const size = 0.15 + Math.random() * 0.25;
+      const rubbleGeo = new THREE.BoxGeometry(size, size * 0.6, size);
+      const rubble = new THREE.Mesh(rubbleGeo, mat);
+      rubble.position.set(
+        (Math.random() - 0.5) * 0.6,
+        size * 0.3,
+        (Math.random() - 0.5) * 0.6
+      );
+      rubble.rotation.set(
+        Math.random() * 0.5,
+        Math.random() * Math.PI,
+        Math.random() * 0.5
+      );
+      rubble.castShadow = true;
+      group.add(rubble);
+    }
+    
+    this.scene.add(group);
+  }
+  
+  _createGlowingMoss(x, y, z, color, size) {
+    // Bioluminescent moss patch
+    const mossGeo = new THREE.CircleGeometry(size, 12);
+    const mossMat = new THREE.MeshStandardMaterial({
+      color: color,
+      emissive: color,
+      emissiveIntensity: 0.4,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+    });
+    const moss = new THREE.Mesh(mossGeo, mossMat);
+    moss.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+    moss.rotation.z = Math.random() * Math.PI;
+    moss.position.set(x, y, z);
+    this.scene.add(moss);
+    
+    // Small glow light
+    const light = new THREE.PointLight(color, 0.3, size * 2);
+    light.position.set(x, y, z);
+    this.scene.add(light);
+  }
+  
+  _createBurialAlcove(x, y, z, side, mat, open = false) {
+    const depth = side === 'left' ? -1.5 : 1.5;
+    
+    // Alcove recess
+    const recessGeo = new THREE.BoxGeometry(2, 2, 1.5);
+    const recess = new THREE.Mesh(recessGeo, mat);
+    recess.position.set(x + depth/2, y + 1, z);
+    this.scene.add(recess);
+    
+    // Sarcophagus
+    const sarcGeo = new THREE.BoxGeometry(1.2, 0.6, 2);
+    const sarcMat = new THREE.MeshStandardMaterial({ color: 0x2a2530, roughness: 0.8 });
+    const sarc = new THREE.Mesh(sarcGeo, sarcMat);
+    sarc.position.set(x + depth * 0.3, y + 0.3, z);
+    sarc.castShadow = true;
+    this.scene.add(sarc);
+    
+    if (open) {
+      // Lid askew
+      const lidGeo = new THREE.BoxGeometry(1.3, 0.15, 2.1);
+      const lid = new THREE.Mesh(lidGeo, sarcMat);
+      lid.position.set(x + depth * 0.3 + 0.3, y + 0.5, z);
+      lid.rotation.z = 0.3;
+      lid.castShadow = true;
+      this.scene.add(lid);
+    }
+  }
+  
+  _createBonePillar(x, y, z, mat) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    
+    // Stack of bones/skulls forming pillar
+    for (let i = 0; i < 8; i++) {
+      // Bones
+      const boneGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6);
+      const bone = new THREE.Mesh(boneGeo, mat);
+      bone.position.set(
+        Math.cos(i * 0.7) * 0.2,
+        i * 0.35 + 0.2,
+        Math.sin(i * 0.7) * 0.2
+      );
+      bone.rotation.z = Math.PI / 2;
+      bone.rotation.y = i * 0.5;
+      group.add(bone);
+      
+      // Occasional skull
+      if (i % 3 === 0) {
+        const skullGeo = new THREE.SphereGeometry(0.15, 8, 6);
+        const skull = new THREE.Mesh(skullGeo, mat);
+        skull.position.set(
+          Math.cos(i * 1.2) * 0.25,
+          i * 0.35 + 0.35,
+          Math.sin(i * 1.2) * 0.25
+        );
+        skull.scale.set(1, 0.8, 0.9);
+        group.add(skull);
+      }
+    }
+    
+    group.castShadow = true;
+    this.scene.add(group);
+  }
+  
+  _createPit(x, y, z, radius) {
+    // Dark pit in floor
+    const pitGeo = new THREE.CircleGeometry(radius, 16);
+    const pitMat = new THREE.MeshBasicMaterial({ color: 0x020204 });
+    const pit = new THREE.Mesh(pitGeo, pitMat);
+    pit.rotation.x = -Math.PI / 2;
+    pit.position.set(x, y - 0.1, z);
+    this.scene.add(pit);
+    
+    // Ring around pit
+    const ringGeo = new THREE.RingGeometry(radius, radius + 0.3, 16);
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0x1a1820, roughness: 0.9 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, y, z);
+    this.scene.add(ring);
+  }
+  
+  _createSkullWall(x, y, z, width, height, depth) {
+    // Decorative skull-lined wall section
+    const boneMat = new THREE.MeshStandardMaterial({
+      color: 0xd8d0c0,
+      roughness: 0.7,
+    });
+    
+    const cols = Math.floor(depth / 0.8);
+    const rows = Math.floor(height / 0.5);
+    
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const skullGeo = new THREE.SphereGeometry(0.12, 6, 5);
+        const skull = new THREE.Mesh(skullGeo, boneMat);
+        skull.position.set(
+          x,
+          y + r * 0.5,
+          z - depth/2 + c * 0.8 + (r % 2) * 0.4
+        );
+        skull.scale.set(1, 0.8, 0.85);
+        skull.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+        this.scene.add(skull);
+      }
+    }
+  }
+  
+  _createRitualCircle(x, y, z, radius, color) {
+    // Outer ring
+    const ringGeo = new THREE.RingGeometry(radius - 0.1, radius, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, y, z);
+    this.scene.add(ring);
+    
+    // Inner pentagram (simplified as inner ring + lines)
+    const innerGeo = new THREE.RingGeometry(radius * 0.4, radius * 0.45, 5);
+    const inner = new THREE.Mesh(innerGeo, ringMat);
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.set(x, y + 0.01, z);
+    this.scene.add(inner);
+    
+    // Glow light
+    const light = new THREE.PointLight(color, 1.0, radius * 3);
+    light.position.set(x, y + 0.5, z);
+    this.scene.add(light);
+    
+    // Pulsing animation
+    const baseIntensity = 1.0;
+    const animate = () => {
+      requestAnimationFrame(animate);
+      light.intensity = baseIntensity + Math.sin(Date.now() * 0.003) * 0.4;
+      ringMat.opacity = 0.4 + Math.sin(Date.now() * 0.003) * 0.2;
+    };
+    animate();
+  }
+  
+  _createHangingChains(x, y, z, count) {
+    const chainMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3530,
+      roughness: 0.6,
+      metalness: 0.4,
+    });
+    
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const cx = x + Math.cos(angle) * 2;
+      const cz = z + Math.sin(angle) * 2;
+      const length = 1.5 + Math.random() * 1.5;
+      
+      // Chain links (simplified as cylinder)
+      const chainGeo = new THREE.CylinderGeometry(0.03, 0.03, length, 6);
+      const chain = new THREE.Mesh(chainGeo, chainMat);
+      chain.position.set(cx, y - length/2, cz);
+      chain.rotation.z = (Math.random() - 0.5) * 0.2;
+      chain.castShadow = true;
+      this.scene.add(chain);
+      
+      // Shackle at bottom
+      if (i % 2 === 0) {
+        const shackleGeo = new THREE.TorusGeometry(0.1, 0.02, 6, 12);
+        const shackle = new THREE.Mesh(shackleGeo, chainMat);
+        shackle.position.set(cx, y - length, cz);
+        shackle.rotation.x = Math.PI / 2;
+        this.scene.add(shackle);
+      }
+    }
+  }
+  
+  _createWallNiche(x, y, z, side) {
+    // Small burial niche in wall with skeletal remains
+    const boneMat = new THREE.MeshStandardMaterial({
+      color: 0xc8c0b0,
+      roughness: 0.8,
+    });
+    
+    const offset = side === 'left' ? -0.3 : 0.3;
+    
+    // Skull
+    const skullGeo = new THREE.SphereGeometry(0.1, 6, 5);
+    const skull = new THREE.Mesh(skullGeo, boneMat);
+    skull.position.set(x + offset, y, z);
+    skull.scale.set(1, 0.8, 0.85);
+    skull.rotation.y = side === 'left' ? Math.PI / 4 : -Math.PI / 4;
+    this.scene.add(skull);
+    
+    // Some bones below
+    for (let i = 0; i < 3; i++) {
+      const boneGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.25, 4);
+      const bone = new THREE.Mesh(boneGeo, boneMat);
+      bone.position.set(
+        x + offset + (Math.random() - 0.5) * 0.15,
+        y - 0.15,
+        z + (Math.random() - 0.5) * 0.2
+      );
+      bone.rotation.z = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+      this.scene.add(bone);
+    }
+  }
+  
+  _createFrostPatches(x, y, z, width, depth) {
+    // Frost/ice patches on floor
+    const frostMat = new THREE.MeshStandardMaterial({
+      color: 0xaaccee,
+      transparent: true,
+      opacity: 0.15,
+      roughness: 0.3,
+    });
+    
+    for (let i = 0; i < 8; i++) {
+      const patchGeo = new THREE.CircleGeometry(0.3 + Math.random() * 0.5, 8);
+      const patch = new THREE.Mesh(patchGeo, frostMat);
+      patch.rotation.x = -Math.PI / 2;
+      patch.position.set(
+        x + (Math.random() - 0.5) * width,
+        y,
+        z + (Math.random() - 0.5) * depth
+      );
+      this.scene.add(patch);
+    }
+  }
+  
+  _createKneelingSkeletonProp(x, y, z) {
+    const boneMat = new THREE.MeshStandardMaterial({
+      color: 0xd8d0c0,
+      roughness: 0.7,
+    });
+    
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    
+    // Skull looking toward center
+    const skullGeo = new THREE.SphereGeometry(0.15, 8, 6);
+    const skull = new THREE.Mesh(skullGeo, boneMat);
+    skull.position.set(0, 0.8, 0);
+    skull.scale.set(1, 0.85, 0.9);
+    group.add(skull);
+    
+    // Spine
+    const spineGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.5, 6);
+    const spine = new THREE.Mesh(spineGeo, boneMat);
+    spine.position.set(0, 0.5, 0);
+    spine.rotation.x = 0.3;
+    group.add(spine);
+    
+    // Reaching arm (extended toward secret reward)
+    const armGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.6, 5);
+    const arm = new THREE.Mesh(armGeo, boneMat);
+    arm.position.set(0.3, 0.7, 0.2);
+    arm.rotation.z = Math.PI / 2 - 0.3;
+    arm.rotation.y = -0.3;
+    group.add(arm);
+    
+    // Kneeling legs
+    for (let i = -1; i <= 1; i += 2) {
+      const legGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.4, 5);
+      const leg = new THREE.Mesh(legGeo, boneMat);
+      leg.position.set(i * 0.15, 0.2, 0.1);
+      leg.rotation.x = Math.PI / 2 - 0.2;
+      group.add(leg);
+    }
+    
+    group.rotation.y = Math.PI / 4; // Face toward reward location
+    this.scene.add(group);
+  }
+  
+  _createLadder(x, y, z, yTop, length, id) {
+    const ladderMat = new THREE.MeshStandardMaterial({
+      color: 0x4a3525,
+      roughness: 0.85,
+      metalness: 0.2,
+    });
+    
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    
+    // Side rails
+    for (let side = -1; side <= 1; side += 2) {
+      const railGeo = new THREE.BoxGeometry(0.08, length, 0.08);
+      const rail = new THREE.Mesh(railGeo, ladderMat);
+      rail.position.set(side * 0.25, length / 2, 0);
+      group.add(rail);
+    }
+    
+    // Rungs
+    const rungCount = Math.floor(length / 0.4);
+    for (let i = 0; i < rungCount; i++) {
+      const rungGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6);
+      const rung = new THREE.Mesh(rungGeo, ladderMat);
+      rung.position.set(0, i * 0.4 + 0.3, 0);
+      rung.rotation.z = Math.PI / 2;
+      group.add(rung);
+    }
+    
+    group.castShadow = true;
+    this.scene.add(group);
+    
+    // Register ladder for interaction
+    this.ladders.push({
+      id,
+      position: new THREE.Vector3(x, y, z),
+      topPosition: new THREE.Vector3(x, yTop, z),
+      length,
+    });
+    
+    return group;
+  }
+  
+  _createShortcutDoor(x, y, z, width, height, depth, id) {
+    const doorGeo = new THREE.BoxGeometry(width, height, depth);
+    const doorMat = new THREE.MeshStandardMaterial({
+      color: 0x2a1a15,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const door = new THREE.Mesh(doorGeo, doorMat);
+    door.position.set(x, y, z);
+    door.castShadow = true;
+    this.scene.add(door);
+    
+    // Heavy iron bar across door
+    const barGeo = new THREE.BoxGeometry(width + 0.4, 0.1, 0.15);
+    const barMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3530,
+      roughness: 0.6,
+      metalness: 0.5,
+    });
+    const bar = new THREE.Mesh(barGeo, barMat);
+    bar.position.set(x, y + 0.3, z + 0.2);
+    bar.castShadow = true;
+    this.scene.add(bar);
+    
+    // Lock indicator
+    const lockGeo = new THREE.SphereGeometry(0.1, 8, 8);
+    const lockMat = new THREE.MeshStandardMaterial({
+      color: 0xff4422,
+      emissive: 0x661100,
+      emissiveIntensity: 0.5,
+    });
+    const lock = new THREE.Mesh(lockGeo, lockMat);
+    lock.position.set(x, y + 0.8, z + 0.2);
+    this.scene.add(lock);
+    
+    const shortcut = {
+      id,
+      door,
+      bar,
+      lock,
+      isOpen: false,
+      bounds: new THREE.Box3().setFromObject(door),
+    };
+    
+    this.shortcuts.push(shortcut);
+    this.colliders.push({
+      type: 'shortcut',
+      shortcut,
+      bounds: shortcut.bounds,
+    });
+    
+    return shortcut;
+  }
+  
+  // Unlock shortcut door (removes bar, changes lock color)
+  unlockShortcut(shortcutId) {
+    const shortcut = this.shortcuts.find(s => s.id === shortcutId);
+    if (!shortcut || shortcut.isOpen) return false;
+    
+    shortcut.isOpen = true;
+    shortcut.door.visible = false;
+    shortcut.bar.visible = false;
+    shortcut.lock.material.color.setHex(0x22ff44);
+    shortcut.lock.material.emissive.setHex(0x006611);
+    
+    // Remove from colliders
+    const idx = this.colliders.findIndex(c => c.shortcut === shortcut);
+    if (idx >= 0) this.colliders.splice(idx, 1);
+    
+    return true;
+  }
+  
+  // Get nearby shortcut for interaction
+  getNearbyShortcut(position, maxDist = 2) {
+    for (const shortcut of this.shortcuts) {
+      if (shortcut.isOpen) continue;
+      const dist = position.distanceTo(shortcut.door.position);
+      if (dist < maxDist) return shortcut;
+    }
+    return null;
+  }
+  
+  _addCryptLighting(cryptY) {
+    // Minimal ambient - very dark
+    // (Main ambient is in _createLighting, this adds local accents)
+    
+    const cryptLights = [
+      // Entry antechamber - faint cold light
+      { pos: [0, cryptY + 3, -25], color: 0x4466aa, intensity: 0.6, dist: 10 },
+      
+      // West corridor - flickering torches
+      { pos: [-12, cryptY + 2.5, -27], color: 0xff7744, intensity: 0.5, dist: 6 },
+      { pos: [-12, cryptY + 2.5, -39], color: 0xff7744, intensity: 0.5, dist: 6 },
+      
+      // Ossuary - blue fungal glow
+      { pos: [-18, cryptY + 1, -47], color: 0x4488ff, intensity: 0.8, dist: 12 },
+      
+      // Ritual chamber - red ritual glow + cold ambient
+      { pos: [0, cryptY + 1, -55], color: 0xcc2222, intensity: 1.2, dist: 10 },
+      { pos: [0, cryptY + 4, -55], color: 0x3344aa, intensity: 0.5, dist: 16 },
+      
+      // South corridor - very dim
+      { pos: [0, cryptY + 2, -70], color: 0x334455, intensity: 0.3, dist: 8 },
+      
+      // Secret room - golden glow (added separately)
+      
+      // Shortcut chamber - dim orange
+      { pos: [-6, cryptY + 2, -78], color: 0xcc8855, intensity: 0.4, dist: 8 },
+    ];
+    
+    cryptLights.forEach(({ pos, color, intensity, dist }) => {
+      const light = new THREE.PointLight(color, intensity, dist);
+      light.position.set(...pos);
+      this.scene.add(light);
+    });
+  }
+  
   _createFloorSection(x, z, width, depth, mat) {
     const geo = new THREE.PlaneGeometry(width, depth, Math.floor(width), Math.floor(depth));
     
@@ -670,11 +1617,11 @@ export class World {
     });
   }
   
-  _createPillar(x, z, mat, height = 8) {
+  _createPillar(x, z, mat, height = 8, baseY = 0) {
     // Base
     const baseGeo = new THREE.CylinderGeometry(0.8, 0.9, 0.5, 8);
     const base = new THREE.Mesh(baseGeo, mat);
-    base.position.set(x, 0.25, z);
+    base.position.set(x, baseY + 0.25, z);
     base.castShadow = true;
     base.receiveShadow = true;
     this.scene.add(base);
@@ -682,7 +1629,7 @@ export class World {
     // Main shaft
     const shaftGeo = new THREE.CylinderGeometry(0.5, 0.6, height - 1, 8);
     const shaft = new THREE.Mesh(shaftGeo, mat);
-    shaft.position.set(x, height / 2, z);
+    shaft.position.set(x, baseY + height / 2, z);
     shaft.castShadow = true;
     shaft.receiveShadow = true;
     this.scene.add(shaft);
@@ -690,14 +1637,14 @@ export class World {
     // Capital
     const capGeo = new THREE.CylinderGeometry(0.9, 0.5, 0.6, 8);
     const cap = new THREE.Mesh(capGeo, mat);
-    cap.position.set(x, height - 0.3, z);
+    cap.position.set(x, baseY + height - 0.3, z);
     cap.castShadow = true;
     cap.receiveShadow = true;
     this.scene.add(cap);
     
     this.colliders.push({
       type: 'cylinder',
-      position: new THREE.Vector3(x, height / 2, z),
+      position: new THREE.Vector3(x, baseY + height / 2, z),
       radius: 0.6,
     });
   }
@@ -1067,6 +2014,7 @@ export class World {
   
   // Get enemy spawn positions for the cathedral
   getEnemySpawns() {
+    const CRYPT_Y = -3;
     return [
       // Entrance - easy enemy
       { pos: new THREE.Vector3(0, 0, -6), type: 'HOLLOW_SOLDIER' },
@@ -1090,15 +2038,28 @@ export class World {
       { pos: new THREE.Vector3(-3, 0, -54), type: 'HOLLOW_SOLDIER' },
       { pos: new THREE.Vector3(3, 0, -54), type: 'HOLLOW_SOLDIER' },
       
-      // Crypt
+      // Old Crypt area (above ground)
       { pos: new THREE.Vector3(-5, 0, -68), type: 'SENTINEL' },
       { pos: new THREE.Vector3(5, 0, -72), type: 'BERSERKER' },
       { pos: new THREE.Vector3(0, 0, -78), type: 'BERSERKER' },
+      
+      // === UNDERGROUND CRYPT (Y=-3) ===
+      
+      // Entry Antechamber - single hollow knight patrolling
+      { pos: new THREE.Vector3(0, CRYPT_Y, -25), type: 'HOLLOW_SOLDIER', patrol: true },
+      
+      // Ossuary Chamber - ambush (dormant until player enters)
+      { pos: new THREE.Vector3(-20, CRYPT_Y, -45), type: 'BERSERKER', ambush: true },
+      { pos: new THREE.Vector3(-16, CRYPT_Y, -49), type: 'BERSERKER', ambush: true },
+      
+      // Ritual Chamber - Elite Crypt Guardian (mini-boss)
+      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'SENTINEL', elite: true },
     ];
   }
   
   // Get item spawn positions
   getItemSpawns() {
+    const CRYPT_Y = -3;
     return [
       // Courtyard - healing item
       { pos: new THREE.Vector3(6, 0.5, 2), type: 'remnant', value: 50 },
@@ -1122,6 +2083,39 @@ export class World {
       // Crypt tombs
       { pos: new THREE.Vector3(-7, 0.9, -62), type: 'remnant', value: 150 },
       { pos: new THREE.Vector3(7, 0.9, -74), type: 'remnant', value: 150 },
+      
+      // === UNDERGROUND CRYPT (Y=-3) ===
+      
+      // West Corridor - consumable in sarcophagus (alcove 3)
+      { pos: new THREE.Vector3(-13, CRYPT_Y + 0.5, -35), type: 'consumable', name: 'Bone Ash', effect: 'tempDamageBoost' },
+      
+      // Ossuary Chamber - remnants among bones
+      { pos: new THREE.Vector3(-18, CRYPT_Y + 0.3, -47), type: 'remnant', value: 250 },
+      
+      // Ritual Chamber - after defeating elite
+      { pos: new THREE.Vector3(0, CRYPT_Y + 0.8, -55), type: 'remnant', value: 400 },
+      
+      // Secret Room behind illusory wall - Apotheosis Shard (rare infusion material)
+      { pos: new THREE.Vector3(8, CRYPT_Y + 0.5, -77), type: 'special', name: 'Apotheosis Shard', description: 'Grants +1 to any infusion track' },
+      
+      // Secret Room - lore item
+      { pos: new THREE.Vector3(9, CRYPT_Y + 0.3, -78), type: 'lore', name: 'Crumbling Journal Page', text: 'The final experiment failed. The flesh rejected transcendence. I descend to try once more...' },
+    ];
+  }
+  
+  // Get crypt-specific spawns for underground level
+  getCryptEnemySpawns() {
+    const CRYPT_Y = -3;
+    return [
+      // Entry Antechamber - patrol guard
+      { pos: new THREE.Vector3(0, CRYPT_Y, -25), type: 'HOLLOW_SOLDIER', behavior: 'patrol', patrolRadius: 4 },
+      
+      // Ossuary Chamber - ambush enemies (dormant in bone piles)
+      { pos: new THREE.Vector3(-20, CRYPT_Y, -45), type: 'BERSERKER', behavior: 'ambush', triggerZone: 'ossuary' },
+      { pos: new THREE.Vector3(-16, CRYPT_Y, -49), type: 'BERSERKER', behavior: 'ambush', triggerZone: 'ossuary' },
+      
+      // Ritual Chamber - elite guardian
+      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'SENTINEL', behavior: 'guard', elite: true, name: 'Crypt Guardian' },
     ];
   }
 }
