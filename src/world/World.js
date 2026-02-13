@@ -2067,44 +2067,47 @@ export class World {
     fillLight.position.set(30, 20, 50);
     this.scene.add(fillLight);
     
-    // Accent lights throughout cathedral
+    // Accent lights throughout cathedral - BOOSTED for visibility
     const accents = [
-      // Entrance courtyard - warm bonfire glow
-      { pos: [0, 3, 5], color: 0xff6622, intensity: 2.5, dist: 15 },
-      { pos: [0, 1, 5], color: 0xff4400, intensity: 1.5, dist: 10 },
+      // Entrance courtyard - large warm bonfire
+      { pos: [0, 3, 5], color: 0xff8844, intensity: 8.0, dist: 25 },
+      { pos: [0, 1, 5], color: 0xff6622, intensity: 5.0, dist: 20 },
       
-      // Main hall - ethereal blue
-      { pos: [-6, 5, -12], color: 0x6688ee, intensity: 1.2, dist: 14 },
-      { pos: [6, 5, -12], color: 0x6688ee, intensity: 1.2, dist: 14 },
-      { pos: [-6, 5, -32], color: 0x5577dd, intensity: 1.0, dist: 14 },
-      { pos: [6, 5, -32], color: 0x5577dd, intensity: 1.0, dist: 14 },
+      // Main hall - bright ethereal lights along walls
+      { pos: [-6, 5, -12], color: 0x88aaff, intensity: 5.0, dist: 25 },
+      { pos: [6, 5, -12], color: 0x88aaff, intensity: 5.0, dist: 25 },
+      { pos: [-6, 5, -22], color: 0x88aaff, intensity: 5.0, dist: 25 },
+      { pos: [6, 5, -22], color: 0x88aaff, intensity: 5.0, dist: 25 },
+      { pos: [-6, 5, -32], color: 0x7799ee, intensity: 4.0, dist: 25 },
+      { pos: [6, 5, -32], color: 0x7799ee, intensity: 4.0, dist: 25 },
+      { pos: [0, 3, -20], color: 0xffeedd, intensity: 4.0, dist: 20 },  // Center hall light
       
       // Left chapel - blood red (corrupted altar)
-      { pos: [-21, 3, -25], color: 0xdd4444, intensity: 1.5, dist: 12 },
-      { pos: [-18, 6, -25], color: 0xaa3333, intensity: 0.8, dist: 15 },
+      { pos: [-21, 3, -25], color: 0xff5555, intensity: 6.0, dist: 20 },
+      { pos: [-18, 6, -25], color: 0xdd4444, intensity: 3.0, dist: 18 },
       
       // Right chapel - sickly green (poison/nature)
-      { pos: [21, 3, -25], color: 0x66cc77, intensity: 1.5, dist: 12 },
-      { pos: [18, 6, -25], color: 0x44aa55, intensity: 0.8, dist: 15 },
+      { pos: [21, 3, -25], color: 0x88ee99, intensity: 6.0, dist: 20 },
+      { pos: [18, 6, -25], color: 0x66cc77, intensity: 3.0, dist: 18 },
       
       // Secret room - golden treasure glow
-      { pos: [21, 2, -40], color: 0xffdd66, intensity: 2.0, dist: 10 },
+      { pos: [21, 2, -40], color: 0xffee88, intensity: 6.0, dist: 15 },
       
       // Altar room - holy golden light
-      { pos: [0, 4, -58], color: 0xffcc66, intensity: 2.0, dist: 15 },
-      { pos: [-2, 2, -57], color: 0xffaa44, intensity: 1.0, dist: 6 },
-      { pos: [2, 2, -57], color: 0xffaa44, intensity: 1.0, dist: 6 },
+      { pos: [0, 4, -58], color: 0xffdd88, intensity: 6.0, dist: 25 },
+      { pos: [-2, 2, -57], color: 0xffcc66, intensity: 4.0, dist: 12 },
+      { pos: [2, 2, -57], color: 0xffcc66, intensity: 4.0, dist: 12 },
       
       // Crypt - cold, deathly blue
-      { pos: [-6, 2, -65], color: 0x4466cc, intensity: 1.0, dist: 12 },
-      { pos: [6, 2, -75], color: 0x4466cc, intensity: 1.0, dist: 12 },
-      { pos: [0, 3, -70], color: 0x5577aa, intensity: 0.8, dist: 20 },
+      { pos: [-6, 2, -65], color: 0x6688dd, intensity: 4.0, dist: 20 },
+      { pos: [6, 2, -75], color: 0x6688dd, intensity: 4.0, dist: 20 },
+      { pos: [0, 3, -70], color: 0x7799cc, intensity: 5.0, dist: 30 },
       
       // Boss arena - ominous red/purple
-      { pos: [-8, 4, -95], color: 0xaa3355, intensity: 1.5, dist: 16 },
-      { pos: [8, 4, -95], color: 0xaa3355, intensity: 1.5, dist: 16 },
-      { pos: [0, 8, -98], color: 0xcc4477, intensity: 2.0, dist: 25 },
-      { pos: [0, 1, -95], color: 0x882244, intensity: 1.2, dist: 16 },
+      { pos: [-8, 4, -95], color: 0xcc5577, intensity: 5.0, dist: 25 },
+      { pos: [8, 4, -95], color: 0xcc5577, intensity: 5.0, dist: 25 },
+      { pos: [0, 8, -98], color: 0xee6699, intensity: 6.0, dist: 35 },
+      { pos: [0, 1, -95], color: 0xaa4466, intensity: 4.0, dist: 20 },
     ];
     
     accents.forEach(({ pos, color, intensity, dist }) => {
@@ -2113,21 +2116,25 @@ export class World {
       this.scene.add(light);
     });
     
-    // Animated torch flames at pillar locations
+    // Animated torch flames at pillar locations - BOOSTED
     const torchPositions = [
       [-6, 6, -12], [6, 6, -12],
       [-6, 6, -22], [6, 6, -22],
       [-6, 6, -32], [6, 6, -32],
       [-6, 6, -42], [6, 6, -42],
+      // Extra torches at floor level for ground lighting
+      [-8, 2, -15], [8, 2, -15],
+      [-8, 2, -25], [8, 2, -25],
+      [-8, 2, -35], [8, 2, -35],
     ];
     
     torchPositions.forEach(pos => {
-      const torch = new THREE.PointLight(0xff8844, 1.5, 12);
+      const torch = new THREE.PointLight(0xffaa66, 5.0, 20);  // Boosted from 1.5/12
       torch.position.set(...pos);
       this.scene.add(torch);
       
       // Animate flicker
-      const baseIntensity = 1.5;
+      const baseIntensity = 5.0;  // Boosted from 1.5
       const offset = Math.random() * 1000;
       const animate = () => {
         requestAnimationFrame(animate);
