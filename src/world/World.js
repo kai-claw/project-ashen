@@ -12,12 +12,531 @@ export class World {
     this.shortcuts = []; // Unlockable shortcuts
     this.bonfirePosition = new THREE.Vector3(0, 0, 5);
     
+    // === BOSS ARENA STATE (Crypt Lord) ===
+    this.bossArena = {
+      active: false,
+      phase: 'idle', // 'idle', 'phase1', 'transition', 'phase2', 'victory'
+      fogGate: null,
+      fogGateCollider: null,
+      ritualCircle: null,
+      ritualLight: null,
+      arenaLights: [],
+      lastPulseTime: 0,
+      pulseInterval: 8000, // ms between ritual circle pulses
+      pulseDamage: 30,
+      pulseRadius: 4,
+      pulseWarningTime: 2000, // ms of warning glow before damage
+      isPulseWarning: false,
+      victoryBonfire: null,
+    };
+    
     this._createSkybox();
     this._createCathedral();
     this._createUndergroundCrypt(); // NEW: Underground level
+    this._createBossArenaFeatures(); // Boss arena fog gate + enhancements
     this._createFloorCollisionZones(); // Floor and stair collision
     this._createLighting();
     this._createEnvironmentProps();
+  }
+  
+  // === BOSS ARENA METHODS ===
+  
+  /**
+   * Create boss arena features (fog gate, enhanced ritual circle)
+   * Located at Ritual Chamber: x:0, z:-55, y:-3
+   */
+  _createBossArenaFeatures() {
+    const CRYPT_Y = -3;
+    const ARENA_CENTER = new THREE.Vector3(0, CRYPT_Y, -55);
+    
+    // Fog gate position: north entrance to ritual chamber
+    const fogGatePos = new THREE.Vector3(0, CRYPT_Y + 2, -47);
+    this._createBossArenaFogGate(fogGatePos);
+    
+    // Store arena center for damage checks
+    this.bossArena.center = ARENA_CENTER;
+    
+    // Create phase-specific arena lights (initially off)
+    this._createBossArenaLights(CRYPT_Y);
+  }
+  
+  /**
+   * Create the fog gate that blocks retreat during boss fight
+   */
+  _createBossArenaFogGate(position) {
+    // Fog gate visual - semi-transparent swirling wall
+    const fogGateGeo = new THREE.PlaneGeometry(8, 5, 16, 16);
+    
+    // Shader material for ethereal fog effect
+    const fogGateMat = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        color: { value: new THREE.Color(0x4466aa) },
+        opacity: { value: 0.7 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vPos;
+        uniform float time;
+        void main() {
+          vUv = uv;
+          vPos = position;
+          vec3 pos = position;
+          pos.x += sin(pos.y * 2.0 + time * 2.0) * 0.1;
+          pos.y += sin(pos.x * 3.0 + time * 1.5) * 0.05;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 color;
+        uniform float opacity;
+        uniform float time;
+        varying vec2 vUv;
+        varying vec3 vPos;
+        
+        float noise(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        
+        void main() {
+          float n = noise(vUv * 10.0 + time);
+          float swirl = sin(vUv.x * 6.28 + vUv.y * 4.0 + time * 2.0) * 0.5 + 0.5;
+          float edge = smoothstep(0.0, 0.3, vUv.y) * smoothstep(1.0, 0.7, vUv.y);
+          edge *= smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.8, vUv.x);
+          float alpha = opacity * edge * (0.5 + swirl * 0.3 + n * 0.2);
+          gl_FragColor = vec4(color + vec3(swirl * 0.2), alpha);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    
+    const fogGate = new THREE.Mesh(fogGateGeo, fogGateMat);
+    fogGate.position.copy(position);
+    fogGate.rotation.y = 0; // Face north-south
+    fogGate.visible = false; // Hidden until boss activates
+    this.scene.add(fogGate);
+    
+    // Fog gate glow light
+    const fogGateLight = new THREE.PointLight(0x4466aa, 0, 8);
+    fogGateLight.position.copy(position);
+    this.scene.add(fogGateLight);
+    
+    // Collision bounds for fog gate (blocks player)
+    const fogGateBounds = new THREE.Box3(
+      new THREE.Vector3(position.x - 4, position.y - 2.5, position.z - 0.5),
+      new THREE.Vector3(position.x + 4, position.y + 2.5, position.z + 0.5)
+    );
+    
+    this.bossArena.fogGate = fogGate;
+    this.bossArena.fogGateMat = fogGateMat;
+    this.bossArena.fogGateLight = fogGateLight;
+    this.bossArena.fogGateBounds = fogGateBounds;
+    
+    // Animate fog gate shader
+    const animateFogGate = () => {
+      requestAnimationFrame(animateFogGate);
+      if (fogGateMat.uniforms) {
+        fogGateMat.uniforms.time.value = Date.now() * 0.001;
+      }
+    };
+    animateFogGate();
+  }
+  
+  /**
+   * Create phase-specific lighting for the boss arena
+   */
+  _createBossArenaLights(cryptY) {
+    // Phase 1 lights (warm orange combat lighting)
+    const phase1Lights = [];
+    const torchPositions = [
+      [-6, cryptY + 3, -55],
+      [6, cryptY + 3, -55],
+      [-4, cryptY + 3, -50],
+      [4, cryptY + 3, -50],
+      [-4, cryptY + 3, -60],
+      [4, cryptY + 3, -60],
+    ];
+    torchPositions.forEach(pos => {
+      const light = new THREE.PointLight(0xff7744, 0, 12);
+      light.position.set(...pos);
+      this.scene.add(light);
+      phase1Lights.push(light);
+    });
+    
+    // Phase 2 lights (purple ominous)
+    const phase2Lights = [];
+    const phase2Positions = [
+      [0, cryptY + 4, -55], // Central purple
+      [-5, cryptY + 2, -52],
+      [5, cryptY + 2, -52],
+      [-5, cryptY + 2, -58],
+      [5, cryptY + 2, -58],
+    ];
+    phase2Positions.forEach((pos, i) => {
+      const light = new THREE.PointLight(i === 0 ? 0xaa44ff : 0x8833cc, 0, 15);
+      light.position.set(...pos);
+      this.scene.add(light);
+      phase2Lights.push(light);
+    });
+    
+    this.bossArena.phase1Lights = phase1Lights;
+    this.bossArena.phase2Lights = phase2Lights;
+  }
+  
+  /**
+   * Activate the boss arena (called when Crypt Lord aggros)
+   */
+  activateBossArena() {
+    if (this.bossArena.active) return;
+    
+    this.bossArena.active = true;
+    this.bossArena.phase = 'phase1';
+    this.bossArena.lastPulseTime = Date.now();
+    
+    // Show fog gate
+    this.bossArena.fogGate.visible = true;
+    this.bossArena.fogGateLight.intensity = 1.5;
+    
+    // Add fog gate to colliders
+    this.bossArena.fogGateCollider = {
+      type: 'box',
+      bounds: this.bossArena.fogGateBounds,
+      isFogGate: true,
+    };
+    this.colliders.push(this.bossArena.fogGateCollider);
+    
+    // Activate Phase 1 lighting
+    this._setBossArenaLighting('phase1');
+    
+    return true;
+  }
+  
+  /**
+   * Set boss arena phase (changes lighting and mechanics)
+   * @param {string} phase - 'idle', 'phase1', 'transition', 'phase2', 'victory'
+   */
+  setBossArenaPhase(phase) {
+    if (!this.bossArena.active && phase !== 'idle') return;
+    
+    const oldPhase = this.bossArena.phase;
+    this.bossArena.phase = phase;
+    
+    switch (phase) {
+      case 'phase1':
+        this._setBossArenaLighting('phase1');
+        break;
+        
+      case 'transition':
+        // Dim all lights, ritual circle blazes
+        this._setBossArenaLighting('transition');
+        break;
+        
+      case 'phase2':
+        // Purple ominous lighting, ritual circle pulses damage
+        this._setBossArenaLighting('phase2');
+        this.bossArena.lastPulseTime = Date.now(); // Reset pulse timer
+        break;
+        
+      case 'victory':
+        this.deactivateBossArena();
+        break;
+    }
+    
+    return oldPhase;
+  }
+  
+  /**
+   * Set arena lighting based on phase
+   */
+  _setBossArenaLighting(phase) {
+    const { phase1Lights, phase2Lights } = this.bossArena;
+    
+    // Fade function for smooth transitions
+    const fadeLights = (lights, targetIntensity, duration = 500) => {
+      lights.forEach(light => {
+        const startIntensity = light.intensity;
+        const startTime = Date.now();
+        const animate = () => {
+          const elapsed = Date.now() - startTime;
+          const t = Math.min(elapsed / duration, 1);
+          light.intensity = startIntensity + (targetIntensity - startIntensity) * t;
+          if (t < 1) requestAnimationFrame(animate);
+        };
+        animate();
+      });
+    };
+    
+    switch (phase) {
+      case 'phase1':
+        fadeLights(phase1Lights, 2.0);
+        fadeLights(phase2Lights, 0);
+        // Fog gate normal color
+        if (this.bossArena.fogGateMat) {
+          this.bossArena.fogGateMat.uniforms.color.value.setHex(0x4466aa);
+        }
+        break;
+        
+      case 'transition':
+        fadeLights(phase1Lights, 0.3);
+        fadeLights(phase2Lights, 0.5);
+        // Flash effect on ritual circle (handled externally via ritual light)
+        break;
+        
+      case 'phase2':
+        fadeLights(phase1Lights, 0.5);
+        fadeLights(phase2Lights, 2.5);
+        // Fog gate turns purple
+        if (this.bossArena.fogGateMat) {
+          this.bossArena.fogGateMat.uniforms.color.value.setHex(0x8844cc);
+        }
+        break;
+        
+      case 'idle':
+      default:
+        fadeLights(phase1Lights, 0);
+        fadeLights(phase2Lights, 0);
+        break;
+    }
+  }
+  
+  /**
+   * Update boss arena (call from main game loop)
+   * Returns damage if player is hit by ritual circle pulse
+   * @param {number} dt - Delta time
+   * @param {THREE.Vector3} playerPos - Player position
+   * @returns {number} - Damage dealt (0 if none)
+   */
+  updateBossArena(dt, playerPos) {
+    if (!this.bossArena.active) return 0;
+    
+    const now = Date.now();
+    const arena = this.bossArena;
+    
+    // Only pulse in Phase 2
+    if (arena.phase !== 'phase2') return 0;
+    
+    const timeSinceLastPulse = now - arena.lastPulseTime;
+    
+    // Warning phase (2 seconds before pulse)
+    if (timeSinceLastPulse >= arena.pulseInterval - arena.pulseWarningTime && !arena.isPulseWarning) {
+      arena.isPulseWarning = true;
+      this._startRitualPulseWarning();
+    }
+    
+    // Pulse damage
+    if (timeSinceLastPulse >= arena.pulseInterval) {
+      arena.lastPulseTime = now;
+      arena.isPulseWarning = false;
+      this._triggerRitualPulse();
+      
+      // Check if player is in ritual circle
+      const distToCenter = new THREE.Vector2(
+        playerPos.x - arena.center.x,
+        playerPos.z - arena.center.z
+      ).length();
+      
+      if (distToCenter <= arena.pulseRadius && Math.abs(playerPos.y - arena.center.y) < 2) {
+        return arena.pulseDamage;
+      }
+    }
+    
+    return 0;
+  }
+  
+  /**
+   * Start ritual circle pulse warning (glow intensifies)
+   */
+  _startRitualPulseWarning() {
+    // Find and intensify the ritual circle light
+    // The existing ritual circle light is created in _createRitualCircle
+    // We'll pulse the phase2 central light as warning
+    const centerLight = this.bossArena.phase2Lights[0];
+    if (centerLight) {
+      const warningPulse = () => {
+        if (!this.bossArena.isPulseWarning) return;
+        const t = (Date.now() % 500) / 500;
+        centerLight.intensity = 2.5 + Math.sin(t * Math.PI * 2) * 2;
+        centerLight.color.setHex(t > 0.5 ? 0xff2222 : 0xaa44ff);
+        requestAnimationFrame(warningPulse);
+      };
+      warningPulse();
+    }
+  }
+  
+  /**
+   * Trigger the ritual circle damage pulse (visual effect)
+   */
+  _triggerRitualPulse() {
+    const arena = this.bossArena;
+    
+    // Create expanding ring effect
+    const ringGeo = new THREE.RingGeometry(0.5, 1, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xff2222,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(arena.center.x, arena.center.y + 0.05, arena.center.z);
+    this.scene.add(ring);
+    
+    // Animate ring expansion
+    const startTime = Date.now();
+    const duration = 500;
+    const animateRing = () => {
+      const elapsed = Date.now() - startTime;
+      const t = elapsed / duration;
+      
+      if (t >= 1) {
+        this.scene.remove(ring);
+        ring.geometry.dispose();
+        ring.material.dispose();
+        return;
+      }
+      
+      const scale = 1 + t * (arena.pulseRadius * 2);
+      ring.scale.set(scale, scale, 1);
+      ringMat.opacity = 0.8 * (1 - t);
+      
+      requestAnimationFrame(animateRing);
+    };
+    animateRing();
+    
+    // Flash the center light
+    const centerLight = this.bossArena.phase2Lights[0];
+    if (centerLight) {
+      centerLight.intensity = 8;
+      centerLight.color.setHex(0xff4422);
+      setTimeout(() => {
+        centerLight.intensity = 2.5;
+        centerLight.color.setHex(0xaa44ff);
+      }, 200);
+    }
+  }
+  
+  /**
+   * Deactivate boss arena (called when boss dies)
+   */
+  deactivateBossArena() {
+    const arena = this.bossArena;
+    if (!arena.active) return;
+    
+    arena.active = false;
+    arena.phase = 'victory';
+    
+    // Fade out fog gate
+    const fogGate = arena.fogGate;
+    const fogGateMat = arena.fogGateMat;
+    if (fogGate && fogGateMat) {
+      let opacity = 0.7;
+      const fadeOut = () => {
+        opacity -= 0.02;
+        fogGateMat.uniforms.opacity.value = Math.max(0, opacity);
+        if (opacity > 0) {
+          requestAnimationFrame(fadeOut);
+        } else {
+          fogGate.visible = false;
+        }
+      };
+      fadeOut();
+    }
+    
+    // Fade fog gate light
+    if (arena.fogGateLight) {
+      const light = arena.fogGateLight;
+      const fadeLight = () => {
+        light.intensity *= 0.95;
+        if (light.intensity > 0.01) requestAnimationFrame(fadeLight);
+        else light.intensity = 0;
+      };
+      fadeLight();
+    }
+    
+    // Remove fog gate from colliders
+    if (arena.fogGateCollider) {
+      const idx = this.colliders.indexOf(arena.fogGateCollider);
+      if (idx >= 0) this.colliders.splice(idx, 1);
+      arena.fogGateCollider = null;
+    }
+    
+    // Turn off arena lights
+    this._setBossArenaLighting('idle');
+    
+    // Spawn victory bonfire at arena center
+    this._spawnVictoryBonfire(arena.center);
+    
+    return true;
+  }
+  
+  /**
+   * Spawn a bonfire at the boss arena center after victory
+   */
+  _spawnVictoryBonfire(position) {
+    // Create a simple bonfire similar to _createBonfire
+    const CRYPT_Y = -3;
+    const bonfirePos = new THREE.Vector3(position.x, CRYPT_Y, position.z);
+    
+    const group = new THREE.Group();
+    group.position.copy(bonfirePos);
+    
+    // Stone base
+    const baseGeo = new THREE.CylinderGeometry(0.5, 0.6, 0.4, 12);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.y = 0.2;
+    base.castShadow = true;
+    group.add(base);
+    
+    // Inner ring
+    const innerGeo = new THREE.TorusGeometry(0.35, 0.08, 8, 16);
+    const innerMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+    const inner = new THREE.Mesh(innerGeo, innerMat);
+    inner.rotation.x = Math.PI / 2;
+    inner.position.y = 0.4;
+    group.add(inner);
+    
+    // Fire light (warm golden for victory)
+    const fireLight = new THREE.PointLight(0xffaa44, 2, 15);
+    fireLight.position.y = 1;
+    group.add(fireLight);
+    
+    // Animate fire flicker
+    const animate = () => {
+      requestAnimationFrame(animate);
+      fireLight.intensity = 2 + Math.sin(Date.now() * 0.012) * 0.4 + Math.random() * 0.3;
+    };
+    animate();
+    
+    this.scene.add(group);
+    this.bossArena.victoryBonfire = group;
+    
+    // This position becomes a respawn point
+    // (handled by GameManager checking bossArena.victoryBonfire)
+  }
+  
+  /**
+   * Check if player is blocked by fog gate
+   * @param {THREE.Vector3} position - Position to check
+   * @returns {boolean} - True if blocked
+   */
+  isBlockedByFogGate(position) {
+    if (!this.bossArena.active || !this.bossArena.fogGateBounds) return false;
+    return this.bossArena.fogGateBounds.containsPoint(position);
+  }
+  
+  /**
+   * Get boss arena state for UI/game logic
+   */
+  getBossArenaState() {
+    return {
+      active: this.bossArena.active,
+      phase: this.bossArena.phase,
+      isPulseWarning: this.bossArena.isPulseWarning,
+    };
   }
   
   /**
