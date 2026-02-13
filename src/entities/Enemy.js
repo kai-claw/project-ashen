@@ -19,6 +19,10 @@ const STATES = {
   BOSS_CHARGE: 'boss_charge',     // Shoulder bash/charge
   BOSS_GRAB: 'boss_grab',         // Grab attack
   BOSS_TRANSITION: 'boss_transition', // Phase transition
+  // Phase 2 attacks
+  BOSS_SUMMON: 'boss_summon',     // Summon skeleton adds
+  BOSS_AOE: 'boss_aoe',           // Ground slam AOE
+  BOSS_PROJECTILE: 'boss_projectile', // Dark magic projectile
 };
 
 // Animation name mapping for robot_expressive.glb
@@ -40,6 +44,10 @@ const ENEMY_ANIM_MAP = {
   [STATES.BOSS_CHARGE]: 'Running',
   [STATES.BOSS_GRAB]: 'Punch',
   [STATES.BOSS_TRANSITION]: 'No',
+  // Phase 2 animations
+  [STATES.BOSS_SUMMON]: 'ThumbsUp',  // Arms raised summoning
+  [STATES.BOSS_AOE]: 'Punch',        // Jump slam
+  [STATES.BOSS_PROJECTILE]: 'Punch', // Cast projectile
 };
 
 // Enemy type presets with model info
@@ -207,6 +215,10 @@ export const ENEMY_TYPES = {
       THREE_HIT_COMBO: { damages: [35, 35, 50], postureDmg: 25, windup: 0.4, recovery: 2.0, range: 3.5 },
       SHOULDER_BASH: { damage: 30, postureDmg: 45, windup: 0.5, recovery: 1.2, range: 6.0, isCharge: true },
       GRAB: { damage: 80, postureDmg: 0, windup: 1.0, recovery: 2.5, range: 2.5, isGrab: true },
+      // Phase 2 attacks
+      SKELETON_SUMMON: { windup: 1.2, recovery: 1.5, summonCount: 2 },
+      GROUND_SLAM_AOE: { damage: 50, postureDmg: 60, windup: 1.0, recovery: 2.0, range: 8.0, jumpHeight: 3.0 },
+      DARK_PROJECTILE: { damage: 40, windup: 0.6, recovery: 0.8, speed: 8, trackingStrength: 3.0 },
     },
     
     // GLTF settings - larger armored model
@@ -296,6 +308,21 @@ export class Enemy {
       
       // World reference for arena integration (set by EnemyManager)
       this.world = null;
+      
+      // EnemyManager reference for summoning adds (set by EnemyManager)
+      this.enemyManager = null;
+      
+      // Phase 2: Projectile tracking
+      this.activeProjectiles = [];
+      
+      // Phase 2: Summoned adds tracking
+      this.summonedAdds = [];
+      this.lastSummonTime = 0;
+      this.summonCooldown = 15000; // 15s between summons
+      
+      // Phase 2: AOE attack state
+      this.aoeJumpProgress = 0;
+      this.aoeStartY = 0;
       
       // Larger health bar for boss
       this._createHealthBar(3.5);
@@ -591,6 +618,11 @@ export class Enemy {
           }
         }
         
+        // Store player reference for Phase 2 ranged attacks
+        if (this.isBoss) {
+          this.playerTarget = player.mesh.position.clone();
+        }
+        
         // Boss doesn't reset aggro easily
         if (!this.isBoss && distToPlayer > this.config.detectionRange * 1.5) {
           this._changeState(STATES.IDLE);
@@ -729,6 +761,24 @@ export class Enemy {
         // Player can heal/reposition during this 4 second window
         // The state will be changed to CHASE when transformation completes
         break;
+        
+      // ========== PHASE 2 ATTACK STATES ==========
+      case STATES.BOSS_SUMMON:
+        this._processBossSummonAttack(delta, player);
+        break;
+        
+      case STATES.BOSS_AOE:
+        this._processBossAOEAttack(delta, player);
+        break;
+        
+      case STATES.BOSS_PROJECTILE:
+        this._processBossProjectileAttack(delta, player);
+        break;
+    }
+    
+    // Update active projectiles (Phase 2)
+    if (this.isBoss && this.activeProjectiles) {
+      this._updateProjectiles(delta, player);
     }
 
     // Posture regen
@@ -765,6 +815,12 @@ export class Enemy {
       return;
     }
     
+    // Phase 2 has additional attacks
+    if (this.bossPhase === 2) {
+      this._selectPhase2Attack(distToPlayer);
+      return;
+    }
+    
     // Roll for attack type based on distance and situation
     const roll = Math.random();
     
@@ -782,6 +838,70 @@ export class Enemy {
       } else {
         // 35% chance for sweep (fast, wide arc)
         this._changeState(STATES.BOSS_SWEEP);
+      }
+    }
+  }
+  
+  // ========== PHASE 2 ATTACK SELECTION ==========
+  _selectPhase2Attack(distToPlayer) {
+    const attacks = this.config.attacks;
+    const roll = Math.random();
+    const canSummon = Date.now() - this.lastSummonTime > this.summonCooldown;
+    const livingAdds = this.summonedAdds.filter(add => !add.isDead).length;
+    
+    // Prioritize summon if no adds are alive and off cooldown
+    if (canSummon && livingAdds === 0 && roll < 0.25) {
+      this._changeState(STATES.BOSS_SUMMON);
+      return;
+    }
+    
+    // Mid-range: Prefer projectile or AOE
+    if (distToPlayer > this.config.attackRange && distToPlayer < 10) {
+      if (roll < 0.4) {
+        // 40% projectile when at range
+        this._changeState(STATES.BOSS_PROJECTILE);
+      } else if (roll < 0.7) {
+        // 30% AOE slam (closes gap + damages)
+        this._changeState(STATES.BOSS_AOE);
+      } else if (roll < 0.85) {
+        // 15% charge - use stored player target
+        this.chargeTarget = this.playerTarget ? this.playerTarget.clone() : this.mesh.position.clone();
+        this.chargeProgress = 0;
+        this._changeState(STATES.BOSS_CHARGE);
+      } else {
+        // 15% chase closer
+        return; // Stay in CHASE
+      }
+      return;
+    }
+    
+    // Close range: Mix of Phase 1 attacks + new ones
+    if (distToPlayer <= this.config.attackRange) {
+      if (roll < 0.15) {
+        // 15% AOE (punishes players who stay close)
+        this._changeState(STATES.BOSS_AOE);
+      } else if (roll < 0.25) {
+        // 10% projectile point-blank (surprising)
+        this._changeState(STATES.BOSS_PROJECTILE);
+      } else if (roll < 0.40) {
+        // 15% slam
+        this._changeState(STATES.BOSS_SLAM);
+      } else if (roll < 0.60) {
+        // 20% combo (faster in Phase 2)
+        this._changeState(STATES.BOSS_COMBO);
+      } else if (roll < 0.80) {
+        // 20% sweep
+        this._changeState(STATES.BOSS_SWEEP);
+      } else if (roll < 0.95) {
+        // 15% grab
+        this._changeState(STATES.BOSS_GRAB);
+      } else {
+        // 5% summon if available
+        if (canSummon && livingAdds < 3) {
+          this._changeState(STATES.BOSS_SUMMON);
+        } else {
+          this._changeState(STATES.BOSS_SLAM);
+        }
       }
     }
   }
@@ -1153,6 +1273,450 @@ export class Enemy {
     
     this._changeState(STATES.CHASE);
   }
+  
+  // ========== PHASE 2: SKELETON SUMMON ATTACK ==========
+  // Raises arms, summons 2 Bone Revenants around the arena
+  _processBossSummonAttack(delta, player) {
+    const attack = this.config.attacks?.SKELETON_SUMMON;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const summonTime = windupTime + 0.5;
+    const recoveryTime = summonTime + attack.recovery;
+    
+    // Windup - arms raised, purple energy gathers
+    if (this.stateTimer < windupTime) {
+      const progress = this.stateTimer / windupTime;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        // Arms raised (simulated via rotation/scale)
+        targetModel.rotation.x = -progress * 0.2;
+      }
+      // Purple energy gathers (flash effect)
+      if (this.stateTimer % 0.2 < 0.1) {
+        this._flashModel(0x8844cc, 80);
+      }
+      // Play charging sound
+      if (this.stateTimer < 0.1 && this.gm?.audioManager) {
+        this.gm.audioManager.play('magic', { position: this.mesh.position, volume: 0.7 });
+      }
+      return;
+    }
+    
+    // Summon moment - spawn the adds
+    if (this.stateTimer >= windupTime && this.stateTimer < summonTime) {
+      if (!this.hitThisSwing) {
+        this.hitThisSwing = true;
+        this.lastSummonTime = Date.now();
+        this._spawnSkeletonAdds(attack.summonCount || 2);
+        
+        // Flash and sound
+        this._flashModel(0xff44ff, 200);
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('ambush', { position: this.mesh.position, volume: 0.8 });
+        }
+        // Camera shake
+        if (this.gm?.cameraController) {
+          this.gm.cameraController.shakeLight();
+        }
+      }
+    }
+    
+    // Recovery
+    if (this.stateTimer >= summonTime && this.stateTimer < recoveryTime) {
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.rotation.x = THREE.MathUtils.lerp(targetModel.rotation.x, 0, 0.1);
+      }
+    }
+    
+    if (this.stateTimer >= recoveryTime) {
+      this._endBossAttack();
+    }
+  }
+  
+  // Spawn skeleton adds around the boss
+  _spawnSkeletonAdds(count) {
+    if (!this.enemyManager) return;
+    
+    const bossPos = this.mesh.position;
+    const spawnRadius = 5;
+    
+    for (let i = 0; i < count; i++) {
+      // Spawn in a circle around the boss
+      const angle = (Math.PI * 2 * i / count) + Math.random() * 0.5;
+      const spawnPos = new THREE.Vector3(
+        bossPos.x + Math.cos(angle) * spawnRadius,
+        bossPos.y,
+        bossPos.z + Math.sin(angle) * spawnRadius
+      );
+      
+      // Create the add as a temporary enemy
+      const add = new Enemy(this.scene, spawnPos, {
+        type: 'BONE_REVENANT',
+        name: 'Summoned Revenant',
+        behavior: 'guard',
+      }, this.gm);
+      
+      // Make it visible immediately (not dormant)
+      add.mesh.visible = true;
+      add.isDormant = false;
+      add.state = STATES.CHASE;
+      add.healthBarGroup.visible = true;
+      
+      // Track for cleanup on boss death
+      this.summonedAdds.push(add);
+      this.enemyManager.enemies.push(add);
+      
+      // Rising effect
+      const targetModel = add.gltfModel || add.fallbackBody;
+      if (targetModel) {
+        targetModel.position.y = -1;
+        const riseAnim = () => {
+          if (targetModel.position.y < 0) {
+            targetModel.position.y += 0.05;
+            requestAnimationFrame(riseAnim);
+          }
+        };
+        riseAnim();
+      }
+    }
+  }
+  
+  // ========== PHASE 2: GROUND SLAM AOE ATTACK ==========
+  // Boss jumps high, slams down creating shockwave ring
+  _processBossAOEAttack(delta, player) {
+    const attack = this.config.attacks?.GROUND_SLAM_AOE;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const jumpTime = windupTime + 0.4;
+    const slamTime = jumpTime + 0.3;
+    const shockwaveTime = slamTime + 0.2;
+    const recoveryTime = shockwaveTime + attack.recovery;
+    
+    const targetModel = this.gltfModel || this.fallbackBody;
+    
+    // Windup - crouch before jump
+    if (this.stateTimer < windupTime) {
+      this._faceTarget(player.mesh.position, delta);
+      this.playerTarget = player.mesh.position.clone();
+      const progress = this.stateTimer / windupTime;
+      if (targetModel) {
+        targetModel.position.y = -progress * 0.3; // Crouch
+      }
+      // Store start position
+      this.aoeStartY = this.mesh.position.y;
+      return;
+    }
+    
+    // Jump up
+    if (this.stateTimer >= windupTime && this.stateTimer < jumpTime) {
+      const jumpProgress = (this.stateTimer - windupTime) / 0.4;
+      const jumpHeight = attack.jumpHeight || 3.0;
+      // Parabolic jump
+      const height = Math.sin(jumpProgress * Math.PI) * jumpHeight;
+      this.mesh.position.y = this.aoeStartY + height;
+      
+      if (targetModel) {
+        targetModel.position.y = 0;
+        targetModel.rotation.x = -0.3; // Tucked position
+      }
+      
+      // Move toward player position during jump
+      const targetPos = this.playerTarget || player.mesh.position;
+      this._moveToward(targetPos, 8, delta);
+      return;
+    }
+    
+    // Slam down
+    if (this.stateTimer >= jumpTime && this.stateTimer < slamTime) {
+      const slamProgress = (this.stateTimer - jumpTime) / 0.3;
+      // Rapid descent
+      this.mesh.position.y = THREE.MathUtils.lerp(this.mesh.position.y, this.aoeStartY, slamProgress * 2);
+      if (targetModel) {
+        targetModel.rotation.x = THREE.MathUtils.lerp(-0.3, 0.2, slamProgress);
+      }
+    }
+    
+    // Shockwave - damage frame
+    if (this.stateTimer >= slamTime && this.stateTimer < shockwaveTime) {
+      this.mesh.position.y = this.aoeStartY;
+      
+      if (!this.hitThisSwing) {
+        this.hitThisSwing = true;
+        
+        // Create AOE damage zone
+        this.activeAttack = {
+          position: this.mesh.position.clone(),
+          range: attack.range,
+          damage: attack.damage,
+          postureDmg: attack.postureDmg,
+          isHeavy: true,
+          isAOE: true,
+        };
+        
+        // Visual shockwave ring
+        this._createShockwaveEffect();
+        
+        // Sound and camera shake
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('postureBreak', { position: this.mesh.position, volume: 1.0, pitch: 0.6 });
+        }
+        if (this.gm?.cameraController) {
+          this.gm.cameraController.shake(0.5, 0.4);
+        }
+      }
+    }
+    
+    // Recovery
+    if (this.stateTimer >= shockwaveTime && this.stateTimer < recoveryTime) {
+      this.activeAttack = null;
+      if (targetModel) {
+        targetModel.rotation.x = THREE.MathUtils.lerp(targetModel.rotation.x, 0, 0.1);
+      }
+    }
+    
+    if (this.stateTimer >= recoveryTime) {
+      this._endBossAttack();
+    }
+  }
+  
+  // Create visual shockwave effect
+  _createShockwaveEffect() {
+    const ringGeo = new THREE.RingGeometry(0.5, 1.5, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x8844cc,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(this.mesh.position);
+    ring.position.y = 0.1;
+    this.scene.add(ring);
+    
+    // Expand and fade
+    const maxRadius = this.config.attacks?.GROUND_SLAM_AOE?.range || 8;
+    const startTime = Date.now();
+    const duration = 400;
+    
+    const animateRing = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = elapsed / duration;
+      
+      if (progress < 1) {
+        const scale = 1 + progress * maxRadius;
+        ring.scale.set(scale, scale, 1);
+        ring.material.opacity = 0.8 * (1 - progress);
+        requestAnimationFrame(animateRing);
+      } else {
+        this.scene.remove(ring);
+        ring.geometry.dispose();
+        ring.material.dispose();
+      }
+    };
+    animateRing();
+  }
+  
+  // ========== PHASE 2: DARK PROJECTILE ATTACK ==========
+  // Casts a tracking purple orb at the player
+  _processBossProjectileAttack(delta, player) {
+    const attack = this.config.attacks?.DARK_PROJECTILE;
+    if (!attack) { this._changeState(STATES.CHASE); return; }
+    
+    const windupTime = attack.windup;
+    const castTime = windupTime + 0.2;
+    const recoveryTime = castTime + attack.recovery;
+    
+    // Windup - arm extends, energy gathers
+    if (this.stateTimer < windupTime) {
+      this._faceTarget(player.mesh.position, delta * 3);
+      const progress = this.stateTimer / windupTime;
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.rotation.z = progress * 0.15; // Lean into cast
+      }
+      // Purple glow charging
+      if (this.stateTimer % 0.15 < 0.075) {
+        this._flashModel(0x6622aa, 60);
+      }
+      return;
+    }
+    
+    // Cast - spawn projectile
+    if (this.stateTimer >= windupTime && this.stateTimer < castTime) {
+      if (!this.hitThisSwing) {
+        this.hitThisSwing = true;
+        this._spawnDarkProjectile(player, attack);
+        
+        // Sound
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('swordSwing', { position: this.mesh.position, volume: 0.6, pitch: 1.5 });
+        }
+      }
+    }
+    
+    // Recovery
+    if (this.stateTimer >= castTime && this.stateTimer < recoveryTime) {
+      const targetModel = this.gltfModel || this.fallbackBody;
+      if (targetModel) {
+        targetModel.rotation.z = THREE.MathUtils.lerp(targetModel.rotation.z, 0, 0.15);
+      }
+    }
+    
+    if (this.stateTimer >= recoveryTime) {
+      this._endBossAttack();
+    }
+  }
+  
+  // Spawn a tracking dark projectile
+  _spawnDarkProjectile(player, attackConfig) {
+    // Create projectile mesh
+    const projGeo = new THREE.SphereGeometry(0.4, 16, 16);
+    const projMat = new THREE.MeshBasicMaterial({
+      color: 0x8844cc,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const projectile = new THREE.Mesh(projGeo, projMat);
+    
+    // Start position (in front of boss)
+    const fwd = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+    projectile.position.copy(this.mesh.position).add(fwd.multiplyScalar(1.5)).add(new THREE.Vector3(0, 1.5, 0));
+    
+    // Inner glow
+    const glowGeo = new THREE.SphereGeometry(0.25, 12, 12);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xff44ff,
+      transparent: true,
+      opacity: 1.0,
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    projectile.add(glow);
+    
+    // Point light for atmosphere
+    const light = new THREE.PointLight(0x8844cc, 2, 5);
+    projectile.add(light);
+    
+    this.scene.add(projectile);
+    
+    // Track projectile
+    this.activeProjectiles.push({
+      mesh: projectile,
+      target: player,
+      speed: attackConfig.speed || 8,
+      tracking: attackConfig.trackingStrength || 3.0,
+      damage: attackConfig.damage || 40,
+      lifetime: 0,
+      maxLifetime: 5.0, // 5 seconds max
+      direction: new THREE.Vector3().subVectors(player.mesh.position, projectile.position).normalize(),
+    });
+  }
+  
+  // Update all active projectiles
+  _updateProjectiles(delta, player) {
+    for (let i = this.activeProjectiles.length - 1; i >= 0; i--) {
+      const proj = this.activeProjectiles[i];
+      proj.lifetime += delta;
+      
+      // Expire old projectiles
+      if (proj.lifetime > proj.maxLifetime) {
+        this._destroyProjectile(i);
+        continue;
+      }
+      
+      // Track toward player
+      const toPlayer = new THREE.Vector3().subVectors(
+        player.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)),
+        proj.mesh.position
+      );
+      const dist = toPlayer.length();
+      toPlayer.normalize();
+      
+      // Smooth tracking
+      proj.direction.lerp(toPlayer, proj.tracking * delta);
+      proj.direction.normalize();
+      
+      // Move projectile
+      proj.mesh.position.addScaledVector(proj.direction, proj.speed * delta);
+      
+      // Rotate for visual effect
+      proj.mesh.rotation.x += delta * 3;
+      proj.mesh.rotation.y += delta * 2;
+      
+      // Check collision with player
+      if (dist < 1.2 && !player.isInvincible) {
+        // Hit player
+        const result = this.gm?.takeDamage(proj.damage, 'magic', 10, player.isBlocking);
+        player.flashDamage();
+        
+        // HUD flash
+        if (this.gm?.hud) {
+          this.gm.hud.flashDamage(0.6);
+        }
+        
+        // Camera shake
+        if (this.gm?.cameraController) {
+          this.gm.cameraController.shakeMedium();
+        }
+        
+        // Impact particles
+        if (this.gm?.particleManager) {
+          this.gm.particleManager.spawnHitSparks(proj.mesh.position, 8, false);
+        }
+        
+        this._destroyProjectile(i);
+        continue;
+      }
+      
+      // Destroy if too far from arena
+      if (dist > 30) {
+        this._destroyProjectile(i);
+      }
+    }
+  }
+  
+  // Clean up projectile
+  _destroyProjectile(index) {
+    const proj = this.activeProjectiles[index];
+    if (proj && proj.mesh) {
+      // Explosion effect
+      const pos = proj.mesh.position.clone();
+      
+      // Small flash
+      const flashGeo = new THREE.SphereGeometry(0.8, 8, 8);
+      const flashMat = new THREE.MeshBasicMaterial({
+        color: 0x8844cc,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const flash = new THREE.Mesh(flashGeo, flashMat);
+      flash.position.copy(pos);
+      this.scene.add(flash);
+      
+      // Fade flash
+      const fadeFlash = () => {
+        flash.scale.multiplyScalar(1.1);
+        flash.material.opacity -= 0.1;
+        if (flash.material.opacity > 0) {
+          requestAnimationFrame(fadeFlash);
+        } else {
+          this.scene.remove(flash);
+          flash.geometry.dispose();
+          flash.material.dispose();
+        }
+      };
+      fadeFlash();
+      
+      // Remove projectile
+      this.scene.remove(proj.mesh);
+      proj.mesh.geometry.dispose();
+      proj.mesh.material.dispose();
+    }
+    this.activeProjectiles.splice(index, 1);
+  }
 
   _processAttack(delta, player) {
     const windupTime = this.config.attackWindup;
@@ -1500,6 +2064,23 @@ export class Enemy {
       // Deactivate boss arena (clears fog gate, spawns victory bonfire)
       if (this.world && this.world.deactivateBossArena) {
         this.world.deactivateBossArena();
+      }
+      
+      // Clean up summoned adds
+      if (this.summonedAdds) {
+        this.summonedAdds.forEach(add => {
+          if (add && !add.isDead) {
+            add._die();
+          }
+        });
+        this.summonedAdds = [];
+      }
+      
+      // Clean up active projectiles
+      if (this.activeProjectiles) {
+        for (let i = this.activeProjectiles.length - 1; i >= 0; i--) {
+          this._destroyProjectile(i);
+        }
       }
       
       // Play boss death sound

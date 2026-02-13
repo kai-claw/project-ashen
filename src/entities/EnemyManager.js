@@ -42,6 +42,8 @@ export class EnemyManager {
         this.cryptLord = enemy;
         // Give Crypt Lord world reference for arena activation
         enemy.world = this.world;
+        // Give Crypt Lord enemy manager reference for spawning adds
+        enemy.enemyManager = this;
       }
       
       this.enemies.push(enemy);
