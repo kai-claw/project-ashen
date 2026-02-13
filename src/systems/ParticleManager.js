@@ -364,6 +364,9 @@ export class ParticleManager {
    * Update all particles
    */
   update(delta) {
+    // Update death effects (vignette, camera shake)
+    this._updateDeathEffects(delta);
+
     // Update regular particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -377,6 +380,22 @@ export class ParticleManager {
       if (p.type === 'ring') {
         const scale = 1 + p.expandRate * p.life;
         p.mesh.scale.set(scale, scale, 1);
+      }
+
+      // Player soul wisps spiral upward
+      if (p.type === 'playerSoul') {
+        const spiralSpeed = 2;
+        p.mesh.position.x += Math.sin(p.life * spiralSpeed) * delta * 0.5;
+        p.mesh.position.z += Math.cos(p.life * spiralSpeed) * delta * 0.5;
+        // Glow pulse
+        const pulse = 0.6 + Math.sin(p.life * 5) * 0.4;
+        p.mesh.material.opacity = pulse * (1 - p.life / p.maxLife);
+      }
+
+      // Death mist expands and fades
+      if (p.type === 'deathMist') {
+        const expandScale = 1 + p.life * 0.5;
+        p.mesh.scale.setScalar(expandScale);
       }
 
       // Fade out
@@ -455,6 +474,202 @@ export class ParticleManager {
           (Math.random() - 0.5) * 100 - 20
         );
         e.maxLife = 8 + Math.random() * 6;
+      }
+    }
+  }
+
+  /**
+   * Spawn player death effect (dramatic soul escape + vignette)
+   */
+  spawnPlayerDeathEffect(position, camera) {
+    // Large soul burst escaping upward
+    for (let i = 0; i < 15; i++) {
+      const soulGeo = new THREE.SphereGeometry(0.15 + Math.random() * 0.1, 8, 8);
+      const soulMat = new THREE.MeshBasicMaterial({
+        color: 0x88ccff,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+      });
+      const soul = new THREE.Mesh(soulGeo, soulMat);
+      soul.position.copy(position);
+      soul.position.y += 0.5 + Math.random() * 0.8;
+      soul.position.x += (Math.random() - 0.5) * 0.6;
+      soul.position.z += (Math.random() - 0.5) * 0.6;
+
+      this.scene.add(soul);
+      this.particles.push({
+        mesh: soul,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 1.5,
+          3 + Math.random() * 2,
+          (Math.random() - 0.5) * 1.5
+        ),
+        gravity: -0.5, // Slow gravity for ethereal float
+        life: 0,
+        maxLife: 2.5 + Math.random() * 1.5,
+        type: 'playerSoul',
+      });
+    }
+
+    // Create a red-black blood mist burst
+    for (let i = 0; i < 20; i++) {
+      const mistGeo = new THREE.SphereGeometry(0.2 + Math.random() * 0.15, 6, 6);
+      const mistMat = new THREE.MeshBasicMaterial({
+        color: 0x440011,
+        transparent: true,
+        opacity: 0.7,
+      });
+      const mist = new THREE.Mesh(mistGeo, mistMat);
+      mist.position.copy(position);
+      mist.position.y += Math.random() * 1.5;
+
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1 + Math.random() * 2;
+
+      this.scene.add(mist);
+      this.particles.push({
+        mesh: mist,
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * speed,
+          0.5 + Math.random() * 1,
+          Math.sin(angle) * speed
+        ),
+        gravity: -1,
+        life: 0,
+        maxLife: 2.0 + Math.random() * 1,
+        type: 'deathMist',
+        scale: 1.0,
+      });
+    }
+
+    // Screen vignette effect (fullscreen quad that fades in)
+    this._createDeathVignette(camera);
+
+    // Camera shake
+    if (camera) {
+      this._triggerCameraShake(camera);
+    }
+  }
+
+  _createDeathVignette(camera) {
+    // Create a fullscreen vignette overlay that fades to red-black edges
+    const vignetteGeo = new THREE.PlaneGeometry(2, 2);
+    
+    // Custom shader for vignette
+    const vignetteMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      uniforms: {
+        uTime: { value: 0 },
+        uIntensity: { value: 0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform float uTime;
+        uniform float uIntensity;
+        
+        void main() {
+          vec2 center = vUv - 0.5;
+          float dist = length(center) * 1.8;
+          
+          // Dark red vignette
+          float vignette = smoothstep(0.3, 1.2, dist);
+          vec3 color = mix(vec3(0.0), vec3(0.3, 0.0, 0.0), vignette);
+          
+          // Pulsing effect
+          float pulse = sin(uTime * 2.0) * 0.1 + 0.9;
+          float alpha = vignette * uIntensity * pulse;
+          
+          gl_FragColor = vec4(color, alpha * 0.85);
+        }
+      `,
+    });
+
+    const vignette = new THREE.Mesh(vignetteGeo, vignetteMat);
+    vignette.frustumCulled = false;
+    vignette.renderOrder = 999;
+
+    // Add to scene as screen-space overlay
+    this.scene.add(vignette);
+
+    // Animate the vignette
+    this.deathVignette = {
+      mesh: vignette,
+      material: vignetteMat,
+      life: 0,
+      fadeInDuration: 0.5,
+      holdDuration: 2.5,
+      fadeOutDuration: 0.5,
+    };
+  }
+
+  _triggerCameraShake(camera) {
+    if (!this.cameraShake) {
+      this.cameraShake = {
+        originalPosition: camera.position.clone(),
+        intensity: 0.3,
+        decay: 0.95,
+        duration: 0.8,
+        elapsed: 0,
+        camera: camera,
+      };
+    }
+  }
+
+  /**
+   * Update death vignette and camera shake
+   */
+  _updateDeathEffects(delta) {
+    // Update vignette
+    if (this.deathVignette) {
+      const v = this.deathVignette;
+      v.life += delta;
+      v.material.uniforms.uTime.value = v.life;
+
+      const totalDuration = v.fadeInDuration + v.holdDuration + v.fadeOutDuration;
+
+      if (v.life < v.fadeInDuration) {
+        // Fade in
+        v.material.uniforms.uIntensity.value = v.life / v.fadeInDuration;
+      } else if (v.life < v.fadeInDuration + v.holdDuration) {
+        // Hold
+        v.material.uniforms.uIntensity.value = 1.0;
+      } else if (v.life < totalDuration) {
+        // Fade out
+        const fadeProgress = (v.life - v.fadeInDuration - v.holdDuration) / v.fadeOutDuration;
+        v.material.uniforms.uIntensity.value = 1.0 - fadeProgress;
+      } else {
+        // Remove vignette
+        this.scene.remove(v.mesh);
+        v.mesh.geometry.dispose();
+        v.material.dispose();
+        this.deathVignette = null;
+      }
+    }
+
+    // Update camera shake
+    if (this.cameraShake) {
+      const shake = this.cameraShake;
+      shake.elapsed += delta;
+
+      if (shake.elapsed < shake.duration) {
+        const remaining = 1 - (shake.elapsed / shake.duration);
+        const shakeAmount = shake.intensity * remaining;
+        
+        shake.camera.position.x += (Math.random() - 0.5) * shakeAmount;
+        shake.camera.position.y += (Math.random() - 0.5) * shakeAmount * 0.5;
+        shake.camera.position.z += (Math.random() - 0.5) * shakeAmount;
+      } else {
+        this.cameraShake = null;
       }
     }
   }

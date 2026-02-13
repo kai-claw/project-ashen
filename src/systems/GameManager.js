@@ -143,6 +143,11 @@ export class GameManager {
     // Store death position for bloodstain
     const deathPos = this.player ? this.player.mesh.position.clone() : this.checkpoint.clone();
 
+    // Spawn player death visual effect
+    if (this.particleManager && this.player) {
+      this.particleManager.spawnPlayerDeathEffect(deathPos, this.camera);
+    }
+
     // Remove old bloodstain if exists
     if (this.bloodstainMesh && this.scene) {
       this.scene.remove(this.bloodstainMesh);
@@ -212,10 +217,11 @@ export class GameManager {
   }
 
   // Set entity references for respawn coordination
-  setEntities(player, enemyManager, scene) {
+  setEntities(player, enemyManager, scene, camera = null) {
     this.player = player;
     this.enemyManager = enemyManager;
     this.scene = scene;
+    this.camera = camera;
   }
 
   // --- Remnant ---

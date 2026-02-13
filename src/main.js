@@ -63,7 +63,7 @@ const enemyManager = new EnemyManager(scene, gameManager, player, world, particl
 
 // --- Wire Up GameManager ---
 gameManager.setCheckpoint(world.bonfirePosition.clone());
-gameManager.setEntities(player, enemyManager, scene);
+gameManager.setEntities(player, enemyManager, scene, camera);
 gameManager.bonfirePosition = world.bonfirePosition;
 gameManager.audioManager = audioManager;
 gameManager.particleManager = particleManager;
