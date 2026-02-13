@@ -75,8 +75,9 @@ export const ENEMY_TYPES = {
 };
 
 export class Enemy {
-  constructor(scene, position, config = {}) {
+  constructor(scene, position, config = {}, gameManager = null) {
     this.scene = scene;
+    this.gm = gameManager;
     
     // Merge with type preset if specified
     const typePreset = config.type ? ENEMY_TYPES[config.type] : {};
@@ -489,6 +490,16 @@ export class Enemy {
 
     this.health -= amount;
     this.posture = Math.min(this.maxPosture, this.posture + postureDmg);
+    
+    // Play hit sound
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('hitImpact', { 
+        position: this.mesh.position, 
+        volume: 0.6,
+        variation: 0.15
+      });
+      this.gm.audioManager.playEnemyGrunt(this.mesh.position);
+    }
 
     // Update health bar
     const ratio = Math.max(0, this.health / this.maxHealth);
@@ -524,6 +535,14 @@ export class Enemy {
   _triggerPostureBreak() {
     this._changeState(STATES.STAGGERED);
     this.breakIndicator.visible = true;
+    
+    // Play posture break sound
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('postureBreak', { 
+        position: this.mesh.position, 
+        volume: 0.7 
+      });
+    }
     
     // Big flash effect
     this.body.material.emissive.setHex(0xffcc00);

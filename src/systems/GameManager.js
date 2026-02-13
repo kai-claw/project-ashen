@@ -46,6 +46,9 @@ export class GameManager {
     this.postureRegenDelay = 1.0;
     this.postureRegenRate = 15;
     this.postureRegenTimer = 0;
+    
+    // Audio manager (set via main.js)
+    this.audioManager = null;
   }
 
   update(delta) {
@@ -100,12 +103,27 @@ export class GameManager {
     this.posture = Math.min(this.maxPosture, this.posture + postureDmg);
     this.postureRegenTimer = 0;
 
+    // Play damage sound
+    if (this.audioManager && this.player) {
+      this.audioManager.play('playerDamage', { 
+        position: this.player.mesh.position,
+        volume: 0.7 
+      });
+    }
+
     if (this.health <= 0) {
       this.die(damageType);
       return 'died';
     }
 
     if (this.posture >= this.maxPosture) {
+      // Play posture break sound
+      if (this.audioManager && this.player) {
+        this.audioManager.play('postureBreak', { 
+          position: this.player.mesh.position,
+          volume: 0.8 
+        });
+      }
       return 'posture_broken';
     }
 
@@ -116,6 +134,11 @@ export class GameManager {
     this.isDead = true;
     this.deathCount++;
     this.health = 0;
+    
+    // Play death sound
+    if (this.audioManager) {
+      this.audioManager.play('death', { volume: 0.8 });
+    }
 
     // Store death position for bloodstain
     const deathPos = this.player ? this.player.mesh.position.clone() : this.checkpoint.clone();
@@ -207,6 +230,10 @@ export class GameManager {
     if (dist < 2.0) {
       this.remnant += this.heldRemnant;
       console.log(`[REMNANT] Recovered ${this.heldRemnant} remnant from bloodstain!`);
+      // Play pickup sound
+      if (this.audioManager) {
+        this.audioManager.play('itemPickup', { volume: 0.6 });
+      }
       this.heldRemnant = 0;
       if (this.bloodstainMesh && this.scene) {
         this.scene.remove(this.bloodstainMesh);
@@ -241,6 +268,10 @@ export class GameManager {
     if (this.remnant < cost) return false;
     this.remnant -= cost;
     this.infusions[track] = nextDepth;
+    // Play infusion sound
+    if (this.audioManager) {
+      this.audioManager.play('menuConfirm', { volume: 0.5 });
+    }
     return true;
   }
 

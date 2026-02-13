@@ -171,6 +171,15 @@ export class Boss {
     this.isActive = true;
     this._changeState(STATES.AWAKENING);
     
+    // Play boss roar and start boss music
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('bossRoar', { 
+        position: this.mesh.position, 
+        volume: 0.8 
+      });
+      this.gm.audioManager.startBossMusic();
+    }
+    
     // Eyes flare up sequence
     let delay = 0;
     this.eyes.forEach((eye, i) => {
@@ -576,6 +585,14 @@ export class Boss {
     this.health -= amount;
     this.posture = Math.min(this.maxPosture, this.posture + postureDmg);
     
+    // Play hit sounds
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('criticalHit', { 
+        position: this.mesh.position, 
+        volume: 0.7 
+      });
+    }
+    
     // Flash on hit
     this.body.material.emissive.setHex(0x440000);
     setTimeout(() => {
@@ -609,6 +626,14 @@ export class Boss {
     this._changeState(STATES.STAGGERED);
     this.activeAttack = null;
     
+    // Play posture break sound
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('postureBreak', { 
+        position: this.mesh.position, 
+        volume: 0.9 
+      });
+    }
+    
     // Big flash
     this.body.material.emissive.setHex(0xffcc00);
     this.eyes.forEach(eye => {
@@ -634,6 +659,14 @@ export class Boss {
     this.activeAttack = null;
     this._changeState(STATES.PHASE_TRANSITION);
     
+    // Play boss roar for phase transition
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('bossRoar', { 
+        position: this.mesh.position, 
+        volume: 1.0 
+      });
+    }
+    
     console.log(`[BOSS] ${this.name} enters PHASE 2!`);
   }
   
@@ -643,6 +676,11 @@ export class Boss {
     this.health = 0;
     this.activeAttack = null;
     this.isActive = false;
+    
+    // Return to ambient music
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.startAmbientMusic();
+    }
     
     console.log(`[BOSS] ${this.name} DEFEATED!`);
     

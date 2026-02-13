@@ -182,6 +182,14 @@ export class ItemManager {
     if (item.mesh) this.scene.remove(item.mesh);
     if (item.light) this.scene.remove(item.light);
     
+    // Play pickup sound
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('itemPickup', { 
+        position: item.position, 
+        volume: 0.6 
+      });
+    }
+    
     // Apply effect based on type
     let message = '';
     switch (item.type) {

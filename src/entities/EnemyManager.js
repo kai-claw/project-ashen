@@ -31,7 +31,7 @@ export class EnemyManager {
       const enemy = new Enemy(this.scene, spawn.pos, {
         type: spawn.type,
         name: `${typeConfig.name} ${i + 1}`,
-      });
+      }, this.gm);
       this.enemies.push(enemy);
     });
   }

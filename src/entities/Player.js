@@ -200,6 +200,13 @@ export class Player {
 
   _startDodge() {
     this.gm.useStamina(COSTS.dodge);
+    // Play dodge sound
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('dodge', { 
+        position: this.mesh.position, 
+        volume: 0.5 
+      });
+    }
     const move = this.input.getMovementVector();
 
     if (move.x !== 0 || move.z !== 0) {
@@ -242,6 +249,16 @@ export class Player {
     const cost = isHeavy ? COSTS.heavyAttack : COSTS.lightAttack;
     this.gm.useStamina(cost);
     this.hitThisSwing = false;
+    
+    // Play sword swing sound
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('swordSwing', { 
+        position: this.mesh.position, 
+        volume: 0.5,
+        pitch: isHeavy ? 0.8 : 1.0,
+        variation: 0.1
+      });
+    }
     
     // Face camera direction when attacking (so attacks go where you're looking)
     const camYaw = this._getCameraYaw();
