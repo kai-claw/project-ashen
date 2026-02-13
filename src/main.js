@@ -22,7 +22,8 @@ renderer.toneMappingExposure = 1.5; // Brighter exposure
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x0a0a14, 0.008); // Less fog density
+// Atmospheric fog - subtle, doesn't obscure gameplay
+scene.fog = new THREE.FogExp2(0x0a0812, 0.006);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 

@@ -8,27 +8,358 @@ export class World {
     this.hiddenWalls = []; // Illusory walls
     this.bonfirePosition = new THREE.Vector3(0, 0, 5);
     
+    this._createSkybox();
     this._createCathedral();
     this._createLighting();
+    this._createEnvironmentProps();
+  }
+  
+  _createSkybox() {
+    // Create a dramatic fantasy sky using a large dome/sphere
+    const skyGeo = new THREE.SphereGeometry(180, 32, 32);
+    
+    // Shader material for gradient sky with stars
+    const skyMat = new THREE.ShaderMaterial({
+      uniforms: {
+        topColor: { value: new THREE.Color(0x0a0a1a) },  // Deep night blue
+        midColor: { value: new THREE.Color(0x1a0a2a) },  // Purple horizon
+        botColor: { value: new THREE.Color(0x2a1a0a) },  // Warm amber low
+        starDensity: { value: 0.003 },
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 midColor;
+        uniform vec3 botColor;
+        uniform float starDensity;
+        varying vec3 vWorldPosition;
+        
+        // Simple hash for stars
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        
+        void main() {
+          float h = normalize(vWorldPosition).y;
+          
+          // Sky gradient
+          vec3 sky;
+          if (h > 0.0) {
+            sky = mix(midColor, topColor, pow(h, 0.5));
+          } else {
+            sky = mix(midColor, botColor, pow(-h, 0.3));
+          }
+          
+          // Add stars in upper sky
+          if (h > 0.1) {
+            vec2 starUV = vWorldPosition.xz * 0.02;
+            float star = hash(floor(starUV * 100.0));
+            if (star > 0.997) {
+              float twinkle = 0.5 + 0.5 * sin(star * 1000.0 + vWorldPosition.x * 0.1);
+              sky += vec3(twinkle * (h - 0.1) * 2.0);
+            }
+          }
+          
+          // Subtle aurora effect near horizon
+          float aurora = sin(vWorldPosition.x * 0.03 + vWorldPosition.z * 0.02) * 0.5 + 0.5;
+          aurora *= smoothstep(0.0, 0.3, h) * smoothstep(0.5, 0.2, h);
+          sky += vec3(0.1, 0.2, 0.3) * aurora * 0.3;
+          
+          gl_FragColor = vec4(sky, 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+    });
+    
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    this.scene.add(sky);
+    
+    // Add a subtle moon
+    const moonGeo = new THREE.CircleGeometry(8, 32);
+    const moonMat = new THREE.MeshBasicMaterial({
+      color: 0xeeeedd,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const moon = new THREE.Mesh(moonGeo, moonMat);
+    moon.position.set(-50, 80, -100);
+    moon.lookAt(0, 0, 0);
+    this.scene.add(moon);
+    
+    // Moon glow
+    const glowGeo = new THREE.CircleGeometry(15, 32);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xaaaacc,
+      transparent: true,
+      opacity: 0.15,
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(moon.position);
+    glow.lookAt(0, 0, 0);
+    this.scene.add(glow);
+  }
+  
+  _createEnvironmentProps() {
+    // Add atmospheric details outside the cathedral
+    
+    // Dead trees around the courtyard
+    const treePositions = [
+      [-12, 8], [14, 6], [-10, -5], [12, -8],
+      [-15, -15], [16, -20], [-14, -35], [15, -45],
+    ];
+    
+    treePositions.forEach(([x, z]) => {
+      this._createDeadTree(x, z);
+    });
+    
+    // Gravestones scattered outside
+    const gravePositions = [
+      [-11, 0], [-13, -2], [13, 2], [11, -3],
+      [-16, -10], [14, -12], [-15, -40], [17, -38],
+    ];
+    
+    gravePositions.forEach(([x, z]) => {
+      this._createGravestone(x, z);
+    });
+    
+    // Grass tufts for ground coverage
+    this._scatterGrass(0, -40, 35, 90, 200);
+    
+    // Glowing runes on the floor
+    this._createFloorRunes();
+  }
+  
+  _createDeadTree(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+    group.rotation.y = Math.random() * Math.PI * 2;
+    
+    // Trunk - gnarled wood
+    const trunkMat = new THREE.MeshStandardMaterial({
+      color: 0x2a1a10,
+      roughness: 0.95,
+    });
+    
+    const trunkGeo = new THREE.CylinderGeometry(0.2, 0.4, 4, 6);
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = 2;
+    trunk.rotation.z = (Math.random() - 0.5) * 0.2;
+    trunk.castShadow = true;
+    group.add(trunk);
+    
+    // Branches
+    for (let i = 0; i < 4; i++) {
+      const branchGeo = new THREE.CylinderGeometry(0.03, 0.12, 2, 4);
+      const branch = new THREE.Mesh(branchGeo, trunkMat);
+      branch.position.set(0, 3 + i * 0.3, 0);
+      branch.rotation.z = 0.3 + Math.random() * 0.8;
+      branch.rotation.y = i * Math.PI / 2 + Math.random() * 0.5;
+      branch.castShadow = true;
+      group.add(branch);
+    }
+    
+    this.scene.add(group);
+  }
+  
+  _createGravestone(x, z) {
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x3a3a40,
+      roughness: 0.9,
+    });
+    
+    // Random style
+    const style = Math.floor(Math.random() * 3);
+    let geo;
+    
+    if (style === 0) {
+      // Simple rectangle
+      geo = new THREE.BoxGeometry(0.6, 1.2, 0.15);
+    } else if (style === 1) {
+      // Rounded top (approximate with box + sphere)
+      geo = new THREE.BoxGeometry(0.5, 1.0, 0.12);
+    } else {
+      // Cross shape
+      geo = new THREE.BoxGeometry(0.15, 1.4, 0.1);
+    }
+    
+    const stone = new THREE.Mesh(geo, mat);
+    stone.position.set(x, style === 2 ? 0.7 : 0.5, z);
+    stone.rotation.y = Math.random() * 0.4 - 0.2;
+    stone.rotation.x = Math.random() * 0.1 - 0.05;
+    stone.castShadow = true;
+    stone.receiveShadow = true;
+    this.scene.add(stone);
+    
+    // Cross arm for style 2
+    if (style === 2) {
+      const armGeo = new THREE.BoxGeometry(0.5, 0.1, 0.08);
+      const arm = new THREE.Mesh(armGeo, mat);
+      arm.position.set(x, 1.0, z);
+      arm.rotation.y = stone.rotation.y;
+      arm.castShadow = true;
+      this.scene.add(arm);
+    }
+  }
+  
+  _scatterGrass(cx, cz, w, h, count) {
+    const grassMat = new THREE.MeshStandardMaterial({
+      color: 0x2a3a20,
+      roughness: 0.9,
+      side: THREE.DoubleSide,
+    });
+    
+    for (let i = 0; i < count; i++) {
+      const x = cx + (Math.random() - 0.5) * w;
+      const z = cz + (Math.random() - 0.5) * h;
+      
+      // Simple grass blade using plane
+      const bladeGeo = new THREE.PlaneGeometry(0.1, 0.3 + Math.random() * 0.3);
+      const blade = new THREE.Mesh(bladeGeo, grassMat);
+      blade.position.set(x, 0.15, z);
+      blade.rotation.y = Math.random() * Math.PI;
+      blade.rotation.x = -0.1;
+      this.scene.add(blade);
+    }
+  }
+  
+  _createFloorRunes() {
+    // Glowing runes at key locations
+    const runePositions = [
+      { pos: [0, 0.02, -25], size: 4, color: 0x4444aa },   // Main hall center
+      { pos: [0, 0.02, -55], size: 3, color: 0xaa6622 },   // Altar
+      { pos: [0, 0.02, -95], size: 5, color: 0xaa2222 },   // Boss arena
+    ];
+    
+    runePositions.forEach(({ pos, size, color }) => {
+      // Rune circle
+      const ringGeo = new THREE.RingGeometry(size - 0.1, size, 32);
+      const runeMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(ringGeo, runeMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(...pos);
+      this.scene.add(ring);
+      
+      // Inner pattern
+      const innerGeo = new THREE.RingGeometry(size * 0.4, size * 0.5, 6);
+      const inner = new THREE.Mesh(innerGeo, runeMat);
+      inner.rotation.x = -Math.PI / 2;
+      inner.position.set(...pos);
+      this.scene.add(inner);
+      
+      // Animate glow
+      const light = new THREE.PointLight(color, 0.5, size * 2);
+      light.position.set(pos[0], pos[1] + 0.5, pos[2]);
+      this.scene.add(light);
+    });
   }
 
   _createCathedral() {
+    // Create procedural stone texture
+    const stoneCanvas = document.createElement('canvas');
+    stoneCanvas.width = 256;
+    stoneCanvas.height = 256;
+    const ctx = stoneCanvas.getContext('2d');
+    
+    // Base color with noise
+    ctx.fillStyle = '#3a3840';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Add stone texture variation
+    for (let i = 0; i < 2000; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 256;
+      const size = Math.random() * 3 + 1;
+      const brightness = Math.floor(Math.random() * 30);
+      ctx.fillStyle = `rgb(${50 + brightness}, ${48 + brightness}, ${55 + brightness})`;
+      ctx.fillRect(x, y, size, size);
+    }
+    
+    // Add mortar lines (grid pattern for bricks)
+    ctx.strokeStyle = '#252228';
+    ctx.lineWidth = 2;
+    for (let y = 0; y < 256; y += 32) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(256, y);
+      ctx.stroke();
+    }
+    for (let x = 0; x < 256; x += 64) {
+      for (let y = 0; y < 256; y += 64) {
+        ctx.beginPath();
+        ctx.moveTo(x + (y % 64 === 0 ? 0 : 32), y);
+        ctx.lineTo(x + (y % 64 === 0 ? 0 : 32), y + 32);
+        ctx.stroke();
+      }
+    }
+    
+    const stoneTexture = new THREE.CanvasTexture(stoneCanvas);
+    stoneTexture.wrapS = THREE.RepeatWrapping;
+    stoneTexture.wrapT = THREE.RepeatWrapping;
+    stoneTexture.repeat.set(2, 2);
+    
     const stoneMat = new THREE.MeshStandardMaterial({
-      color: 0x2a2a30,
+      color: 0x4a4850,
       roughness: 0.85,
       metalness: 0.1,
+      map: stoneTexture,
     });
     
+    // Dark crypt stone - purplish tint
     const darkStoneMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a20,
+      color: 0x2a2535,
       roughness: 0.9,
       metalness: 0.05,
+      map: stoneTexture,
     });
     
+    // Floor with different texture
+    const floorCanvas = document.createElement('canvas');
+    floorCanvas.width = 256;
+    floorCanvas.height = 256;
+    const fctx = floorCanvas.getContext('2d');
+    
+    // Cobblestone pattern
+    fctx.fillStyle = '#2a2830';
+    fctx.fillRect(0, 0, 256, 256);
+    
+    // Random stone shapes
+    for (let i = 0; i < 25; i++) {
+      const x = (i % 5) * 52 + Math.random() * 10;
+      const y = Math.floor(i / 5) * 52 + Math.random() * 10;
+      const w = 40 + Math.random() * 10;
+      const h = 40 + Math.random() * 10;
+      const brightness = Math.floor(Math.random() * 20);
+      fctx.fillStyle = `rgb(${38 + brightness}, ${36 + brightness}, ${42 + brightness})`;
+      fctx.beginPath();
+      fctx.roundRect(x, y, w, h, 5);
+      fctx.fill();
+      fctx.strokeStyle = '#1a1820';
+      fctx.lineWidth = 2;
+      fctx.stroke();
+    }
+    
+    const floorTexture = new THREE.CanvasTexture(floorCanvas);
+    floorTexture.wrapS = THREE.RepeatWrapping;
+    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.repeat.set(4, 4);
+    
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a20,
+      color: 0x3a3840,
       roughness: 0.95,
       metalness: 0.05,
+      map: floorTexture,
     });
 
     // === ENTRANCE COURTYARD (Spawn Area) ===
@@ -159,9 +490,6 @@ export class World {
     
     // === SCATTERED DEBRIS ===
     this._scatterDebris(0, -30, 40, 60, 30, stoneMat);
-    
-    // Fog for atmosphere
-    this.scene.fog = new THREE.FogExp2(0x0a0a0f, 0.015);
   }
   
   _createFloorSection(x, z, width, depth, mat) {
@@ -410,52 +738,102 @@ export class World {
   }
   
   _createLighting() {
-    // Ambient light - bright enough to see
-    const ambient = new THREE.AmbientLight(0x404060, 0.8);
+    // Hemisphere light for natural sky/ground bounce
+    const hemiLight = new THREE.HemisphereLight(0x6666aa, 0x443322, 0.6);
+    this.scene.add(hemiLight);
+    
+    // Ambient for base visibility
+    const ambient = new THREE.AmbientLight(0x303040, 0.4);
     this.scene.add(ambient);
     
-    // Moonlight through unseen windows
-    const dirLight = new THREE.DirectionalLight(0x8888cc, 1.0);
-    dirLight.position.set(-15, 20, -10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.set(2048, 2048);
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 100;
-    dirLight.shadow.camera.left = -40;
-    dirLight.shadow.camera.right = 40;
-    dirLight.shadow.camera.top = 40;
-    dirLight.shadow.camera.bottom = -40;
-    this.scene.add(dirLight);
+    // Moonlight - main directional (silvery blue)
+    const moonLight = new THREE.DirectionalLight(0x8899cc, 1.2);
+    moonLight.position.set(-50, 80, -100);
+    moonLight.castShadow = true;
+    moonLight.shadow.mapSize.set(4096, 4096);
+    moonLight.shadow.camera.near = 10;
+    moonLight.shadow.camera.far = 200;
+    moonLight.shadow.camera.left = -60;
+    moonLight.shadow.camera.right = 60;
+    moonLight.shadow.camera.top = 60;
+    moonLight.shadow.camera.bottom = -60;
+    moonLight.shadow.bias = -0.0001;
+    this.scene.add(moonLight);
     
-    // Accent lights throughout cathedral
+    // Secondary fill light (warm, from opposite direction)
+    const fillLight = new THREE.DirectionalLight(0xaa6644, 0.3);
+    fillLight.position.set(30, 20, 50);
+    this.scene.add(fillLight);
+    
+    // Accent lights throughout cathedral - more dramatic colors
     const accents = [
-      // Entrance courtyard
-      { pos: [0, 3, 5], color: 0xff6622, intensity: 2, dist: 10 }, // Bonfire
+      // Entrance courtyard - warm bonfire glow
+      { pos: [0, 3, 5], color: 0xff6622, intensity: 3, dist: 15 },
+      { pos: [0, 1, 5], color: 0xff4400, intensity: 2, dist: 8 }, // Low fire glow
       
-      // Main hall
-      { pos: [0, 6, -20], color: 0x4444aa, intensity: 0.8, dist: 15 },
-      { pos: [0, 6, -40], color: 0x4444aa, intensity: 0.8, dist: 15 },
+      // Main hall - ethereal blue
+      { pos: [-6, 5, -12], color: 0x4466cc, intensity: 1.2, dist: 12 },
+      { pos: [6, 5, -12], color: 0x4466cc, intensity: 1.2, dist: 12 },
+      { pos: [-6, 5, -32], color: 0x4455bb, intensity: 1.0, dist: 12 },
+      { pos: [6, 5, -32], color: 0x4455bb, intensity: 1.0, dist: 12 },
       
-      // Left chapel
-      { pos: [-18, 4, -25], color: 0xaa4444, intensity: 1, dist: 12 },
+      // Left chapel - blood red (corrupted altar)
+      { pos: [-21, 3, -25], color: 0xcc3333, intensity: 1.5, dist: 10 },
+      { pos: [-18, 6, -25], color: 0x882222, intensity: 0.8, dist: 15 },
       
-      // Right chapel
-      { pos: [18, 4, -25], color: 0x44aa44, intensity: 1, dist: 12 },
+      // Right chapel - sickly green (poison/nature)
+      { pos: [21, 3, -25], color: 0x44aa55, intensity: 1.5, dist: 10 },
+      { pos: [18, 6, -25], color: 0x338844, intensity: 0.8, dist: 15 },
       
-      // Altar room
-      { pos: [0, 5, -55], color: 0xffaa44, intensity: 1.5, dist: 12 },
+      // Secret room - golden treasure glow
+      { pos: [21, 2, -40], color: 0xffcc44, intensity: 2, dist: 8 },
       
-      // Crypt
-      { pos: [0, 3, -70], color: 0x2244aa, intensity: 0.6, dist: 15 },
+      // Altar room - holy golden light
+      { pos: [0, 4, -58], color: 0xffaa44, intensity: 2.5, dist: 15 },
+      { pos: [-2, 2, -57], color: 0xff8822, intensity: 1, dist: 5 }, // Candles
+      { pos: [2, 2, -57], color: 0xff8822, intensity: 1, dist: 5 },
       
-      // Boss arena
-      { pos: [0, 5, -95], color: 0xaa2222, intensity: 1.2, dist: 20 },
+      // Crypt - cold, deathly blue
+      { pos: [-6, 2, -65], color: 0x2244aa, intensity: 0.8, dist: 10 },
+      { pos: [6, 2, -75], color: 0x2244aa, intensity: 0.8, dist: 10 },
+      { pos: [0, 3, -70], color: 0x334488, intensity: 0.6, dist: 20 },
+      
+      // Boss arena - ominous red/purple
+      { pos: [-8, 4, -95], color: 0x882244, intensity: 1.5, dist: 15 },
+      { pos: [8, 4, -95], color: 0x882244, intensity: 1.5, dist: 15 },
+      { pos: [0, 8, -98], color: 0xaa2255, intensity: 2, dist: 25 }, // Central dramatic
+      { pos: [0, 1, -95], color: 0x660022, intensity: 1, dist: 15 }, // Floor glow
     ];
     
     accents.forEach(({ pos, color, intensity, dist }) => {
       const light = new THREE.PointLight(color, intensity, dist);
       light.position.set(...pos);
       this.scene.add(light);
+    });
+    
+    // Animated torch flames at pillar locations
+    const torchPositions = [
+      [-6, 6, -12], [6, 6, -12],
+      [-6, 6, -22], [6, 6, -22],
+      [-6, 6, -32], [6, 6, -32],
+    ];
+    
+    torchPositions.forEach(pos => {
+      const torch = new THREE.PointLight(0xff6633, 1.5, 10);
+      torch.position.set(...pos);
+      this.scene.add(torch);
+      
+      // Animate flicker
+      const baseIntensity = 1.5;
+      const offset = Math.random() * 1000;
+      const animate = () => {
+        requestAnimationFrame(animate);
+        torch.intensity = baseIntensity + 
+          Math.sin(Date.now() * 0.01 + offset) * 0.3 + 
+          Math.sin(Date.now() * 0.023 + offset) * 0.2 +
+          Math.random() * 0.15;
+      };
+      animate();
     });
   }
 
