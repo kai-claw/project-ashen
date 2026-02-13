@@ -163,10 +163,10 @@ export class Player {
         }
       });
 
-      // Hide fallback mesh
+      // Hide all fallback meshes when GLTF loads
       if (this.fallbackBody) this.fallbackBody.visible = false;
       if (this.fallbackHead) this.fallbackHead.visible = false;
-      // Keep visor for visual effect indicator
+      if (this.visor) this.visor.visible = false;
 
       // Add GLTF model to mesh group
       this.mesh.add(this.gltfModel);
