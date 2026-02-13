@@ -52,8 +52,44 @@
       font-family: 'Courier New', monospace; font-size: 12px;
       color: #555; z-index: 10; text-align: center;
     }
+    /* Boss health bar at bottom center */
+    #boss-container {
+      display: none;
+      position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+      width: 600px; z-index: 10;
+      font-family: 'Georgia', serif;
+    }
+    #boss-name {
+      text-align: center; font-size: 18px; color: #c8c0b0;
+      text-shadow: 0 0 10px rgba(139, 26, 26, 0.8);
+      margin-bottom: 6px; letter-spacing: 2px;
+    }
+    #boss-phase {
+      text-align: center; font-size: 12px; color: #ffcc00;
+      text-shadow: 0 0 8px rgba(255, 68, 0, 0.8);
+      margin-bottom: 4px; font-weight: bold;
+    }
+    #boss-health-container {
+      width: 100%; height: 24px; background: #1a1a24;
+      border: 2px solid #4a2222; position: relative;
+      box-shadow: 0 0 20px rgba(139, 26, 26, 0.5);
+    }
+    #boss-health-bar {
+      height: 100%; width: 100%;
+      background: linear-gradient(90deg, #cc2222, #ff4444);
+      transition: width 0.2s ease;
+    }
+    #boss-posture-container {
+      width: 100%; height: 8px; background: #1a1a14;
+      border: 1px solid #333; margin-top: 2px;
+    }
+    #boss-posture-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #ccaa33, #ffcc00);
+      transition: width 0.15s ease;
+    }
   </style>
-  <script type="module" crossorigin src="/project-ashen/assets/index-BMwWl3bM.js"></script>
+  <script type="module" crossorigin src="/project-ashen/assets/index-t-Q5v9Xx.js"></script>
 </head>
 <body>
   <div id="hud">
@@ -81,5 +117,18 @@
   <div id="controls-hint">
     WASD Move · Space Dodge · LMB Attack · RMB Heavy · Shift Block · Q Lock-on · Click to start
   </div>
+  
+  <!-- Boss health bar (bottom center) -->
+  <div id="boss-container">
+    <div id="boss-phase"></div>
+    <div id="boss-name">The Failed Experiment</div>
+    <div id="boss-health-container">
+      <div id="boss-health-bar"></div>
+    </div>
+    <div id="boss-posture-container">
+      <div id="boss-posture-bar"></div>
+    </div>
+  </div>
+  
 </body>
 </html>
