@@ -77,16 +77,38 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 2.0; // Much brighter exposure
+renderer.outputColorSpace = THREE.SRGBColorSpace; // Required for proper color output in Three.js r152+
 document.body.appendChild(renderer.domElement);
+
+// DEBUG: Log WebGL capabilities
+console.log('=== WebGL DEBUG ===');
+console.log('WebGL Version:', renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1');
+console.log('Max Texture Size:', renderer.capabilities.maxTextureSize);
+console.log('==================');
 
 const scene = new THREE.Scene();
 // Atmospheric fog - very subtle, doesn't obscure gameplay
 scene.fog = new THREE.FogExp2(0x1a1828, 0.003);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+// Initialize camera position to see the scene (will be overridden by CameraController)
+camera.position.set(0, 5, 15);
+camera.lookAt(0, 0, 0);
 
 // --- Post-Processing Setup ---
-const composer = new EffectComposer(renderer);
+// Create a proper render target for the composer to avoid black screen issues
+const renderTarget = new THREE.WebGLRenderTarget(
+  window.innerWidth * Math.min(window.devicePixelRatio, 2),
+  window.innerHeight * Math.min(window.devicePixelRatio, 2),
+  {
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    format: THREE.RGBAFormat,
+    colorSpace: THREE.SRGBColorSpace,
+  }
+);
+
+const composer = new EffectComposer(renderer, renderTarget);
 
 // Base render pass
 const renderPass = new RenderPass(scene, camera);
@@ -104,6 +126,21 @@ composer.addPass(bloomPass);
 // Color grading + vignette pass
 const colorGradingPass = new ShaderPass(ColorGradingShader);
 composer.addPass(colorGradingPass);
+
+// DEBUG: Start with post-processing DISABLED to diagnose black screen
+console.log('=== POST-PROCESSING DEBUG ===');
+console.log('Starting with post-processing DISABLED to test base rendering');
+console.log('Run window.enablePostProcessing() to turn it on');
+window.POST_PROCESSING_ENABLED = false;
+
+window.enablePostProcessing = () => {
+  window.POST_PROCESSING_ENABLED = true;
+  console.log('Post-processing ENABLED');
+};
+window.disablePostProcessing = () => {
+  window.POST_PROCESSING_ENABLED = false;
+  console.log('Post-processing DISABLED');
+};
 
 // --- Systems ---
 const clock = new THREE.Clock();
@@ -165,9 +202,16 @@ window.addEventListener('resize', () => {
 });
 
 // --- Game Loop ---
+let frameCount = 0;
 function animate() {
   requestAnimationFrame(animate);
+  frameCount++;
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
+  
+  // Log first 3 frames for debugging
+  if (frameCount <= 3) {
+    console.log(`[Frame ${frameCount}] Camera:`, camera.position.toArray().map(n => n.toFixed(2)), 'Player:', player.mesh.position.toArray().map(n => n.toFixed(2)));
+  }
 
   inputManager.update(delta);
   
@@ -233,10 +277,89 @@ function animate() {
     gameManager.bloodstainMesh.material.opacity = pulse;
   }
 
-  composer.render();
+  // DEBUG: Switchable render path
+  // Start with post-processing DISABLED to diagnose black screen issue
+  if (window.POST_PROCESSING_ENABLED) {
+    composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
 }
 
 animate();
+
+// === DEBUG: Test cube to verify rendering ===
+const testGeo = new THREE.BoxGeometry(2, 2, 2);
+const testMat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red, unlit - SHOULD be visible regardless of lighting
+const testCube = new THREE.Mesh(testGeo, testMat);
+testCube.position.set(0, 1, 3); // In front of player spawn
+scene.add(testCube);
+console.log('DEBUG: Added red test cube at (0, 1, 3)');
+
+// === DEBUG: Add a LARGE bright floor plane to verify rendering ===
+const debugFloorGeo = new THREE.PlaneGeometry(100, 100);
+const debugFloorMat = new THREE.MeshBasicMaterial({ color: 0x333366, side: THREE.DoubleSide });
+const debugFloor = new THREE.Mesh(debugFloorGeo, debugFloorMat);
+debugFloor.rotation.x = -Math.PI / 2;
+debugFloor.position.y = -0.1;
+scene.add(debugFloor);
+console.log('DEBUG: Added debug floor plane');
+
+// === DEBUG: Add bright reference objects at known positions ===
+const debugMarkers = [
+  { pos: [0, 2, 0], color: 0x00ff00, label: 'Origin' },
+  { pos: [0, 2, 5], color: 0xffff00, label: 'Player spawn area' },
+  { pos: [0, 2, -10], color: 0xff00ff, label: 'Into cathedral' },
+];
+debugMarkers.forEach(({ pos, color, label }) => {
+  const markerGeo = new THREE.SphereGeometry(0.5, 16, 16);
+  const markerMat = new THREE.MeshBasicMaterial({ color });
+  const marker = new THREE.Mesh(markerGeo, markerMat);
+  marker.position.set(...pos);
+  scene.add(marker);
+  console.log(`DEBUG: Added ${label} marker at`, pos);
+});
+
+// Debug helper function
+window.debugScene = () => {
+  console.log('=== SCENE DEBUG ===');
+  console.log('Scene children:', scene.children.length);
+  let meshCount = 0, lightCount = 0;
+  scene.traverse((obj) => {
+    if (obj.isMesh) meshCount++;
+    if (obj.isLight) lightCount++;
+  });
+  console.log('Total meshes:', meshCount);
+  console.log('Total lights:', lightCount);
+  console.log('Camera position:', camera.position.toArray().map(n => n.toFixed(2)));
+  console.log('Camera target direction:', camera.getWorldDirection(new THREE.Vector3()).toArray().map(n => n.toFixed(2)));
+  console.log('Player position:', player.mesh.position.toArray().map(n => n.toFixed(2)));
+  console.log('Renderer info:', renderer.info.render);
+  console.log('Post-processing:', window.POST_PROCESSING_ENABLED ? 'ON' : 'OFF');
+  console.log('==================');
+};
+
+// === DEBUG: Trace rendering pipeline ===
+console.log('=== RENDER DEBUG ===');
+console.log('Scene children:', scene.children.length);
+let totalMeshes = 0, totalLights = 0;
+scene.traverse((obj) => {
+  if (obj.isMesh) totalMeshes++;
+  if (obj.isLight) totalLights++;
+});
+console.log('Total meshes in scene:', totalMeshes);
+console.log('Total lights in scene:', totalLights);
+console.log('Camera position:', camera.position.toArray());
+console.log('Camera near/far:', camera.near, camera.far);
+console.log('Player mesh position:', player.mesh.position.toArray());
+console.log('Renderer size:', renderer.domElement.width, 'x', renderer.domElement.height);
+console.log('Composer passes:', composer.passes.length);
+console.log('WebGL context:', renderer.getContext() ? 'OK' : 'FAILED');
+console.log('=====================');
+console.log('DEBUG COMMANDS:');
+console.log('  window.togglePostProcessing() - Toggle post-processing on/off');
+console.log('  window.debugScene() - Print scene info');
+console.log('=====================');
 
 // Export for debugging
 window.gameManager = gameManager;

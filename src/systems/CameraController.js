@@ -18,7 +18,8 @@ export class CameraController {
     this.maxPitch = 1.2;
 
     this.smoothing = 8;
-    this.currentPos = new THREE.Vector3();
+    // Initialize currentPos to camera's starting position to prevent jump on first frame
+    this.currentPos = camera.position.clone();
     this.lockOnTarget = null;
     
     // Smooth lock-on transition
