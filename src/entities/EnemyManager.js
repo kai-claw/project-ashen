@@ -3,38 +3,27 @@ import { Enemy, ENEMY_TYPES } from './Enemy.js';
 import { Boss } from './Boss.js';
 
 export class EnemyManager {
-  constructor(scene, gameManager, player) {
+  constructor(scene, gameManager, player, world = null) {
     this.scene = scene;
     this.gm = gameManager;
     this.player = player;
+    this.world = world;
     this.enemies = [];
     this.boss = null;
 
-    // Spawn initial enemies
+    // Spawn enemies from world data or fallback
     this._spawnEnemies();
     
-    // Spawn the boss in a distant arena
+    // Spawn the boss
     this._spawnBoss();
   }
 
   _spawnEnemies() {
-    // Mix of enemy types for variety
-    const enemySpawns = [
-      // Close hollow soldier for initial testing
-      { pos: new THREE.Vector3(0, 0, -4), type: 'HOLLOW_SOLDIER' },
-      
-      // Berserker - fast and aggressive
-      { pos: new THREE.Vector3(-5, 0, -8), type: 'BERSERKER' },
-      
-      // Another hollow soldier
-      { pos: new THREE.Vector3(6, 0, -10), type: 'HOLLOW_SOLDIER' },
-      
-      // Sentinel - tanky shield enemy
-      { pos: new THREE.Vector3(0, 0, -15), type: 'SENTINEL' },
-      
-      // Berserker pair
-      { pos: new THREE.Vector3(-8, 0, -18), type: 'BERSERKER' },
-      { pos: new THREE.Vector3(-6, 0, -20), type: 'BERSERKER' },
+    // Get spawns from world if available, otherwise use defaults
+    const enemySpawns = this.world?.getEnemySpawns() || [
+      { pos: new THREE.Vector3(0, 0, -6), type: 'HOLLOW_SOLDIER' },
+      { pos: new THREE.Vector3(-4, 0, -15), type: 'BERSERKER' },
+      { pos: new THREE.Vector3(5, 0, -22), type: 'SENTINEL' },
     ];
 
     enemySpawns.forEach((spawn, i) => {
@@ -48,8 +37,8 @@ export class EnemyManager {
   }
   
   _spawnBoss() {
-    // Boss arena at end of test area
-    const bossPos = new THREE.Vector3(0, 0, -35);
+    // Get boss position from world or fallback
+    const bossPos = this.world?.getBossPosition() || new THREE.Vector3(0, 0, -95);
     this.boss = new Boss(this.scene, bossPos, this.gm);
     
     // Create a boss arena marker (subtle floor glow)

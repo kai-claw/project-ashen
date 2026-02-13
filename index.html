@@ -89,6 +89,63 @@
       transition: width 0.15s ease;
     }
     
+    /* Item pickup notification */
+    #item-notification {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Georgia', serif;
+      font-size: 20px;
+      color: #88ffaa;
+      text-shadow: 0 0 15px rgba(136, 255, 170, 0.6);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 12px 32px;
+      border: 1px solid #88ffaa;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 60;
+    }
+    #item-notification.visible {
+      opacity: 1;
+    }
+    
+    /* Door prompt */
+    #door-prompt {
+      position: fixed;
+      bottom: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 14px;
+      color: #cc8844;
+      text-shadow: 0 0 10px rgba(200, 100, 50, 0.5);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 20px;
+      border: 1px solid #cc8844;
+      border-radius: 4px;
+      display: none;
+      z-index: 40;
+    }
+    #door-prompt .key {
+      display: inline-block;
+      background: #cc8844;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    #door-prompt.locked {
+      border-color: #aa3333;
+      color: #aa5555;
+    }
+    #door-prompt.locked .key {
+      background: #aa3333;
+    }
+    
     /* Crucible UI */
     #crucible-container {
       position: fixed;
@@ -248,6 +305,14 @@
   </div>
   <div id="controls-hint">
     WASD Move · Space Dodge · LMB Attack · RMB Heavy · Shift Block · Q Lock-on · E Interact · Click to start
+  </div>
+  
+  <!-- Item pickup notification -->
+  <div id="item-notification"></div>
+  
+  <!-- Door interaction prompt -->
+  <div id="door-prompt">
+    Press <span class="key">E</span> to open <span id="door-name">Door</span>
   </div>
   
   <!-- Crucible UI (Infusion Menu) -->

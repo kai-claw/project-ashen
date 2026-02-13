@@ -4,6 +4,7 @@ import { Player } from './entities/Player.js';
 import { EnemyManager } from './entities/EnemyManager.js';
 import { World } from './world/World.js';
 import { InputManager } from './systems/InputManager.js';
+import { ItemManager } from './systems/ItemManager.js';
 import { HUD } from './ui/HUD.js';
 import { CrucibleUI } from './ui/CrucibleUI.js';
 import { CameraController } from './systems/CameraController.js';
@@ -32,15 +33,20 @@ const hud = new HUD(gameManager);
 // --- World ---
 const world = new World(scene);
 
+// --- Items ---
+const itemManager = new ItemManager(scene, gameManager);
+itemManager.initItems(world.getItemSpawns());
+
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
 const cameraController = new CameraController(camera, player.mesh, inputManager);
 player.setCameraController(cameraController); // Wire camera controller for movement direction
-const enemyManager = new EnemyManager(scene, gameManager, player);
+const enemyManager = new EnemyManager(scene, gameManager, player, world);
 
 // --- Wire Up GameManager ---
-gameManager.setCheckpoint(new THREE.Vector3(0, 0, 5));
+gameManager.setCheckpoint(world.bonfirePosition.clone());
 gameManager.setEntities(player, enemyManager, scene);
+gameManager.bonfirePosition = world.bonfirePosition;
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -64,12 +70,45 @@ function animate() {
   player.update(delta);
   enemyManager.update(delta, player);
   cameraController.update(delta);
+  itemManager.update(player.mesh.position);
   hud.update();
   crucibleUI.update();
   gameManager.update(delta);
 
   // Check for bloodstain collection
   gameManager.collectBloodstain();
+  
+  // Check for hidden wall hits when attacking
+  if (player.activeAttack) {
+    const hitWall = world.checkHiddenWallHit(player.activeAttack.position, player.activeAttack.range);
+    if (hitWall && !hitWall.revealed) {
+      world.revealHiddenWall(hitWall.id);
+    }
+  }
+  
+  // Check for door interactions
+  const nearDoor = world.getNearbyDoor(player.mesh.position);
+  const doorPrompt = document.getElementById('door-prompt');
+  const doorNameEl = document.getElementById('door-name');
+  
+  if (nearDoor && !crucibleUI.isOpen) {
+    doorPrompt.style.display = 'block';
+    doorNameEl.textContent = nearDoor.name;
+    
+    // Check if player has key
+    if (itemManager.hasKey(nearDoor.id)) {
+      doorPrompt.classList.remove('locked');
+      if (inputManager.interact) {
+        world.tryOpenDoor(nearDoor.id, itemManager);
+        itemManager.showNotification(`${nearDoor.name} Opened`);
+      }
+    } else {
+      doorPrompt.classList.add('locked');
+      doorNameEl.textContent = `${nearDoor.name} (Locked)`;
+    }
+  } else {
+    doorPrompt.style.display = 'none';
+  }
 
   // Animate bloodstain (pulsing glow)
   if (gameManager.bloodstainMesh) {
@@ -85,3 +124,5 @@ animate();
 // Export for debugging
 window.gameManager = gameManager;
 window.player = player;
+window.world = world;
+window.itemManager = itemManager;
