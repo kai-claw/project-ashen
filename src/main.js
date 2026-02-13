@@ -53,7 +53,7 @@ function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
-  inputManager.update();
+  inputManager.update(delta);
   player.update(delta);
   enemyManager.update(delta, player);
   cameraController.update(delta);

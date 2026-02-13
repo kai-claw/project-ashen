@@ -56,9 +56,9 @@ export class InputManager {
     this.buffer[code] = this.bufferDuration;
   }
 
-  update() {
-    // Decay buffer
-    const dt = 1 / 60; // Approximate
+  update(delta) {
+    // Decay buffer using actual frame time
+    const dt = delta || (1 / 60); // Fallback if no delta provided
     for (const key in this.buffer) {
       this.buffer[key] -= dt;
       if (this.buffer[key] <= 0) delete this.buffer[key];

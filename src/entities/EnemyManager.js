@@ -36,9 +36,11 @@ export class EnemyManager {
       const enemy = this.enemies[i];
       enemy.update(delta, player);
 
-      // Check player attacks hitting enemies
+      // Check player attacks hitting enemies (use horizontal distance - ignore y)
       if (player.activeAttack && !player.hitThisSwing) {
-        const dist = enemy.mesh.position.distanceTo(player.activeAttack.position);
+        const dx = enemy.mesh.position.x - player.activeAttack.position.x;
+        const dz = enemy.mesh.position.z - player.activeAttack.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
         if (dist < player.activeAttack.range && enemy.health > 0) {
           const result = enemy.takeDamage(
             player.activeAttack.damage,
@@ -58,9 +60,11 @@ export class EnemyManager {
         }
       }
 
-      // Check enemy attacks hitting player
+      // Check enemy attacks hitting player (use horizontal distance - ignore y)
       if (enemy.activeAttack && !enemy.hitThisSwing) {
-        const dist = player.mesh.position.distanceTo(enemy.activeAttack.position);
+        const edx = player.mesh.position.x - enemy.activeAttack.position.x;
+        const edz = player.mesh.position.z - enemy.activeAttack.position.z;
+        const dist = Math.sqrt(edx * edx + edz * edz);
         if (dist < enemy.activeAttack.range && !player.isInvincible) {
           const result = this.gm.takeDamage(
             enemy.activeAttack.damage,
@@ -69,6 +73,7 @@ export class EnemyManager {
             player.isBlocking
           );
           enemy.hitThisSwing = true;
+          player.flashDamage();
           console.log(`[COMBAT] ${enemy.config.name} hit player for ${enemy.activeAttack.damage} damage! Result: ${result}, HP: ${this.gm.health}/${this.gm.maxHealth}`);
 
           if (result === 'died') {

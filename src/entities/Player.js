@@ -389,4 +389,16 @@ export class Player {
   get isAttacking() {
     return this.state === STATES.ATTACKING || this.state === STATES.HEAVY_ATTACKING;
   }
+
+  // Visual feedback when taking damage
+  flashDamage() {
+    // Flash body red on hit
+    this.body.material.emissive.setHex(0x660000);
+    setTimeout(() => this.body.material.emissive.setHex(0x000000), 150);
+    
+    // Also flash visor white briefly
+    const originalVisorColor = this.visor.material.emissive.getHex();
+    this.visor.material.emissive.setHex(0xff4444);
+    setTimeout(() => this.visor.material.emissive.setHex(originalVisorColor), 100);
+  }
 }
