@@ -84,11 +84,34 @@ document.body.appendChild(renderer.domElement);
 console.log('=== WebGL DEBUG ===');
 console.log('WebGL Version:', renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1');
 console.log('Max Texture Size:', renderer.capabilities.maxTextureSize);
+console.log('Canvas element:', renderer.domElement);
+console.log('Canvas size:', renderer.domElement.width, 'x', renderer.domElement.height);
+console.log('Canvas in DOM:', document.body.contains(renderer.domElement));
 console.log('==================');
+
+// DEBUG: Listen for WebGL context loss
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  console.error('!!! WebGL CONTEXT LOST !!!', e);
+});
+
+// DEBUG: Check for WebGL errors after setup
+const gl = renderer.getContext();
+const glError = gl.getError();
+if (glError !== gl.NO_ERROR) {
+  console.error('!!! WebGL ERROR after setup:', glError);
+} else {
+  console.log('WebGL: No errors after initial setup');
+}
 
 const scene = new THREE.Scene();
 // Atmospheric fog - very subtle, doesn't obscure gameplay
 scene.fog = new THREE.FogExp2(0x1a1828, 0.003);
+
+// DEBUG: Set scene background to dark blue so we can distinguish "rendering but empty" from "not rendering"
+// If we see dark blue: renderer works but scene has no visible content
+// If we see black (#0a0a0f from body): renderer canvas might not be displaying
+scene.background = new THREE.Color(0x101030);
+console.log('DEBUG: Scene background set to dark blue (0x101030)');
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 // Initialize camera position to see the scene (will be overridden by CameraController)
@@ -203,6 +226,21 @@ window.addEventListener('resize', () => {
 
 // --- Game Loop ---
 let frameCount = 0;
+
+// CRITICAL DEBUG: Verify scene has content BEFORE first render
+console.log('=== PRE-ANIMATE CHECK ===');
+console.log('Scene children count:', scene.children.length);
+scene.children.forEach((child, i) => {
+  if (i < 10) console.log(`  [${i}] ${child.type}: ${child.name || '(unnamed)'}`);
+});
+if (scene.children.length > 10) console.log(`  ... and ${scene.children.length - 10} more`);
+
+// Force one immediate render to check if anything displays
+renderer.render(scene, camera);
+console.log('Immediate test render completed');
+console.log('Renderer draw calls:', renderer.info.render.calls);
+console.log('Renderer triangles:', renderer.info.render.triangles);
+
 function animate() {
   requestAnimationFrame(animate);
   frameCount++;
@@ -211,6 +249,7 @@ function animate() {
   // Log first 3 frames for debugging
   if (frameCount <= 3) {
     console.log(`[Frame ${frameCount}] Camera:`, camera.position.toArray().map(n => n.toFixed(2)), 'Player:', player.mesh.position.toArray().map(n => n.toFixed(2)));
+    console.log(`[Frame ${frameCount}] Render calls: ${renderer.info.render.calls}, triangles: ${renderer.info.render.triangles}`);
   }
 
   inputManager.update(delta);
@@ -295,6 +334,14 @@ const testCube = new THREE.Mesh(testGeo, testMat);
 testCube.position.set(0, 1, 3); // In front of player spawn
 scene.add(testCube);
 console.log('DEBUG: Added red test cube at (0, 1, 3)');
+
+// === DEBUG: HUGE obvious test object at camera look target ===
+const hugeTestGeo = new THREE.BoxGeometry(10, 10, 10);
+const hugeTestMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }); // Green wireframe - UNMISSABLE
+const hugeTestCube = new THREE.Mesh(hugeTestGeo, hugeTestMat);
+hugeTestCube.position.set(0, 5, 0); // Right at origin, where camera looks
+scene.add(hugeTestCube);
+console.log('DEBUG: Added HUGE green wireframe cube at origin (0, 5, 0)');
 
 // === DEBUG: Add a LARGE bright floor plane to verify rendering ===
 const debugFloorGeo = new THREE.PlaneGeometry(100, 100);
