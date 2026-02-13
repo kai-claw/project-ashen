@@ -14,7 +14,7 @@ export class EnemyManager {
 
   _spawnEnemies() {
     const positions = [
-      new THREE.Vector3(8, 0, -5),
+      new THREE.Vector3(0, 0, -3),   // Close enemy for testing combat
       new THREE.Vector3(-6, 0, -10),
       new THREE.Vector3(3, 0, -15),
     ];
@@ -45,9 +45,11 @@ export class EnemyManager {
             player.activeAttack.postureDmg
           );
           player.hitThisSwing = true;
+          console.log(`[COMBAT] Player hit ${enemy.config.name} for ${player.activeAttack.damage} damage! Result: ${result}`);
 
           if (result === 'died') {
             this.gm.addRemnant(enemy.config.remnantDrop);
+            console.log(`[COMBAT] ${enemy.config.name} died! Dropped ${enemy.config.remnantDrop} remnant`);
             // Respawn after delay
             setTimeout(() => {
               enemy.respawn();
@@ -67,8 +69,10 @@ export class EnemyManager {
             player.isBlocking
           );
           enemy.hitThisSwing = true;
+          console.log(`[COMBAT] ${enemy.config.name} hit player for ${enemy.activeAttack.damage} damage! Result: ${result}, HP: ${this.gm.health}/${this.gm.maxHealth}`);
 
           if (result === 'died') {
+            console.log('[COMBAT] Player died!');
             player.resetPosition();
           } else if (result === 'guard_broken' || result === 'posture_broken') {
             player.state = 'staggered';

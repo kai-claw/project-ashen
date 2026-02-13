@@ -242,6 +242,12 @@ export class Player {
     const cost = isHeavy ? COSTS.heavyAttack : COSTS.lightAttack;
     this.gm.useStamina(cost);
     this.hitThisSwing = false;
+    
+    // Face camera direction when attacking (so attacks go where you're looking)
+    const camYaw = this._getCameraYaw();
+    this.facingAngle = camYaw;
+    this.body.rotation.y = camYaw;
+    
     this._changeState(isHeavy ? STATES.HEAVY_ATTACKING : STATES.ATTACKING);
   }
 
