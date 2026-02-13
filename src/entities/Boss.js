@@ -244,8 +244,9 @@ export class Boss {
   async _loadGLTFModel() {
     try {
       // Load brainstem model - perfect for "The Failed Experiment"
+      const basePath = import.meta.env.BASE_URL || '/';
       const { scene: model, animations } = await AssetManager.loadModel(
-        'assets/models/brainrobot.glb', // Use brainrobot - more complex model
+        `${basePath}assets/models/brainrobot.glb`, // Use brainrobot - more complex model
         { scale: 2.5 } // Boss is large
       );
       

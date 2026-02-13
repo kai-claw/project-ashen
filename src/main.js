@@ -70,6 +70,9 @@ const ColorGradingShader = {
 };
 
 // --- Core Setup ---
+console.log('=== MAIN.JS STARTUP ===');
+console.log('Three.js version:', THREE.REVISION);
+
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -78,7 +81,13 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 2.0; // Much brighter exposure
 renderer.outputColorSpace = THREE.SRGBColorSpace; // Required for proper color output in Three.js r152+
+
+// CRITICAL: Set renderer clear color to BRIGHT RED so we can see if renderer works at all
+renderer.setClearColor(0xff0000, 1);
+console.log('DEBUG: Set clear color to BRIGHT RED (0xff0000)');
+
 document.body.appendChild(renderer.domElement);
+console.log('DEBUG: Canvas added to DOM');
 
 // DEBUG: Log WebGL capabilities
 console.log('=== WebGL DEBUG ===');
@@ -107,11 +116,12 @@ const scene = new THREE.Scene();
 // Atmospheric fog - very subtle, doesn't obscure gameplay
 scene.fog = new THREE.FogExp2(0x1a1828, 0.003);
 
-// DEBUG: Set scene background to dark blue so we can distinguish "rendering but empty" from "not rendering"
-// If we see dark blue: renderer works but scene has no visible content
-// If we see black (#0a0a0f from body): renderer canvas might not be displaying
-scene.background = new THREE.Color(0x101030);
-console.log('DEBUG: Scene background set to dark blue (0x101030)');
+// DEBUG: Set scene background to BRIGHT MAGENTA for maximum visibility
+// If we see magenta: renderer works, scene renders
+// If we see RED: renderer works but scene.background not applied (clear color showing)
+// If we see black (#0a0a0f from body): canvas not visible or renderer broken
+scene.background = new THREE.Color(0xff00ff);
+console.log('DEBUG: Scene background set to BRIGHT MAGENTA (0xff00ff)');
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 // Initialize camera position to see the scene (will be overridden by CameraController)
@@ -188,17 +198,60 @@ document.addEventListener('click', initAudio);
 document.addEventListener('keydown', initAudio);
 
 // --- World ---
-const world = new World(scene);
+console.log('DEBUG: Creating World...');
+let world;
+try {
+  world = new World(scene);
+  console.log('DEBUG: World created successfully');
+} catch (e) {
+  console.error('DEBUG: World creation FAILED:', e);
+  // Create minimal fallback world
+  const fallbackFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(50, 50),
+    new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide })
+  );
+  fallbackFloor.rotation.x = -Math.PI / 2;
+  scene.add(fallbackFloor);
+  world = { bonfirePosition: new THREE.Vector3(0, 0, 5), getItemSpawns: () => [], getEnemySpawns: () => [] };
+}
 
 // --- Items ---
 const itemManager = new ItemManager(scene, gameManager);
 itemManager.initItems(world.getItemSpawns());
 
 // --- Entities ---
-const player = new Player(scene, gameManager, inputManager);
+console.log('DEBUG: Creating Player...');
+let player;
+try {
+  player = new Player(scene, gameManager, inputManager);
+  console.log('DEBUG: Player created at', player.mesh.position.toArray());
+} catch (e) {
+  console.error('DEBUG: Player creation FAILED:', e);
+  // Create minimal fallback player
+  const fallbackMesh = new THREE.Group();
+  const fallbackCube = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 2, 1),
+    new THREE.MeshBasicMaterial({ color: 0x0088ff })
+  );
+  fallbackCube.position.y = 1;
+  fallbackMesh.add(fallbackCube);
+  fallbackMesh.position.set(0, 0, 5);
+  scene.add(fallbackMesh);
+  player = { mesh: fallbackMesh, update: () => {}, activeAttack: null, setCameraController: () => {} };
+}
+
 const cameraController = new CameraController(camera, player.mesh, inputManager);
 player.setCameraController(cameraController); // Wire camera controller for movement direction
-const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager);
+
+console.log('DEBUG: Creating EnemyManager...');
+let enemyManager;
+try {
+  enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager);
+  console.log('DEBUG: EnemyManager created');
+} catch (e) {
+  console.error('DEBUG: EnemyManager creation FAILED:', e);
+  enemyManager = { update: () => {}, enemies: [], boss: null };
+}
 
 // --- Wire Up GameManager ---
 gameManager.setCheckpoint(world.bonfirePosition.clone());
@@ -235,11 +288,31 @@ scene.children.forEach((child, i) => {
 });
 if (scene.children.length > 10) console.log(`  ... and ${scene.children.length - 10} more`);
 
-// Force one immediate render to check if anything displays
+// CRITICAL: Test render with just clear color (no scene) first
+renderer.clear();
+console.log('DEBUG: Called renderer.clear() - should show RED clear color');
+
+// Now test with scene
 renderer.render(scene, camera);
-console.log('Immediate test render completed');
+console.log('DEBUG: Called renderer.render(scene, camera)');
 console.log('Renderer draw calls:', renderer.info.render.calls);
 console.log('Renderer triangles:', renderer.info.render.triangles);
+
+// Check canvas dimensions
+const canvas = renderer.domElement;
+console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
+console.log('Canvas display size:', canvas.clientWidth, 'x', canvas.clientHeight);
+console.log('Canvas computed style:', getComputedStyle(canvas).display, getComputedStyle(canvas).visibility);
+
+// Test if we can actually read pixels
+try {
+  const gl = renderer.getContext();
+  const pixel = new Uint8Array(4);
+  gl.readPixels(canvas.width/2, canvas.height/2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+  console.log('Center pixel RGBA:', pixel[0], pixel[1], pixel[2], pixel[3]);
+} catch(e) {
+  console.log('Could not read pixels:', e.message);
+}
 
 function animate() {
   requestAnimationFrame(animate);

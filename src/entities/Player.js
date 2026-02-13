@@ -144,8 +144,9 @@ export class Player {
     try {
       console.log('[Player] Loading GLTF model...');
       
+      const basePath = import.meta.env.BASE_URL || '/';
       const { scene: model, animations } = await AssetManager.loadModel(
-        '/assets/models/robot_expressive.glb',
+        `${basePath}assets/models/robot_expressive.glb`,
         { scale: 0.8 }
       );
 

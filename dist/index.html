@@ -7,7 +7,14 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #0a0a0f; }
-    canvas { display: block; }
+    /* DEBUG: Ensure canvas is visible and not covered */
+    canvas { 
+      display: block; 
+      position: fixed !important; 
+      top: 0 !important; 
+      left: 0 !important; 
+      z-index: 1 !important;
+    }
     #hud {
       position: fixed; top: 20px; left: 20px; z-index: 10;
       font-family: 'Courier New', monospace; color: #c8c0b0;
@@ -279,7 +286,7 @@
       padding-top: 12px;
     }
   </style>
-  <script type="module" crossorigin src="/project-ashen/assets/index-HBXwK6BV.js"></script>
+  <script type="module" crossorigin src="/project-ashen/assets/index-C0SAw9kr.js"></script>
 </head>
 <body>
   <div id="hud">

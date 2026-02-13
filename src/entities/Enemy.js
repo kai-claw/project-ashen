@@ -44,8 +44,8 @@ export const ENEMY_TYPES = {
     canChainAttacks: false,
     maxPosture: 60,
     hasShield: false,
-    // GLTF settings
-    modelPath: '/assets/models/robot_expressive.glb',
+    // GLTF settings - use relative path, BASE_URL added at load time
+    modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.5,
     modelTint: 0x4a5a3a, // Greenish undead tint
     animSpeedMult: 1.0,
@@ -69,8 +69,8 @@ export const ENEMY_TYPES = {
     maxChainAttacks: 3,
     maxPosture: 40,
     hasShield: false,
-    // GLTF settings
-    modelPath: '/assets/models/robot_expressive.glb',
+    // GLTF settings - use relative path, BASE_URL added at load time
+    modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.55,
     modelTint: 0x8a2222, // Red aggressive tint
     animSpeedMult: 1.5,
@@ -94,8 +94,8 @@ export const ENEMY_TYPES = {
     maxPosture: 100,
     hasShield: true,
     shieldBlockChance: 0.4,
-    // GLTF settings
-    modelPath: '/assets/models/soldier.glb',
+    // GLTF settings - use relative path, BASE_URL added at load time
+    modelPath: 'assets/models/soldier.glb',
     modelScale: 0.9,
     modelTint: 0x3a3a5a, // Blue-gray armored tint
     animSpeedMult: 0.8,
@@ -187,13 +187,15 @@ export class Enemy {
 
   async _loadGLTFModel() {
     try {
-      const modelPath = this.config.modelPath || '/assets/models/robot_expressive.glb';
+      const basePath = import.meta.env.BASE_URL || '/';
+      const modelPath = this.config.modelPath || 'assets/models/robot_expressive.glb';
+      const fullPath = `${basePath}${modelPath}`;
       const modelScale = this.config.modelScale || 0.5;
       
-      console.log(`[Enemy:${this.config.name}] Loading GLTF model...`);
+      console.log(`[Enemy:${this.config.name}] Loading GLTF model from ${fullPath}...`);
       
       const { scene: model, animations } = await AssetManager.loadModel(
-        modelPath,
+        fullPath,
         { scale: modelScale }
       );
 
