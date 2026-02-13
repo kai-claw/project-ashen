@@ -142,8 +142,6 @@ export class Player {
 
   async _loadGLTFModel() {
     try {
-      console.log('[Player] Loading GLTF model...');
-      
       const basePath = import.meta.env.BASE_URL || '/';
       const { scene: model, animations } = await AssetManager.loadModel(
         `${basePath}assets/models/robot_expressive.glb`,
@@ -176,17 +174,12 @@ export class Player {
       // Set up animation system
       if (animations && animations.length > 0) {
         this.animSystem = AssetManager.createAnimationSystem(this.gltfModel, animations);
-        
-        // Log available animations
-        console.log('[Player] Available animations:', animations.map(a => a.name));
-        
         // Play idle animation
         this._playAnimation(STATES.IDLE, { loop: true });
       }
 
       this.modelLoaded = true;
       this.body = this.gltfModel; // Update body reference for effects
-      console.log('[Player] GLTF model loaded successfully');
 
     } catch (error) {
       console.error('[Player] Failed to load GLTF model:', error);

@@ -192,8 +192,6 @@ export class Enemy {
       const fullPath = `${basePath}${modelPath}`;
       const modelScale = this.config.modelScale || 0.5;
       
-      console.log(`[Enemy:${this.config.name}] Loading GLTF model from ${fullPath}...`);
-      
       const { scene: model, animations } = await AssetManager.loadModel(
         fullPath,
         { scale: modelScale }
@@ -226,13 +224,11 @@ export class Enemy {
       // Set up animation system
       if (animations && animations.length > 0) {
         this.animSystem = AssetManager.createAnimationSystem(this.gltfModel, animations);
-        console.log(`[Enemy:${this.config.name}] Animations:`, animations.map(a => a.name));
         this._playAnimation(this.state, { loop: true });
       }
 
       this.modelLoaded = true;
       this.body = this.gltfModel;
-      console.log(`[Enemy:${this.config.name}] GLTF model loaded`);
 
     } catch (error) {
       console.error(`[Enemy:${this.config.name}] Failed to load GLTF:`, error);
@@ -699,8 +695,6 @@ export class Enemy {
     this._flashModel(0xffcc00, 300);
     this.postureFill.material.color.setHex(0xff4400);
     setTimeout(() => this.postureFill.material.color.setHex(0xffcc00), 300);
-    
-    console.log(`[COMBAT] ${this.config.name} POSTURE BROKEN!`);
   }
   
   _updatePostureBar() {

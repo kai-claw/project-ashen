@@ -76,7 +76,6 @@ export class EnemyManager {
             player.mesh.position // attackerPos for recoil
           );
           player.hitThisSwing = true;
-          console.log(`[COMBAT] Player hit ${enemy.config.name} for ${player.activeAttack.damage} damage! Result: ${result}`);
           
           // HITSTOP - brief freeze on impact
           if (player.activeAttack.isHeavy) {
@@ -108,7 +107,6 @@ export class EnemyManager {
 
           if (result === 'died') {
             this.gm.addRemnant(enemy.config.remnantDrop);
-            console.log(`[COMBAT] ${enemy.config.name} died! Dropped ${enemy.config.remnantDrop} remnant`);
             // Spawn death particles
             if (this.particleManager) {
               this.particleManager.spawnDeathBurst(enemy.mesh.position.clone());
@@ -146,8 +144,6 @@ export class EnemyManager {
           if (this.gm.cameraController) {
             this.gm.cameraController.shakeHeavy();
           }
-          
-          console.log(`[COMBAT] ${enemy.config.name} hit player for ${enemy.activeAttack.damage} damage! Result: ${result}, HP: ${this.gm.health}/${this.gm.maxHealth}`);
 
           // Spawn hit particles
           if (this.particleManager) {
@@ -165,7 +161,6 @@ export class EnemyManager {
           }
 
           if (result === 'died') {
-            console.log('[COMBAT] Player died!');
             // Player reset happens in GameManager.respawn() after death screen
           } else if (result === 'guard_broken' || result === 'posture_broken') {
             player.state = 'staggered';
@@ -192,7 +187,6 @@ export class EnemyManager {
             player.mesh.position // attackerPos for recoil
           );
           player.hitThisSwing = true;
-          console.log(`[BOSS] Player hit ${this.boss.name} for ${player.activeAttack.damage} damage! Result: ${result}`);
           
           // HITSTOP - boss hits feel extra impactful
           this.gm.hitstopHeavy();
@@ -247,8 +241,6 @@ export class EnemyManager {
             this.gm.cameraController.shake(0.7, 0.25); // Extra intense shake
           }
           
-          console.log(`[BOSS] ${this.boss.name} hit player for ${this.boss.activeAttack.damage} damage! Result: ${result}`);
-          
           // Spawn hit particles (boss hits are more dramatic)
           if (this.particleManager) {
             const hitPos = player.mesh.position.clone();
@@ -266,7 +258,7 @@ export class EnemyManager {
           }
           
           if (result === 'died') {
-            console.log('[BOSS] Player died to boss!');
+            // Player death handled by GameManager
           } else if (result === 'guard_broken' || result === 'posture_broken') {
             player.state = 'staggered';
             player.stateTimer = 0;
@@ -282,7 +274,6 @@ export class EnemyManager {
     if (this.boss) {
       this.boss.respawn();
     }
-    console.log('[COMBAT] All enemies and boss reset');
   }
   
   // Get boss reference for HUD

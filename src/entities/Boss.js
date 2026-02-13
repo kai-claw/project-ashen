@@ -280,7 +280,6 @@ export class Boss {
         // Store all animations by name
         animations.forEach((clip) => {
           this.animations[clip.name] = this.mixer.clipAction(clip);
-          console.log(`[BOSS] Animation loaded: ${clip.name}`);
         });
         
         // Play idle animation
@@ -294,8 +293,6 @@ export class Boss {
       if (this.fallbackMesh) {
         this.fallbackMesh.visible = false;
       }
-      
-      console.log(`[BOSS] GLTF model loaded: brainrobot.glb with ${animations?.length || 0} animations`);
       
     } catch (error) {
       console.warn('[BOSS] GLTF loading failed:', error);
@@ -1204,8 +1201,6 @@ export class Boss {
         });
       }
     }, 300);
-    
-    console.log(`[BOSS] ${this.name} POSTURE BROKEN!`);
   }
   
   _enterPhase2() {
@@ -1221,8 +1216,6 @@ export class Boss {
         volume: 1.0,
       });
     }
-    
-    console.log(`[BOSS] ${this.name} enters PHASE 2!`);
   }
   
   _die() {
@@ -1238,8 +1231,6 @@ export class Boss {
     if (this.gm?.audioManager) {
       this.gm.audioManager.startAmbientMusic();
     }
-    
-    console.log(`[BOSS] ${this.name} DEFEATED!`);
     
     // Death animation - collapse
     let deathProgress = 0;

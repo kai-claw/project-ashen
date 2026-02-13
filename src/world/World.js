@@ -810,7 +810,6 @@ export class World {
       const idx = this.colliders.findIndex(c => c.door === door);
       if (idx >= 0) this.colliders.splice(idx, 1);
       
-      console.log(`[DOOR] ${door.name} opened!`);
       return true;
     }
     return false;
@@ -848,7 +847,6 @@ export class World {
     };
     fadeOut();
     
-    console.log(`[SECRET] Hidden wall revealed: ${wallId}`);
     return true;
   }
   

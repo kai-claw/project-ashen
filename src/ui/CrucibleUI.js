@@ -128,8 +128,6 @@ export class CrucibleUI {
       
       // Apply visual changes to player
       this._applyVisualEffect(track);
-      
-      console.log(`[CRUCIBLE] Infused ${track} to level ${this.gm.infusions[track]}`);
     }
   }
   
