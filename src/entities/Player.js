@@ -59,6 +59,21 @@ export class Player {
     this.dodgeGhostMeshes = [];
     this.lastGhostSpawnTime = 0;
     this.ghostSpawnInterval = 0.05; // Spawn ghost every 50ms during dodge
+    
+    // Animation blending for smooth transitions
+    this.animationBlend = 0; // 0 = previous pose, 1 = new pose
+    this.animationBlendSpeed = 12; // How fast to blend between poses
+    this.prevSwordPos = new THREE.Vector3(0.45, 1.2, 0);
+    this.prevSwordRotZ = 0;
+    this.prevSwordRotX = 0;
+    this.targetSwordPos = new THREE.Vector3(0.45, 1.2, 0);
+    this.targetSwordRotZ = 0;
+    this.targetSwordRotX = 0;
+    
+    // Body animation tracking
+    this.bodyTilt = 0; // Forward/back lean
+    this.bodyTwist = 0; // Left/right rotation for attacks
+    this.walkBobPhase = 0; // Walking animation cycle
 
     // Directions
     this.moveDir = new THREE.Vector3();
@@ -712,45 +727,152 @@ export class Player {
 
   _animateSword(delta) {
     const t = this.stateTimer;
+    
+    // Progress animation blend towards 1
+    this.animationBlend = Math.min(1, this.animationBlend + this.animationBlendSpeed * delta);
+    
+    // Calculate target sword pose based on state
     switch (this.state) {
       case STATES.ATTACKING: {
-        // Quick slash
-        const swing = Math.sin(t / TIMINGS.lightAttackDuration * Math.PI);
-        this.sword.rotation.z = -swing * 1.5;
-        this.sword.rotation.x = swing * 0.5;
-        this.sword.position.set(0.45 + swing * 0.3, 1.2 + swing * 0.3, swing * 0.5);
+        // Quick slash with wind-up
+        const duration = TIMINGS.lightAttackDuration;
+        const windUpPhase = 0.15; // First 15% is wind-up
+        
+        if (t < duration * windUpPhase) {
+          // Wind-up: pull sword back
+          const windUp = t / (duration * windUpPhase);
+          const easeIn = windUp * windUp; // Ease in
+          this.targetSwordRotZ = 0.3 * easeIn; // Cock back slightly
+          this.targetSwordRotX = -0.3 * easeIn;
+          this.targetSwordPos.set(0.5 + easeIn * 0.1, 1.25, -0.1 * easeIn);
+          this.bodyTilt = THREE.MathUtils.lerp(this.bodyTilt, -0.08, 8 * delta);
+        } else {
+          // Swing through
+          const swingProgress = (t - duration * windUpPhase) / (duration * (1 - windUpPhase));
+          const swing = Math.sin(swingProgress * Math.PI);
+          const comboVariation = this.attackCombo * 0.3; // Vary angle for combos
+          
+          this.targetSwordRotZ = -swing * 1.5 - comboVariation;
+          this.targetSwordRotX = swing * 0.5 + comboVariation * 0.5;
+          this.targetSwordPos.set(0.45 + swing * 0.3, 1.2 + swing * 0.3, swing * 0.5);
+          
+          // Body follows through with attack
+          this.bodyTilt = THREE.MathUtils.lerp(this.bodyTilt, swing * 0.15, 10 * delta);
+          this.bodyTwist = THREE.MathUtils.lerp(this.bodyTwist, -swing * 0.1 - comboVariation * 0.05, 8 * delta);
+        }
         break;
       }
       case STATES.HEAVY_ATTACKING: {
-        // Overhead slam
-        const swing = Math.sin(t / TIMINGS.heavyAttackDuration * Math.PI);
-        this.sword.rotation.z = -swing * 2.0;
-        this.sword.rotation.x = swing * 1.2;
-        this.sword.position.set(0.45, 1.2 + swing * 0.6, swing * 0.8);
+        // Overhead slam with dramatic wind-up
+        const duration = TIMINGS.heavyAttackDuration;
+        const windUpPhase = 0.25; // 25% wind-up for heavy
+        
+        if (t < duration * windUpPhase) {
+          // Wind-up: raise sword overhead
+          const windUp = t / (duration * windUpPhase);
+          const easeIn = Math.sin(windUp * Math.PI * 0.5); // Smooth ease
+          this.targetSwordRotZ = 0.8 * easeIn;
+          this.targetSwordRotX = -1.5 * easeIn; // Raise overhead
+          this.targetSwordPos.set(0.3, 1.5 + easeIn * 0.5, -0.3 * easeIn);
+          this.bodyTilt = THREE.MathUtils.lerp(this.bodyTilt, -0.12, 8 * delta);
+        } else {
+          // Slam down
+          const swingProgress = (t - duration * windUpPhase) / (duration * (1 - windUpPhase));
+          const swing = Math.sin(swingProgress * Math.PI);
+          const slamProgress = Math.min(1, swingProgress * 2); // Fast slam
+          
+          this.targetSwordRotZ = THREE.MathUtils.lerp(0.8, -2.0, slamProgress);
+          this.targetSwordRotX = THREE.MathUtils.lerp(-1.5, 1.2, slamProgress);
+          this.targetSwordPos.set(0.45, 1.2 + (1 - slamProgress) * 0.6, swing * 0.8);
+          
+          // Body lurches forward with slam
+          this.bodyTilt = THREE.MathUtils.lerp(this.bodyTilt, slamProgress * 0.2, 12 * delta);
+        }
         break;
       }
       case STATES.BLOCKING: {
-        this.sword.rotation.z = -0.3;
-        this.sword.position.set(0.2, 1.3, 0.3);
+        this.targetSwordRotZ = -0.3;
+        this.targetSwordRotX = 0;
+        this.targetSwordPos.set(0.2, 1.3, 0.3);
+        this.bodyTilt = THREE.MathUtils.lerp(this.bodyTilt, -0.05, 8 * delta);
+        this.bodyTwist = THREE.MathUtils.lerp(this.bodyTwist, 0, 8 * delta);
+        break;
+      }
+      case STATES.MOVING: {
+        // Walking bob animation
+        this.walkBobPhase += delta * 12; // Bob speed tied to movement
+        const bob = Math.sin(this.walkBobPhase) * 0.02;
+        const sway = Math.cos(this.walkBobPhase * 0.5) * 0.05;
+        
+        this.targetSwordRotZ = sway;
+        this.targetSwordRotX = 0;
+        this.targetSwordPos.set(0.45 + sway * 0.1, 1.2 + bob, 0);
+        this.bodyTilt = THREE.MathUtils.lerp(this.bodyTilt, 0.03, 6 * delta); // Slight forward lean
+        this.bodyTwist = THREE.MathUtils.lerp(this.bodyTwist, 0, 6 * delta);
+        break;
+      }
+      case STATES.DODGING: {
+        // Sword tucked during dodge
+        this.targetSwordRotZ = 0.5;
+        this.targetSwordRotX = -0.3;
+        this.targetSwordPos.set(0.3, 1.0, -0.2);
         break;
       }
       default: {
         // Rest position
-        this.sword.rotation.z = THREE.MathUtils.lerp(this.sword.rotation.z, 0, 5 * delta);
-        this.sword.rotation.x = THREE.MathUtils.lerp(this.sword.rotation.x, 0, 5 * delta);
-        this.sword.position.lerp(new THREE.Vector3(0.45, 1.2, 0), 5 * delta);
+        this.targetSwordRotZ = 0;
+        this.targetSwordRotX = 0;
+        this.targetSwordPos.set(0.45, 1.2, 0);
+        this.bodyTilt = THREE.MathUtils.lerp(this.bodyTilt, 0, 6 * delta);
+        this.bodyTwist = THREE.MathUtils.lerp(this.bodyTwist, 0, 6 * delta);
+        this.walkBobPhase = 0;
       }
     }
+    
+    // Blend from previous pose to target pose
+    const blendFactor = this._easeOutCubic(this.animationBlend);
+    
+    // Interpolate sword position and rotation
+    this.sword.position.x = THREE.MathUtils.lerp(this.prevSwordPos.x, this.targetSwordPos.x, blendFactor);
+    this.sword.position.y = THREE.MathUtils.lerp(this.prevSwordPos.y, this.targetSwordPos.y, blendFactor);
+    this.sword.position.z = THREE.MathUtils.lerp(this.prevSwordPos.z, this.targetSwordPos.z, blendFactor);
+    
+    this.sword.rotation.z = THREE.MathUtils.lerp(this.prevSwordRotZ, this.targetSwordRotZ, blendFactor);
+    this.sword.rotation.x = THREE.MathUtils.lerp(this.prevSwordRotX, this.targetSwordRotX, blendFactor);
+    
+    // Also apply additional smooth lerp for overall fluidity
+    if (this.state !== STATES.ATTACKING && this.state !== STATES.HEAVY_ATTACKING) {
+      this.sword.rotation.z = THREE.MathUtils.lerp(this.sword.rotation.z, this.targetSwordRotZ, 8 * delta);
+      this.sword.rotation.x = THREE.MathUtils.lerp(this.sword.rotation.x, this.targetSwordRotX, 8 * delta);
+      this.sword.position.lerp(this.targetSwordPos, 8 * delta);
+    }
+    
+    // Apply body animations
+    this.body.rotation.x = this.bodyTilt;
+    this.body.rotation.y = this.bodyTwist;
+  }
+  
+  // Easing function for smoother blends
+  _easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
   }
 
   _changeState(newState) {
     if (this.state === newState) return;
+    
+    // Save current sword pose for blending into new state
+    this.prevSwordPos.copy(this.sword.position);
+    this.prevSwordRotZ = this.sword.rotation.z;
+    this.prevSwordRotX = this.sword.rotation.x;
+    this.animationBlend = 0; // Reset blend to start from previous pose
+    
     // Cleanup old state
     if (this.state === STATES.ATTACKING || this.state === STATES.HEAVY_ATTACKING) {
       this.activeAttack = null;
     }
     if (this.state === STATES.DODGING) {
       this.body.position.y = 1.1;
+      this.body.material.emissive.setHex(0x000000); // Clear any dodge tint
     }
 
     this.state = newState;
