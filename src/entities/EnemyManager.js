@@ -73,7 +73,7 @@ export class EnemyManager {
 
           if (result === 'died') {
             console.log('[COMBAT] Player died!');
-            player.resetPosition();
+            // Player reset happens in GameManager.respawn() after death screen
           } else if (result === 'guard_broken' || result === 'posture_broken') {
             player.state = 'staggered';
             player.stateTimer = 0;
@@ -81,5 +81,11 @@ export class EnemyManager {
         }
       }
     }
+  }
+
+  // Reset all enemies to starting state (called on player respawn)
+  resetAll() {
+    this.enemies.forEach(enemy => enemy.respawn());
+    console.log('[COMBAT] All enemies reset');
   }
 }

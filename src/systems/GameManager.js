@@ -26,6 +26,14 @@ export class GameManager {
     this.checkpoint = new THREE.Vector3(0, 0, 5);
     this.deathScreenEl = document.getElementById('death-screen');
 
+    // Entity references (set via setEntities)
+    this.player = null;
+    this.enemyManager = null;
+
+    // Bloodstain (remnant recovery at death location)
+    this.bloodstain = null;
+    this.bloodstainMesh = null;
+
     // Stamina regen
     this.staminaRegenDelay = 0.5;
     this.staminaRegenRate = 25;
@@ -106,9 +114,40 @@ export class GameManager {
     this.deathCount++;
     this.health = 0;
 
-    // Drop remnant
-    this.heldRemnant = this.remnant;
-    this.remnant = 0;
+    // Store death position for bloodstain
+    const deathPos = this.player ? this.player.mesh.position.clone() : this.checkpoint.clone();
+
+    // Remove old bloodstain if exists
+    if (this.bloodstainMesh && this.scene) {
+      this.scene.remove(this.bloodstainMesh);
+      this.bloodstainMesh = null;
+    }
+
+    // If player had remnant, create bloodstain
+    if (this.remnant > 0 && this.scene) {
+      this.heldRemnant = this.remnant;
+      this.remnant = 0;
+      this.bloodstain = deathPos.clone();
+      this.bloodstain.y = 0.05; // Slightly above ground
+
+      // Create visual bloodstain marker
+      const geometry = new THREE.CircleGeometry(0.5, 16);
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xaa3333,
+        transparent: true,
+        opacity: 0.8,
+        side: THREE.DoubleSide,
+      });
+      this.bloodstainMesh = new THREE.Mesh(geometry, material);
+      this.bloodstainMesh.rotation.x = -Math.PI / 2;
+      this.bloodstainMesh.position.copy(this.bloodstain);
+      this.scene.add(this.bloodstainMesh);
+      console.log(`[REMNANT] Dropped ${this.heldRemnant} remnant at bloodstain`);
+    } else {
+      // No remnant to drop, but previous bloodstain is now lost
+      this.heldRemnant = 0;
+      this.bloodstain = null;
+    }
 
     // Learn from death
     if (!this.deathLessons[damageType]) this.deathLessons[damageType] = 0;
@@ -126,6 +165,19 @@ export class GameManager {
     this.health = this.maxHealth;
     this.stamina = this.maxStamina;
     this.posture = 0;
+
+    // Reset player position
+    if (this.player) {
+      this.player.resetPosition();
+      console.log('[RESPAWN] Player reset to checkpoint');
+    }
+
+    // Reset all enemies
+    if (this.enemyManager) {
+      this.enemyManager.resetAll();
+    }
+
+    // Hide death screen
     if (this.deathScreenEl) this.deathScreenEl.classList.remove('visible');
   }
 
@@ -133,9 +185,34 @@ export class GameManager {
     this.checkpoint.copy(pos);
   }
 
+  // Set entity references for respawn coordination
+  setEntities(player, enemyManager, scene) {
+    this.player = player;
+    this.enemyManager = enemyManager;
+    this.scene = scene;
+  }
+
   // --- Remnant ---
   addRemnant(amount) {
     this.remnant += amount;
+  }
+
+  // Collect bloodstain remnant
+  collectBloodstain() {
+    if (!this.bloodstain || !this.player) return false;
+    const dist = this.player.mesh.position.distanceTo(this.bloodstain);
+    if (dist < 2.0) {
+      this.remnant += this.heldRemnant;
+      console.log(`[REMNANT] Recovered ${this.heldRemnant} remnant from bloodstain!`);
+      this.heldRemnant = 0;
+      if (this.bloodstainMesh && this.scene) {
+        this.scene.remove(this.bloodstainMesh);
+      }
+      this.bloodstain = null;
+      this.bloodstainMesh = null;
+      return true;
+    }
+    return false;
   }
 
   // --- Infusions ---

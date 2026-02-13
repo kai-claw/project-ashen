@@ -37,8 +37,9 @@ const cameraController = new CameraController(camera, player.mesh, inputManager)
 player.setCameraController(cameraController); // Wire camera controller for movement direction
 const enemyManager = new EnemyManager(scene, gameManager, player);
 
-// --- Checkpoint ---
+// --- Wire Up GameManager ---
 gameManager.setCheckpoint(new THREE.Vector3(0, 0, 5));
+gameManager.setEntities(player, enemyManager, scene);
 
 // --- Resize ---
 window.addEventListener('resize', () => {
@@ -58,6 +59,15 @@ function animate() {
   cameraController.update(delta);
   hud.update();
   gameManager.update(delta);
+
+  // Check for bloodstain collection
+  gameManager.collectBloodstain();
+
+  // Animate bloodstain (pulsing glow)
+  if (gameManager.bloodstainMesh) {
+    const pulse = 0.6 + Math.sin(Date.now() * 0.005) * 0.3;
+    gameManager.bloodstainMesh.material.opacity = pulse;
+  }
 
   renderer.render(scene, camera);
 }

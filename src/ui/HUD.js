@@ -5,6 +5,7 @@ export class HUD {
     this.staminaBar = document.getElementById('stamina-bar');
     this.postureBar = document.getElementById('posture-bar');
     this.remnantLabel = document.getElementById('remnant');
+    this.lostRemnantLabel = document.getElementById('lost-remnant');
   }
 
   update() {
@@ -19,6 +20,15 @@ export class HUD {
     }
     if (this.remnantLabel) {
       this.remnantLabel.textContent = `Remnant: ${this.gm.remnant}`;
+    }
+    // Show lost remnant indicator when bloodstain exists
+    if (this.lostRemnantLabel) {
+      if (this.gm.bloodstain && this.gm.heldRemnant > 0) {
+        this.lostRemnantLabel.style.display = 'block';
+        this.lostRemnantLabel.textContent = `Lost: ${this.gm.heldRemnant} (recover at bloodstain)`;
+      } else {
+        this.lostRemnantLabel.style.display = 'none';
+      }
     }
   }
 }
