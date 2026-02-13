@@ -19,11 +19,11 @@ import { ParticleManager } from './systems/ParticleManager.js';
 const ColorGradingShader = {
   uniforms: {
     tDiffuse: { value: null },
-    brightness: { value: 0.3 },
-    contrast: { value: 1.15 },
+    brightness: { value: 0.05 },  // Reduced from 0.3 - was washing out colors
+    contrast: { value: 1.1 },     // Slightly reduced
     saturation: { value: 1.1 },
-    vignetteIntensity: { value: 0.35 },
-    vignetteRadius: { value: 0.85 },
+    vignetteIntensity: { value: 0.2 },   // Reduced vignette
+    vignetteRadius: { value: 0.9 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -79,7 +79,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 2.0;
+renderer.toneMappingExposure = 1.2;  // Reduced from 2.0 for clearer visuals
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
