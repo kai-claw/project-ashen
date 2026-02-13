@@ -16,6 +16,86 @@ export class HUD {
     
     // Reference to enemy manager (set via setEnemyManager)
     this.enemyManager = null;
+    
+    // Damage vignette overlay
+    this._createDamageVignette();
+    this.damageVignetteOpacity = 0;
+    
+    // Stamina depleted warning
+    this.staminaWarningActive = false;
+  }
+  
+  _createDamageVignette() {
+    // Create vignette overlay for damage feedback
+    this.damageVignette = document.createElement('div');
+    this.damageVignette.id = 'damage-vignette';
+    this.damageVignette.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 999;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(180, 30, 30, 0.6) 100%);
+      opacity: 0;
+      transition: opacity 0.05s ease-out;
+    `;
+    document.body.appendChild(this.damageVignette);
+    
+    // Also create a flash overlay for impact hits
+    this.hitFlash = document.createElement('div');
+    this.hitFlash.id = 'hit-flash';
+    this.hitFlash.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 998;
+      background: rgba(255, 100, 100, 0.3);
+      opacity: 0;
+      transition: opacity 0.08s ease-out;
+    `;
+    document.body.appendChild(this.hitFlash);
+  }
+  
+  // Call when player takes damage
+  flashDamage(intensity = 0.6) {
+    // Vignette
+    this.damageVignetteOpacity = Math.min(1.0, intensity);
+    this.damageVignette.style.opacity = this.damageVignetteOpacity;
+    
+    // Quick center flash
+    this.hitFlash.style.opacity = Math.min(0.5, intensity * 0.8);
+    
+    // Fade out over time
+    setTimeout(() => {
+      this.damageVignette.style.opacity = this.damageVignetteOpacity * 0.5;
+      this.hitFlash.style.opacity = 0;
+    }, 80);
+    
+    setTimeout(() => {
+      this.damageVignette.style.opacity = 0;
+    }, 250);
+  }
+  
+  // Warning flash when stamina depletes
+  flashStaminaDepleted() {
+    if (this.staminaWarningActive) return;
+    this.staminaWarningActive = true;
+    
+    if (this.staminaBar) {
+      this.staminaBar.style.background = 'linear-gradient(90deg, #ffaa00, #ff6600)';
+      this.staminaBar.style.boxShadow = '0 0 10px #ff6600';
+      
+      setTimeout(() => {
+        this.staminaBar.style.background = '';
+        this.staminaBar.style.boxShadow = '';
+        this.staminaWarningActive = false;
+      }, 300);
+    }
   }
   
   setEnemyManager(enemyManager) {

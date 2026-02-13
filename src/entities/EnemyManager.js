@@ -69,12 +69,30 @@ export class EnemyManager {
         const dz = enemy.mesh.position.z - player.activeAttack.position.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
         if (dist < player.activeAttack.range && enemy.health > 0) {
+          // Pass player position for recoil direction
           const result = enemy.takeDamage(
             player.activeAttack.damage,
-            player.activeAttack.postureDmg
+            player.activeAttack.postureDmg,
+            player.mesh.position // attackerPos for recoil
           );
           player.hitThisSwing = true;
           console.log(`[COMBAT] Player hit ${enemy.config.name} for ${player.activeAttack.damage} damage! Result: ${result}`);
+          
+          // HITSTOP - brief freeze on impact
+          if (player.activeAttack.isHeavy) {
+            this.gm.hitstopHeavy();
+          } else {
+            this.gm.hitstopLight();
+          }
+          
+          // CAMERA SHAKE - impact feedback
+          if (this.gm.cameraController) {
+            if (player.activeAttack.isHeavy) {
+              this.gm.cameraController.shakeMedium();
+            } else {
+              this.gm.cameraController.shakeLight();
+            }
+          }
 
           // Spawn hit particles
           if (this.particleManager) {
@@ -117,6 +135,18 @@ export class EnemyManager {
           );
           enemy.hitThisSwing = true;
           player.flashDamage();
+          
+          // HUD DAMAGE VIGNETTE - screen flash feedback
+          if (this.gm.hud) {
+            const intensity = enemy.activeAttack.damage / 30; // Scale with damage
+            this.gm.hud.flashDamage(Math.min(1.0, intensity));
+          }
+          
+          // CAMERA SHAKE - getting hit shake
+          if (this.gm.cameraController) {
+            this.gm.cameraController.shakeHeavy();
+          }
+          
           console.log(`[COMBAT] ${enemy.config.name} hit player for ${enemy.activeAttack.damage} damage! Result: ${result}, HP: ${this.gm.health}/${this.gm.maxHealth}`);
 
           // Spawn hit particles
@@ -158,10 +188,19 @@ export class EnemyManager {
         if (dist < player.activeAttack.range + 1.0 && this.boss.health > 0) {
           const result = this.boss.takeDamage(
             player.activeAttack.damage,
-            player.activeAttack.postureDmg
+            player.activeAttack.postureDmg,
+            player.mesh.position // attackerPos for recoil
           );
           player.hitThisSwing = true;
           console.log(`[BOSS] Player hit ${this.boss.name} for ${player.activeAttack.damage} damage! Result: ${result}`);
+          
+          // HITSTOP - boss hits feel extra impactful
+          this.gm.hitstopHeavy();
+          
+          // CAMERA SHAKE - more intense for boss hits
+          if (this.gm.cameraController) {
+            this.gm.cameraController.shakeMedium();
+          }
           
           // Spawn boss hit particles (more dramatic)
           if (this.particleManager) {
@@ -196,6 +235,18 @@ export class EnemyManager {
           );
           this.boss.hitThisSwing = true;
           player.flashDamage();
+          
+          // HUD DAMAGE VIGNETTE - boss hits feel brutal
+          if (this.gm.hud) {
+            const intensity = this.boss.activeAttack.damage / 25; // Boss hits are more intense
+            this.gm.hud.flashDamage(Math.min(1.0, intensity));
+          }
+          
+          // CAMERA SHAKE - brutal boss impact
+          if (this.gm.cameraController) {
+            this.gm.cameraController.shake(0.7, 0.25); // Extra intense shake
+          }
+          
           console.log(`[BOSS] ${this.boss.name} hit player for ${this.boss.activeAttack.damage} damage! Result: ${result}`);
           
           // Spawn hit particles (boss hits are more dramatic)

@@ -855,7 +855,7 @@ export class Boss {
     });
   }
   
-  takeDamage(amount, postureDmg = 0) {
+  takeDamage(amount, postureDmg = 0, attackerPos = null) {
     if (this.state === STATES.DEAD || this.state === STATES.PHASE_TRANSITION || this.state === STATES.DORMANT) return 'immune';
     
     // Reduced damage during awakening
@@ -896,6 +896,9 @@ export class Boss {
       }
     }, 100);
     
+    // BOSS RECOIL - more subtle than regular enemies but still visible
+    this._applyHitRecoil(attackerPos, amount);
+    
     // Check for death
     if (this.health <= 0) {
       this._die();
@@ -915,6 +918,63 @@ export class Boss {
     }
     
     return 'hit';
+  }
+  
+  // Visual recoil when hit - bosses show smaller recoil (they're massive)
+  _applyHitRecoil(attackerPos, damage) {
+    // Calculate knockback direction (away from attacker)
+    let knockDir;
+    if (attackerPos) {
+      knockDir = new THREE.Vector3().subVectors(this.mesh.position, attackerPos);
+      knockDir.y = 0;
+      knockDir.normalize();
+    } else {
+      // Fallback: recoil backwards
+      const faceAngle = this.body.rotation.y;
+      knockDir = new THREE.Vector3(-Math.sin(faceAngle), 0, -Math.cos(faceAngle));
+    }
+    
+    // Boss recoil is much smaller (they're massive)
+    const recoilStrength = Math.min(0.2, damage * 0.005);
+    
+    // Quick position offset
+    const startPos = this.mesh.position.clone();
+    const recoilPos = startPos.clone().add(knockDir.multiplyScalar(recoilStrength));
+    
+    // Body tilt for impact feel
+    const originalTiltZ = this.body.rotation.z || 0;
+    const tiltDirection = Math.random() > 0.5 ? 1 : -1;
+    this.body.rotation.z = originalTiltZ + tiltDirection * 0.08; // Smaller tilt for boss
+    
+    // Animate back to original
+    let recoilTime = 0;
+    const recoilDuration = 0.15;
+    
+    const animateRecoil = () => {
+      recoilTime += 0.016;
+      const t = Math.min(1, recoilTime / recoilDuration);
+      
+      // Ease out for snappy recovery
+      const easeOut = 1 - Math.pow(1 - t, 3);
+      
+      // Lerp position back
+      this.mesh.position.lerpVectors(recoilPos, startPos, easeOut);
+      
+      // Lerp tilt back
+      this.body.rotation.z = THREE.MathUtils.lerp(
+        originalTiltZ + tiltDirection * 0.08,
+        originalTiltZ,
+        easeOut
+      );
+      
+      if (t < 1) {
+        requestAnimationFrame(animateRecoil);
+      }
+    };
+    
+    // Move to recoil position immediately, then animate back
+    this.mesh.position.copy(recoilPos);
+    requestAnimationFrame(animateRecoil);
   }
   
   _triggerPostureBreak() {

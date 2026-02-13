@@ -20,6 +20,36 @@ export class CameraController {
     this.smoothing = 8;
     this.currentPos = new THREE.Vector3();
     this.lockOnTarget = null;
+    
+    // Camera shake system
+    this.shakeIntensity = 0;
+    this.shakeDuration = 0;
+    this.shakeTimer = 0;
+    this.shakeOffset = new THREE.Vector3();
+    this.shakeDecay = 0.92; // How fast shake fades
+  }
+  
+  // Trigger camera shake
+  shake(intensity = 0.3, duration = 0.15) {
+    // Stack shakes but cap intensity
+    this.shakeIntensity = Math.min(this.shakeIntensity + intensity, 1.0);
+    this.shakeDuration = Math.max(this.shakeDuration, duration);
+    this.shakeTimer = 0;
+  }
+  
+  // Light shake for regular hits
+  shakeLight() {
+    this.shake(0.15, 0.1);
+  }
+  
+  // Medium shake for heavy attacks
+  shakeMedium() {
+    this.shake(0.35, 0.15);
+  }
+  
+  // Heavy shake for taking damage
+  shakeHeavy() {
+    this.shake(0.5, 0.2);
   }
 
   update(delta) {
@@ -56,7 +86,12 @@ export class CameraController {
 
     // Smooth follow
     this.currentPos.lerp(desiredPos, this.smoothing * delta);
+    
+    // Apply camera shake
+    this._updateShake(delta);
+    
     this.camera.position.copy(this.currentPos);
+    this.camera.position.add(this.shakeOffset);
 
     // Look at target
     const lookTarget = targetPos.clone();
@@ -65,6 +100,29 @@ export class CameraController {
       lookTarget.y += 1;
     }
     this.camera.lookAt(lookTarget);
+  }
+  
+  _updateShake(delta) {
+    if (this.shakeIntensity > 0.001) {
+      // Random shake offset based on intensity
+      this.shakeOffset.set(
+        (Math.random() - 0.5) * 2 * this.shakeIntensity,
+        (Math.random() - 0.5) * 2 * this.shakeIntensity,
+        (Math.random() - 0.5) * 2 * this.shakeIntensity
+      );
+      
+      // Decay shake
+      this.shakeIntensity *= this.shakeDecay;
+      this.shakeTimer += delta;
+      
+      // End shake
+      if (this.shakeTimer >= this.shakeDuration) {
+        this.shakeIntensity = 0;
+        this.shakeOffset.set(0, 0, 0);
+      }
+    } else {
+      this.shakeOffset.set(0, 0, 0);
+    }
   }
 
   setLockOnTarget(target) {

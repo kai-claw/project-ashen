@@ -49,6 +49,52 @@ export class GameManager {
     
     // Audio manager (set via main.js)
     this.audioManager = null;
+    
+    // Hitstop system - brief freeze frames on impact
+    this.hitstopActive = false;
+    this.hitstopDuration = 0;
+    this.hitstopTimer = 0;
+    
+    // HUD reference for screen effects (set via main.js)
+    this.hud = null;
+    
+    // Camera controller reference for shake (set via main.js)
+    this.cameraController = null;
+  }
+  
+  // Hitstop - brief game freeze on impact (makes hits feel powerful)
+  triggerHitstop(duration = 0.04) {
+    this.hitstopActive = true;
+    this.hitstopDuration = duration;
+    this.hitstopTimer = 0;
+  }
+  
+  // Light hitstop for normal hits (30-40ms)
+  hitstopLight() {
+    this.triggerHitstop(0.035);
+  }
+  
+  // Heavy hitstop for heavy attacks (50-70ms) 
+  hitstopHeavy() {
+    this.triggerHitstop(0.06);
+  }
+  
+  // Check if game is in hitstop (call from update loop)
+  isInHitstop() {
+    return this.hitstopActive;
+  }
+  
+  // Update hitstop timer
+  updateHitstop(delta) {
+    if (this.hitstopActive) {
+      this.hitstopTimer += delta;
+      if (this.hitstopTimer >= this.hitstopDuration) {
+        this.hitstopActive = false;
+        this.hitstopTimer = 0;
+      }
+      return true; // Still in hitstop
+    }
+    return false;
   }
 
   update(delta) {

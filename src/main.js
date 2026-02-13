@@ -146,6 +146,8 @@ gameManager.setEntities(player, enemyManager, scene, camera);
 gameManager.bonfirePosition = world.bonfirePosition;
 gameManager.audioManager = audioManager;
 gameManager.particleManager = particleManager;
+gameManager.hud = hud; // For damage vignette effects
+gameManager.cameraController = cameraController; // For camera shake
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -168,15 +170,27 @@ function animate() {
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
   inputManager.update(delta);
-  player.update(delta);
-  enemyManager.update(delta, player);
+  
+  // Check hitstop - pause game entities during freeze frame
+  const inHitstop = gameManager.updateHitstop(delta);
+  
+  if (!inHitstop) {
+    // Normal game update when not in hitstop
+    player.update(delta);
+    enemyManager.update(delta, player);
+    particleManager.update(delta);
+  } else {
+    // During hitstop: still update camera and particles (for effect continuity)
+    particleManager.update(delta * 0.1); // Slow-mo particles during hitstop
+  }
+  
+  // These always update regardless of hitstop
   cameraController.update(delta);
   itemManager.update(player.mesh.position);
   hud.update();
   crucibleUI.update();
   gameManager.update(delta);
   audioManager.updateListener();
-  particleManager.update(delta);
 
   // Check for bloodstain collection
   gameManager.collectBloodstain();
