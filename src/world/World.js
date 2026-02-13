@@ -2040,12 +2040,12 @@ export class World {
   }
   
   _createLighting() {
-    // Hemisphere light for natural sky/ground bounce
-    const hemiLight = new THREE.HemisphereLight(0xaaaadd, 0x887766, 2.0);  // Boosted from 1.2
+    // Hemisphere light for natural sky/ground bounce - BOOSTED
+    const hemiLight = new THREE.HemisphereLight(0xccccff, 0xaa9988, 3.5);  // Cranked up
     this.scene.add(hemiLight);
     
-    // Ambient for base visibility - bright enough to see geometry
-    const ambient = new THREE.AmbientLight(0xaaaacc, 1.5);  // Boosted from 0.5
+    // Ambient for base visibility - VERY bright so everything is visible
+    const ambient = new THREE.AmbientLight(0xccccdd, 3.0);  // Cranked up for visibility
     this.scene.add(ambient);
     
     // Moonlight - main directional (silvery blue)
@@ -2069,9 +2069,10 @@ export class World {
     
     // Accent lights throughout cathedral - BOOSTED for visibility
     const accents = [
-      // Entrance courtyard - large warm bonfire
-      { pos: [0, 3, 5], color: 0xff8844, intensity: 8.0, dist: 25 },
-      { pos: [0, 1, 5], color: 0xff6622, intensity: 5.0, dist: 20 },
+      // Entrance courtyard - HUGE warm bonfire to light spawn area
+      { pos: [0, 5, 5], color: 0xffaa66, intensity: 15.0, dist: 50 },
+      { pos: [0, 2, 5], color: 0xff8844, intensity: 10.0, dist: 40 },
+      { pos: [0, 1, 0], color: 0xffeedd, intensity: 8.0, dist: 30 },  // Light at spawn
       
       // Main hall - bright ethereal lights along walls
       { pos: [-6, 5, -12], color: 0x88aaff, intensity: 5.0, dist: 25 },
