@@ -1737,6 +1737,30 @@ export class World {
     return null;
   }
   
+  // Get nearby ladder for climbing interaction
+  getNearbyLadder(position, maxDist = 2) {
+    for (const ladder of this.ladders) {
+      // Check distance to ladder base
+      const ladderBase = new THREE.Vector3(ladder.x, ladder.y, ladder.z);
+      const dist = position.distanceTo(ladderBase);
+      if (dist < maxDist) return ladder;
+    }
+    return null;
+  }
+  
+  // Check if position is inside an unrevealed illusory wall (for walk-through)
+  checkInsideIllusoryWall(position) {
+    for (const wall of this.hiddenWalls) {
+      if (wall.revealed) continue;
+      // Check if player position is inside the wall bounds (expanded slightly)
+      const expandedBounds = wall.bounds.clone().expandByScalar(0.3);
+      if (expandedBounds.containsPoint(position)) {
+        return wall;
+      }
+    }
+    return null;
+  }
+  
   _addCryptLighting(cryptY) {
     // Minimal ambient - very dark
     // (Main ambient is in _createLighting, this adds local accents)

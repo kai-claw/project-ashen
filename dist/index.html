@@ -153,6 +153,83 @@
       background: #aa3333;
     }
     
+    /* Ladder prompt */
+    #ladder-prompt {
+      position: fixed;
+      bottom: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 14px;
+      color: #88cc88;
+      text-shadow: 0 0 10px rgba(100, 200, 100, 0.5);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 20px;
+      border: 1px solid #88cc88;
+      border-radius: 4px;
+      display: none;
+      z-index: 40;
+    }
+    #ladder-prompt .key {
+      display: inline-block;
+      background: #88cc88;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    
+    /* Shortcut prompt */
+    #shortcut-prompt {
+      position: fixed;
+      bottom: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 14px;
+      color: #cc88cc;
+      text-shadow: 0 0 10px rgba(200, 100, 200, 0.5);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 20px;
+      border: 1px solid #cc88cc;
+      border-radius: 4px;
+      display: none;
+      z-index: 40;
+    }
+    #shortcut-prompt .key {
+      display: inline-block;
+      background: #cc88cc;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    
+    /* Illusory wall notification */
+    #illusory-notification {
+      position: fixed;
+      top: 200px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 20px;
+      color: #ffdd88;
+      text-shadow: 0 0 15px rgba(255, 200, 100, 0.7);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px 30px;
+      border: 1px solid #ffdd88;
+      border-radius: 4px;
+      display: none;
+      z-index: 100;
+      animation: illusoryFadeIn 0.5s ease-out;
+    }
+    @keyframes illusoryFadeIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    
     /* Crucible UI */
     #crucible-container {
       position: fixed;
@@ -286,7 +363,7 @@
       padding-top: 12px;
     }
   </style>
-  <script type="module" crossorigin src="/project-ashen/assets/index-Bl4U1MyG.js"></script>
+  <script type="module" crossorigin src="/project-ashen/assets/index-DF4pnCBB.js"></script>
 </head>
 <body>
   <div id="hud">
@@ -322,6 +399,19 @@
   <div id="door-prompt">
     Press <span class="key">E</span> to open <span id="door-name">Door</span>
   </div>
+  
+  <!-- Ladder interaction prompt -->
+  <div id="ladder-prompt">
+    Press <span class="key">E</span> to climb <span id="ladder-name">Ladder</span>
+  </div>
+  
+  <!-- Shortcut door prompt -->
+  <div id="shortcut-prompt">
+    Press <span class="key">E</span> to <span id="shortcut-action">unlock</span> <span id="shortcut-name">Shortcut</span>
+  </div>
+  
+  <!-- Illusory wall reveal notification -->
+  <div id="illusory-notification">Illusory wall revealed!</div>
   
   <!-- Crucible UI (Infusion Menu) -->
   <div id="crucible-container">

@@ -245,6 +245,65 @@ function animate() {
   } else {
     doorPrompt.style.display = 'none';
   }
+  
+  // Check for ladder interactions
+  const nearLadder = world.getNearbyLadder(player.mesh.position);
+  const ladderPrompt = document.getElementById('ladder-prompt');
+  const ladderNameEl = document.getElementById('ladder-name');
+  
+  if (nearLadder && !crucibleUI.isOpen) {
+    ladderPrompt.style.display = 'block';
+    ladderNameEl.textContent = nearLadder.id === 'shortcut-ladder' ? 'to Cathedral' : 'Ladder';
+    
+    if (inputManager.interact) {
+      // Teleport player to ladder destination
+      if (nearLadder.id === 'shortcut-ladder') {
+        // Teleport to left chapel in cathedral (above the shortcut)
+        player.mesh.position.set(-15, 0, -12);
+        player.velocity.set(0, 0, 0);
+        itemManager.showNotification('Climbed to Cathedral');
+        audioManager.playSound('footstep'); // Climbing sound
+      }
+    }
+  } else {
+    ladderPrompt.style.display = 'none';
+  }
+  
+  // Check for shortcut door interactions
+  const nearShortcut = world.getNearbyShortcut(player.mesh.position);
+  const shortcutPrompt = document.getElementById('shortcut-prompt');
+  const shortcutActionEl = document.getElementById('shortcut-action');
+  const shortcutNameEl = document.getElementById('shortcut-name');
+  
+  if (nearShortcut && !crucibleUI.isOpen) {
+    shortcutPrompt.style.display = 'block';
+    shortcutActionEl.textContent = 'remove bar from';
+    shortcutNameEl.textContent = 'Shortcut Door';
+    
+    if (inputManager.interact) {
+      if (world.unlockShortcut(nearShortcut.id)) {
+        itemManager.showNotification('Shortcut Unlocked — Path to Cathedral opened!');
+        audioManager.playSound('hit'); // Unlocking sound
+      }
+    }
+  } else {
+    shortcutPrompt.style.display = 'none';
+  }
+  
+  // Check for illusory wall walk-through (reveal when player walks into it)
+  const insideWall = world.checkInsideIllusoryWall(player.mesh.position);
+  if (insideWall && !insideWall.revealed) {
+    world.revealHiddenWall(insideWall.id);
+    
+    // Show notification
+    const illusoryNotif = document.getElementById('illusory-notification');
+    illusoryNotif.style.display = 'block';
+    setTimeout(() => {
+      illusoryNotif.style.display = 'none';
+    }, 2500);
+    
+    audioManager.playSound('hit'); // Reveal sound effect
+  }
 
   // Animate bloodstain (pulsing glow)
   if (gameManager.bloodstainMesh) {
