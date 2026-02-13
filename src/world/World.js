@@ -134,6 +134,133 @@ export class World {
     
     // Glowing runes on the floor
     this._createFloorRunes();
+    
+    // Add glowing mushrooms and crystals for magical atmosphere
+    this._createGlowingMushrooms();
+    this._createMagicalCrystals();
+  }
+  
+  _createGlowingMushrooms() {
+    // Bioluminescent mushrooms scattered in dark corners
+    const mushroomPositions = [
+      // Near trees and gravestones
+      { pos: [-11, 0, 7], color: 0x44ffaa, scale: 0.8 },
+      { pos: [13, 0, 5], color: 0x66ff88, scale: 0.6 },
+      { pos: [-12, 0, -6], color: 0x44ffaa, scale: 0.7 },
+      { pos: [11, 0, -4], color: 0x88ffbb, scale: 0.5 },
+      // Along walls of cathedral
+      { pos: [-8, 0, -18], color: 0x44ddff, scale: 0.9 },
+      { pos: [8, 0, -18], color: 0x44ddff, scale: 0.7 },
+      { pos: [-8, 0, -38], color: 0x66aaff, scale: 0.6 },
+      { pos: [8, 0, -38], color: 0x66aaff, scale: 0.8 },
+      // In crypt area
+      { pos: [-5, 0, -68], color: 0xaa66ff, scale: 0.9 },
+      { pos: [5, 0, -72], color: 0xaa66ff, scale: 0.7 },
+      { pos: [-3, 0, -80], color: 0xcc88ff, scale: 0.6 },
+      { pos: [4, 0, -78], color: 0xcc88ff, scale: 0.5 },
+    ];
+    
+    mushroomPositions.forEach(({ pos, color, scale }) => {
+      const group = new THREE.Group();
+      group.position.set(...pos);
+      group.scale.setScalar(scale);
+      
+      // Mushroom stem
+      const stemGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.3, 8);
+      const stemMat = new THREE.MeshStandardMaterial({
+        color: 0xccccaa,
+        roughness: 0.8,
+        emissive: color,
+        emissiveIntensity: 0.2,
+      });
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.y = 0.15;
+      group.add(stem);
+      
+      // Glowing cap
+      const capGeo = new THREE.SphereGeometry(0.2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+      const capMat = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 0.8,
+        roughness: 0.3,
+        transparent: true,
+        opacity: 0.9,
+      });
+      const cap = new THREE.Mesh(capGeo, capMat);
+      cap.position.y = 0.3;
+      group.add(cap);
+      
+      // Light from mushroom
+      const light = new THREE.PointLight(color, 0.6, 4);
+      light.position.y = 0.4;
+      group.add(light);
+      
+      this.scene.add(group);
+    });
+  }
+  
+  _createMagicalCrystals() {
+    // Glowing crystals emerging from ground/walls
+    const crystalPositions = [
+      // Main hall pillars
+      { pos: [-4, 0, -15], color: 0x6688ff, scale: 1.2, rot: 0.2 },
+      { pos: [4, 0, -15], color: 0x6688ff, scale: 1.0, rot: -0.3 },
+      { pos: [-4, 0, -30], color: 0x8866ff, scale: 0.9, rot: 0.15 },
+      { pos: [4, 0, -30], color: 0x8866ff, scale: 1.1, rot: -0.2 },
+      // Near altar
+      { pos: [-3, 0, -52], color: 0xffaa44, scale: 1.3, rot: 0.1 },
+      { pos: [3, 0, -52], color: 0xffaa44, scale: 1.1, rot: -0.1 },
+      // Boss arena corners
+      { pos: [-6, 0, -88], color: 0xff4466, scale: 1.5, rot: 0.25 },
+      { pos: [6, 0, -88], color: 0xff4466, scale: 1.4, rot: -0.2 },
+      { pos: [-6, 0, -102], color: 0xff6644, scale: 1.2, rot: 0.3 },
+      { pos: [6, 0, -102], color: 0xff6644, scale: 1.3, rot: -0.25 },
+    ];
+    
+    crystalPositions.forEach(({ pos, color, scale, rot }) => {
+      const group = new THREE.Group();
+      group.position.set(...pos);
+      group.scale.setScalar(scale);
+      group.rotation.z = rot;
+      
+      // Main crystal shard
+      const crystalGeo = new THREE.ConeGeometry(0.15, 0.8, 6);
+      const crystalMat = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 1.0,
+        roughness: 0.1,
+        metalness: 0.3,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+      crystal.position.y = 0.4;
+      group.add(crystal);
+      
+      // Smaller side shards
+      for (let i = 0; i < 3; i++) {
+        const smallGeo = new THREE.ConeGeometry(0.08, 0.4, 5);
+        const small = new THREE.Mesh(smallGeo, crystalMat);
+        const angle = (i / 3) * Math.PI * 2;
+        small.position.set(
+          Math.cos(angle) * 0.15,
+          0.2,
+          Math.sin(angle) * 0.15
+        );
+        small.rotation.z = Math.random() * 0.4 - 0.2;
+        small.rotation.x = Math.random() * 0.3;
+        group.add(small);
+      }
+      
+      // Crystal light
+      const light = new THREE.PointLight(color, 1.2, 6);
+      light.position.y = 0.5;
+      group.add(light);
+      
+      this.scene.add(group);
+    });
   }
   
   _createDeadTree(x, z) {
@@ -230,20 +357,24 @@ export class World {
   }
   
   _createFloorRunes() {
-    // Glowing runes at key locations
+    // Glowing runes at key locations - ENHANCED for visibility
     const runePositions = [
-      { pos: [0, 0.02, -25], size: 4, color: 0x4444aa },   // Main hall center
-      { pos: [0, 0.02, -55], size: 3, color: 0xaa6622 },   // Altar
-      { pos: [0, 0.02, -95], size: 5, color: 0xaa2222 },   // Boss arena
+      { pos: [0, 0.02, -25], size: 4, color: 0x6666cc },   // Main hall center
+      { pos: [0, 0.02, -55], size: 3, color: 0xcc8833 },   // Altar
+      { pos: [0, 0.02, -95], size: 5, color: 0xcc3333 },   // Boss arena
+      // Additional runes for better environment visibility
+      { pos: [0, 0.02, 0], size: 3, color: 0x44aa88 },     // Bonfire area
+      { pos: [0, 0.02, -42], size: 2.5, color: 0x8866aa }, // Transition hall
+      { pos: [0, 0.02, -72], size: 2.5, color: 0x5588cc }, // Crypt area
     ];
     
     runePositions.forEach(({ pos, size, color }) => {
-      // Rune circle
+      // Outer rune circle - brighter
       const ringGeo = new THREE.RingGeometry(size - 0.1, size, 32);
       const runeMat = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.6,  // Increased from 0.3
         side: THREE.DoubleSide,
       });
       const ring = new THREE.Mesh(ringGeo, runeMat);
@@ -251,15 +382,28 @@ export class World {
       ring.position.set(...pos);
       this.scene.add(ring);
       
-      // Inner pattern
+      // Inner hexagon pattern
       const innerGeo = new THREE.RingGeometry(size * 0.4, size * 0.5, 6);
       const inner = new THREE.Mesh(innerGeo, runeMat);
       inner.rotation.x = -Math.PI / 2;
       inner.position.set(...pos);
       this.scene.add(inner);
       
-      // Animate glow
-      const light = new THREE.PointLight(color, 0.5, size * 2);
+      // Innermost glow disc
+      const discGeo = new THREE.CircleGeometry(size * 0.3, 16);
+      const discMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide,
+      });
+      const disc = new THREE.Mesh(discGeo, discMat);
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.set(pos[0], pos[1] + 0.01, pos[2]);
+      this.scene.add(disc);
+      
+      // Stronger floor glow light
+      const light = new THREE.PointLight(color, 1.5, size * 3);  // Increased intensity and range
       light.position.set(pos[0], pos[1] + 0.5, pos[2]);
       this.scene.add(light);
     });
