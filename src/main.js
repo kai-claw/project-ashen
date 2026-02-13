@@ -82,8 +82,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-// Atmospheric fog - very light, for distant atmosphere only
-scene.fog = new THREE.FogExp2(0x1a1828, 0.0008);
+// No fog - clean visibility
+scene.fog = null;
 // Dark atmospheric background
 scene.background = new THREE.Color(0x0a0a0f);
 

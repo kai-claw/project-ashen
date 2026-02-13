@@ -675,7 +675,8 @@ export class Player {
       }
     }
 
-    const fwd = new THREE.Vector3(Math.sin(this.facingAngle), 0, Math.cos(this.facingAngle));
+    // Forward direction must match movement formula (negative sin/cos)
+    const fwd = new THREE.Vector3(-Math.sin(this.facingAngle), 0, -Math.cos(this.facingAngle));
     const lungeSpeed = isHeavy ? 3 : 2;
     if (this.stateTimer < hitEnd) {
       this.mesh.position.addScaledVector(fwd, lungeSpeed * delta);
