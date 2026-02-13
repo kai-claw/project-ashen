@@ -61,7 +61,6 @@ export class AudioManager {
       await this.generateSoundBuffers();
       
       this.initialized = true;
-      console.log('[AUDIO] AudioManager initialized');
     } catch (e) {
       console.warn('[AUDIO] Failed to initialize:', e);
     }
@@ -118,8 +117,6 @@ export class AudioManager {
     
     // Stamina depleted warning
     this.soundBuffers.staminaDepleted = this.createStaminaDepletedBuffer(0.15);
-    
-    console.log('[AUDIO] Sound buffers generated');
   }
   
   /**

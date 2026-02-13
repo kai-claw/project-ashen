@@ -236,7 +236,6 @@ export class GameManager {
       this.bloodstainMesh.rotation.x = -Math.PI / 2;
       this.bloodstainMesh.position.copy(this.bloodstain);
       this.scene.add(this.bloodstainMesh);
-      console.log(`[REMNANT] Dropped ${this.heldRemnant} remnant at bloodstain`);
     } else {
       // No remnant to drop, but previous bloodstain is now lost
       this.heldRemnant = 0;
@@ -263,7 +262,6 @@ export class GameManager {
     // Reset player position
     if (this.player) {
       this.player.resetPosition();
-      console.log('[RESPAWN] Player reset to checkpoint');
     }
 
     // Reset all enemies
@@ -298,7 +296,6 @@ export class GameManager {
     const dist = this.player.mesh.position.distanceTo(this.bloodstain);
     if (dist < 2.0) {
       this.remnant += this.heldRemnant;
-      console.log(`[REMNANT] Recovered ${this.heldRemnant} remnant from bloodstain!`);
       // Play pickup sound
       if (this.audioManager) {
         this.audioManager.play('itemPickup', { volume: 0.6 });

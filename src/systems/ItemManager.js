@@ -196,13 +196,11 @@ export class ItemManager {
       case 'remnant':
         this.gm.addRemnant(item.value);
         message = `+${item.value} Remnant`;
-        console.log(`[ITEM] Collected ${item.value} remnant`);
         break;
         
       case 'key':
         this.inventory.keys.add(item.keyId);
         message = `Got ${item.name}`;
-        console.log(`[ITEM] Collected key: ${item.name} (${item.keyId})`);
         break;
         
       default:
