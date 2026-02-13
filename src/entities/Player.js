@@ -157,7 +157,7 @@ export class Player {
       // Get camera-relative direction
       const camYaw = this._getCameraYaw();
       const forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-      const right = new THREE.Vector3(-Math.cos(camYaw), 0, Math.sin(camYaw));
+      const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw)); // Fixed: was inverted
 
       this.moveDir.set(0, 0, 0)
         .addScaledVector(forward, -move.z)
@@ -166,10 +166,10 @@ export class Player {
 
       this.mesh.position.addScaledVector(this.moveDir, this.moveSpeed * delta);
 
-      // Face movement direction
+      // Face movement direction - rotate the whole mesh, not just body
       this.facingAngle = Math.atan2(this.moveDir.x, this.moveDir.z);
-      this.body.rotation.y = THREE.MathUtils.lerp(
-        this.body.rotation.y,
+      this.mesh.rotation.y = THREE.MathUtils.lerp(
+        this.mesh.rotation.y,
         this.facingAngle,
         10 * delta
       );
@@ -263,7 +263,7 @@ export class Player {
     // Face camera direction when attacking (so attacks go where you're looking)
     const camYaw = this._getCameraYaw();
     this.facingAngle = camYaw;
-    this.body.rotation.y = camYaw;
+    this.mesh.rotation.y = camYaw; // Rotate whole mesh so visor faces correctly
     
     // Spawn slash trail particle effect
     if (this.gm.particleManager) {

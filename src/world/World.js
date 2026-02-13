@@ -410,12 +410,12 @@ export class World {
   }
   
   _createLighting() {
-    // Very dim ambient
-    const ambient = new THREE.AmbientLight(0x0a0a15, 0.3);
+    // Ambient light - bright enough to see
+    const ambient = new THREE.AmbientLight(0x404060, 0.8);
     this.scene.add(ambient);
     
     // Moonlight through unseen windows
-    const dirLight = new THREE.DirectionalLight(0x6666aa, 0.4);
+    const dirLight = new THREE.DirectionalLight(0x8888cc, 1.0);
     dirLight.position.set(-15, 20, -10);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.set(2048, 2048);
