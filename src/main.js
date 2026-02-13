@@ -19,7 +19,7 @@ import { ParticleManager } from './systems/ParticleManager.js';
 const ColorGradingShader = {
   uniforms: {
     tDiffuse: { value: null },
-    brightness: { value: 0.05 },
+    brightness: { value: 0.3 },
     contrast: { value: 1.15 },
     saturation: { value: 1.1 },
     vignetteIntensity: { value: 0.35 },
@@ -76,12 +76,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.6; // Brighter exposure
+renderer.toneMappingExposure = 2.0; // Much brighter exposure
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-// Atmospheric fog - subtle, doesn't obscure gameplay
-scene.fog = new THREE.FogExp2(0x0a0812, 0.006);
+// Atmospheric fog - very subtle, doesn't obscure gameplay
+scene.fog = new THREE.FogExp2(0x1a1828, 0.003);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 

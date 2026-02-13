@@ -738,16 +738,28 @@ export class World {
   }
   
   _createLighting() {
-    // Hemisphere light for natural sky/ground bounce - BRIGHT for visibility
-    const hemiLight = new THREE.HemisphereLight(0x8888cc, 0x665544, 2.0);
+    // Hemisphere light for natural sky/ground bounce - EXTREME for visibility
+    const hemiLight = new THREE.HemisphereLight(0xaaaadd, 0x887766, 8.0);
     this.scene.add(hemiLight);
     
-    // Ambient for base visibility - SIGNIFICANTLY INCREASED (was 0.4)
-    const ambient = new THREE.AmbientLight(0x4a4a5a, 1.6);
+    // Ambient for base visibility - VERY HIGH to see environment
+    const ambient = new THREE.AmbientLight(0x8888bb, 6.0);
     this.scene.add(ambient);
     
+    // Global overhead fill - ensures entire scene is lit
+    const overheadFill = new THREE.DirectionalLight(0xccccee, 4.0);
+    overheadFill.position.set(0, 100, 0);
+    this.scene.add(overheadFill);
+    
+    // GLOBAL fill light - massive coverage for environment visibility
+    const globalFill = new THREE.DirectionalLight(0x8888aa, 3.0);
+    globalFill.position.set(0, 50, 0);
+    globalFill.target.position.set(0, 0, -50);
+    this.scene.add(globalFill);
+    this.scene.add(globalFill.target);
+    
     // Moonlight - main directional (silvery blue) - boosted
-    const moonLight = new THREE.DirectionalLight(0xaabbee, 2.0);
+    const moonLight = new THREE.DirectionalLight(0xaabbee, 3.0);
     moonLight.position.set(-50, 80, -100);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.set(4096, 4096);
