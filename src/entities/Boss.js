@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { AssetManager } from '../systems/AssetManager.js';
 
 const STATES = {
   DORMANT: 'dormant',
@@ -12,6 +13,21 @@ const STATES = {
   STAGGERED: 'staggered',
   PHASE_TRANSITION: 'phase_transition',
   DEAD: 'dead',
+};
+
+// Animation map for boss states (if GLTF has animations)
+const BOSS_ANIM_MAP = {
+  [STATES.DORMANT]: 'Idle',
+  [STATES.AWAKENING]: 'Idle',
+  [STATES.IDLE]: 'Idle',
+  [STATES.WALK]: 'Walking',
+  [STATES.ATTACK]: 'Punch',
+  [STATES.HEAVY_ATTACK]: 'Punch',
+  [STATES.AOE_ATTACK]: 'Jump',
+  [STATES.COMBO]: 'Punch',
+  [STATES.STAGGERED]: 'No',
+  [STATES.PHASE_TRANSITION]: 'Death',
+  [STATES.DEAD]: 'Death',
 };
 
 export class Boss {
@@ -34,6 +50,13 @@ export class Boss {
     this.isActive = false;
     this.isDead = false;
     
+    // Animation system
+    this.mixer = null;
+    this.animations = {};
+    this.currentAction = null;
+    this.gltfModel = null;
+    this.gltfLoaded = false;
+    
     // Phase 1: Slow, telegraphed
     // Phase 2: Faster, adds AoE
     this.phaseConfigs = {
@@ -45,6 +68,8 @@ export class Boss {
         postureDmg: 30,
         canCombo: false,
         canAoE: false,
+        modelTint: 0x3a2040, // Dark purple
+        emissiveColor: 0x220022,
       },
       2: {
         moveSpeed: 3.5,
@@ -56,6 +81,8 @@ export class Boss {
         maxCombo: 3,
         canAoE: true,
         aoeCooldown: 8.0,
+        modelTint: 0x5a1020, // Dark red
+        emissiveColor: 0x440011,
       },
     };
     
@@ -67,180 +94,305 @@ export class Boss {
     
     this.spawnPos = position.clone();
     
-    // Create boss mesh - "The Failed Experiment" - a twisted eldritch horror
+    // Create main mesh container
     this.mesh = new THREE.Group();
     this.mesh.position.copy(position);
     
-    // === MAIN BODY - Massive twisted torso ===
-    const bodyGroup = new THREE.Group();
+    // Create body group for transformations
+    this.body = new THREE.Group();
+    this.mesh.add(this.body);
     
-    // Core torso - bloated, misshapen
-    const torsoGeo = new THREE.SphereGeometry(0.9, 16, 14);
+    // Create fallback primitive mesh while GLTF loads
+    this._createFallbackMesh();
+    
+    // Eye glow lights array
+    this.eyeLights = [];
+    
+    // Create multiple glowing eye orbs
+    this.eyes = [];
+    this._createEyes();
+    
+    // Create weapon (procedural - massive claw/appendage)
+    this.weapon = this._createWeapon();
+    this.mesh.add(this.weapon);
+    
+    // AoE indicator
+    this._createAoEIndicator();
+    
+    // Aura particles
+    this._createAuraParticles();
+    
+    // Mutated arm for Phase 2
+    this.mutatedArm = null;
+    
+    scene.add(this.mesh);
+    
+    // Load GLTF model
+    this._loadGLTFModel();
+    
+    // Start dormant
+    this._setDormant();
+  }
+  
+  _createFallbackMesh() {
+    // Primitive fallback - massive twisted torso
+    const torsoGeo = new THREE.IcosahedronGeometry(1.2, 2);
     const torsoMat = new THREE.MeshStandardMaterial({
       color: 0x1a1520,
       roughness: 0.75,
       metalness: 0.25,
+      flatShading: true,
     });
-    const torso = new THREE.Mesh(torsoGeo, torsoMat);
-    torso.position.y = 2.0;
-    torso.scale.set(1.1, 1.3, 1.0);
-    torso.castShadow = true;
-    bodyGroup.add(torso);
+    this.fallbackMesh = new THREE.Mesh(torsoGeo, torsoMat);
+    this.fallbackMesh.position.y = 2.0;
+    this.fallbackMesh.scale.set(1.3, 1.6, 1.2);
+    this.fallbackMesh.castShadow = true;
+    this.body.add(this.fallbackMesh);
     
-    // Secondary mass - hunched back growth
-    const backMassGeo = new THREE.SphereGeometry(0.6, 12, 10);
-    const backMassMat = new THREE.MeshStandardMaterial({
-      color: 0x221828,
-      roughness: 0.8,
-      metalness: 0.2,
-    });
-    const backMass = new THREE.Mesh(backMassGeo, backMassMat);
-    backMass.position.set(0, 2.5, -0.5);
-    backMass.scale.set(1.2, 0.9, 0.8);
-    bodyGroup.add(backMass);
+    // Secondary mass - hunched back
+    const backGeo = new THREE.IcosahedronGeometry(0.7, 1);
+    const backMesh = new THREE.Mesh(backGeo, torsoMat.clone());
+    backMesh.position.set(0, 2.8, -0.6);
+    backMesh.scale.set(1.3, 1.0, 0.9);
+    this.body.add(backMesh);
     
-    // Tumorous growths scattered on body
-    for (let i = 0; i < 8; i++) {
-      const tumorGeo = new THREE.SphereGeometry(0.12 + Math.random() * 0.15, 8, 6);
+    // Tumorous growths
+    for (let i = 0; i < 12; i++) {
+      const size = 0.12 + Math.random() * 0.2;
+      const tumorGeo = new THREE.SphereGeometry(size, 6, 6);
       const tumorMat = new THREE.MeshStandardMaterial({
         color: 0x2a1a25,
         roughness: 0.9,
-        metalness: 0.1,
+        emissive: 0x110008,
+        emissiveIntensity: 0.3,
       });
       const tumor = new THREE.Mesh(tumorGeo, tumorMat);
-      const angle = (i / 8) * Math.PI * 2;
-      const yOff = 1.5 + Math.random() * 1.5;
+      const angle = (i / 12) * Math.PI * 2;
+      const yOff = 1.3 + Math.random() * 2.0;
+      const radius = 0.8 + Math.random() * 0.4;
       tumor.position.set(
-        Math.cos(angle) * 0.7 + (Math.random() - 0.5) * 0.3,
+        Math.cos(angle) * radius + (Math.random() - 0.5) * 0.3,
         yOff,
-        Math.sin(angle) * 0.5 + (Math.random() - 0.5) * 0.3
+        Math.sin(angle) * (radius * 0.7) + (Math.random() - 0.5) * 0.3
       );
-      bodyGroup.add(tumor);
+      this.body.add(tumor);
     }
     
     // Exposed ribcage/bone structure
     const ribMat = new THREE.MeshStandardMaterial({
       color: 0x8a7a6a,
       roughness: 0.6,
-      metalness: 0.2,
-    });
-    for (let i = 0; i < 5; i++) {
-      const ribGeo = new THREE.TorusGeometry(0.35 - i * 0.03, 0.03, 6, 16, Math.PI * 0.7);
-      const rib = new THREE.Mesh(ribGeo, ribMat);
-      rib.position.set(0, 1.5 + i * 0.15, 0.6);
-      rib.rotation.x = Math.PI / 2;
-      rib.rotation.y = Math.PI;
-      bodyGroup.add(rib);
-    }
-    
-    // === SHOULDERS AND ARMS ===
-    // Massive asymmetric shoulders
-    const leftShoulderGeo = new THREE.SphereGeometry(0.5, 12, 10);
-    const shoulderMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1525,
-      roughness: 0.7,
       metalness: 0.3,
     });
-    this.leftShoulder = new THREE.Mesh(leftShoulderGeo, shoulderMat);
-    this.leftShoulder.position.set(-0.9, 2.8, 0);
-    this.leftShoulder.scale.set(1.3, 1.0, 1.1);
-    bodyGroup.add(this.leftShoulder);
+    for (let i = 0; i < 6; i++) {
+      const ribGeo = new THREE.TorusGeometry(0.4 - i * 0.035, 0.035, 6, 16, Math.PI * 0.75);
+      const rib = new THREE.Mesh(ribGeo, ribMat);
+      rib.position.set(0, 1.4 + i * 0.18, 0.7);
+      rib.rotation.x = Math.PI / 2;
+      rib.rotation.y = Math.PI;
+      this.body.add(rib);
+    }
     
-    const rightShoulderGeo = new THREE.SphereGeometry(0.6, 12, 10);
-    this.rightShoulder = new THREE.Mesh(rightShoulderGeo, shoulderMat);
-    this.rightShoulder.position.set(1.0, 2.9, 0);
-    this.rightShoulder.scale.set(1.1, 0.9, 1.0);
-    bodyGroup.add(this.rightShoulder);
-    
-    // Left arm - withered
-    const leftArmGeo = new THREE.CapsuleGeometry(0.12, 0.7, 8, 12);
-    const armMat = new THREE.MeshStandardMaterial({
-      color: 0x2a1a22,
-      roughness: 0.8,
-      metalness: 0.15,
+    // Head - twisted skull
+    const headGeo = new THREE.DodecahedronGeometry(0.5, 1);
+    const headMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1420,
+      roughness: 0.7,
+      metalness: 0.25,
     });
-    const leftArm = new THREE.Mesh(leftArmGeo, armMat);
-    leftArm.position.set(-1.1, 2.0, 0.2);
-    leftArm.rotation.z = 0.4;
-    leftArm.rotation.x = -0.3;
-    bodyGroup.add(leftArm);
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 3.6, 0.35);
+    head.scale.set(1.0, 1.2, 0.85);
+    this.body.add(head);
     
-    // Right arm - massive, weapon arm
-    const rightArmGeo = new THREE.CapsuleGeometry(0.2, 0.8, 10, 14);
-    const rightArm = new THREE.Mesh(rightArmGeo, armMat);
-    rightArm.position.set(1.3, 2.0, 0.2);
-    rightArm.rotation.z = -0.3;
-    bodyGroup.add(rightArm);
-    
-    // === LEGS - Twisted and powerful ===
+    // Twisted legs
     const legMat = new THREE.MeshStandardMaterial({
       color: 0x1a1520,
       roughness: 0.75,
       metalness: 0.2,
     });
-    const leftLegGeo = new THREE.CapsuleGeometry(0.2, 0.9, 10, 12);
-    const leftLeg = new THREE.Mesh(leftLegGeo, legMat);
-    leftLeg.position.set(-0.4, 0.6, 0);
-    leftLeg.rotation.z = 0.1;
-    bodyGroup.add(leftLeg);
     
-    const rightLegGeo = new THREE.CapsuleGeometry(0.22, 0.85, 10, 12);
+    const leftLegGeo = new THREE.CapsuleGeometry(0.22, 1.0, 10, 12);
+    const leftLeg = new THREE.Mesh(leftLegGeo, legMat);
+    leftLeg.position.set(-0.45, 0.6, 0);
+    leftLeg.rotation.z = 0.15;
+    this.body.add(leftLeg);
+    
+    const rightLegGeo = new THREE.CapsuleGeometry(0.24, 0.95, 10, 12);
     const rightLeg = new THREE.Mesh(rightLegGeo, legMat);
-    rightLeg.position.set(0.4, 0.6, 0);
-    rightLeg.rotation.z = -0.1;
-    bodyGroup.add(rightLeg);
+    rightLeg.position.set(0.45, 0.6, 0);
+    rightLeg.rotation.z = -0.12;
+    this.body.add(rightLeg);
     
     // Clawed feet
-    const footMat = new THREE.MeshStandardMaterial({
+    const clawMat = new THREE.MeshStandardMaterial({
       color: 0x222222,
-      roughness: 0.5,
-      metalness: 0.4,
+      roughness: 0.4,
+      metalness: 0.6,
     });
     for (let side of [-1, 1]) {
       for (let i = 0; i < 3; i++) {
-        const clawGeo = new THREE.ConeGeometry(0.04, 0.15, 6);
-        const claw = new THREE.Mesh(clawGeo, footMat);
-        claw.position.set(side * 0.4 + (i - 1) * 0.08, 0.05, 0.2);
+        const clawGeo = new THREE.ConeGeometry(0.05, 0.18, 6);
+        const claw = new THREE.Mesh(clawGeo, clawMat);
+        claw.position.set(side * 0.45 + (i - 1) * 0.1, 0.05, 0.25);
         claw.rotation.x = Math.PI / 3;
-        bodyGroup.add(claw);
+        this.body.add(claw);
+      }
+    }
+  }
+  
+  async _loadGLTFModel() {
+    try {
+      // Load brainstem model - perfect for "The Failed Experiment"
+      const { scene: model, animations } = await AssetManager.loadModel(
+        'assets/models/brainrobot.glb', // Use brainrobot - more complex model
+        { scale: 2.5 } // Boss is large
+      );
+      
+      if (!model) {
+        console.warn('[BOSS] GLTF model failed to load, using fallback');
+        return;
+      }
+      
+      this.gltfModel = model;
+      this.gltfLoaded = true;
+      
+      // Position and scale the model
+      model.position.set(0, 0.5, 0);
+      model.scale.setScalar(2.5);
+      
+      // Apply boss tinting to all materials
+      this._applyModelTint(this.config.modelTint, this.config.emissiveColor);
+      
+      // Set up shadows
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      
+      // Set up animation mixer if animations exist
+      if (animations && animations.length > 0) {
+        this.mixer = new THREE.AnimationMixer(model);
+        
+        // Store all animations by name
+        animations.forEach((clip) => {
+          this.animations[clip.name] = this.mixer.clipAction(clip);
+          console.log(`[BOSS] Animation loaded: ${clip.name}`);
+        });
+        
+        // Play idle animation
+        this._playAnimation(STATES.IDLE);
+      }
+      
+      // Add GLTF model to body group
+      this.body.add(model);
+      
+      // Hide fallback mesh
+      if (this.fallbackMesh) {
+        this.fallbackMesh.visible = false;
+      }
+      
+      console.log(`[BOSS] GLTF model loaded: brainrobot.glb with ${animations?.length || 0} animations`);
+      
+    } catch (error) {
+      console.warn('[BOSS] GLTF loading failed:', error);
+      // Fallback already visible
+    }
+  }
+  
+  _applyModelTint(tintColor, emissiveColor) {
+    if (!this.gltfModel) return;
+    
+    const tint = new THREE.Color(tintColor);
+    const emissive = new THREE.Color(emissiveColor);
+    
+    this.gltfModel.traverse((child) => {
+      if (child.isMesh && child.material) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((mat) => {
+          if (mat.color) {
+            // Blend original color with tint
+            mat.color.lerp(tint, 0.4);
+          }
+          if (mat.emissive !== undefined) {
+            mat.emissive.copy(emissive);
+            mat.emissiveIntensity = 0.5;
+          }
+          mat.needsUpdate = true;
+        });
+      }
+    });
+    
+    // Also tint fallback mesh
+    this.body.traverse((child) => {
+      if (child.isMesh && child.material && child !== this.gltfModel) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((mat) => {
+          if (mat.color) mat.color.lerp(tint, 0.3);
+          if (mat.emissive !== undefined) {
+            mat.emissive.copy(emissive);
+            mat.emissiveIntensity = 0.4;
+          }
+        });
+      }
+    });
+  }
+  
+  _playAnimation(stateName, speed = 1.0) {
+    if (!this.mixer) return;
+    
+    const animName = BOSS_ANIM_MAP[stateName];
+    if (!animName) return;
+    
+    // Try to find animation (case-insensitive)
+    let action = this.animations[animName];
+    if (!action) {
+      // Try lowercase
+      const lower = animName.toLowerCase();
+      for (const name of Object.keys(this.animations)) {
+        if (name.toLowerCase().includes(lower)) {
+          action = this.animations[name];
+          break;
+        }
       }
     }
     
-    // === HEAD - Horrific multi-eyed visage ===
-    const headGeo = new THREE.SphereGeometry(0.4, 14, 12);
-    const headMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1420,
-      roughness: 0.75,
-      metalness: 0.2,
-    });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 3.4, 0.3);
-    head.scale.set(1.0, 1.1, 0.9);
-    bodyGroup.add(head);
+    if (!action) return;
     
-    // Exposed skull/jaw
-    const jawGeo = new THREE.BoxGeometry(0.35, 0.15, 0.25);
-    const jaw = new THREE.Mesh(jawGeo, ribMat);
-    jaw.position.set(0, 3.15, 0.45);
-    jaw.rotation.x = 0.2;
-    bodyGroup.add(jaw);
+    // Cross-fade to new animation
+    if (this.currentAction && this.currentAction !== action) {
+      action.reset();
+      action.setEffectiveTimeScale(speed);
+      action.setEffectiveWeight(1);
+      action.crossFadeFrom(this.currentAction, 0.3, true);
+      action.play();
+    } else if (!this.currentAction) {
+      action.reset();
+      action.setEffectiveTimeScale(speed);
+      action.play();
+    }
     
+    this.currentAction = action;
+  }
+  
+  _createEyes() {
     // Multiple glowing eyes - the failed experiment's signature
-    this.eyes = [];
     const eyePositions = [
       // Main eyes
-      { x: -0.15, y: 3.5, z: 0.55, size: 0.09 },
-      { x: 0.15, y: 3.5, z: 0.55, size: 0.09 },
+      { x: -0.18, y: 3.55, z: 0.6, size: 0.11 },
+      { x: 0.18, y: 3.55, z: 0.6, size: 0.11 },
       // Third eye
-      { x: 0, y: 3.65, z: 0.5, size: 0.07 },
+      { x: 0, y: 3.75, z: 0.55, size: 0.085 },
       // Side eyes
-      { x: -0.32, y: 3.35, z: 0.4, size: 0.05 },
-      { x: 0.32, y: 3.35, z: 0.4, size: 0.05 },
+      { x: -0.38, y: 3.35, z: 0.45, size: 0.06 },
+      { x: 0.38, y: 3.35, z: 0.45, size: 0.06 },
       // Cluster on shoulder
-      { x: -0.75, y: 3.0, z: 0.25, size: 0.04 },
-      { x: -0.85, y: 2.85, z: 0.3, size: 0.03 },
+      { x: -0.85, y: 3.1, z: 0.3, size: 0.05 },
+      { x: -0.95, y: 2.9, z: 0.35, size: 0.04 },
       // Eye on back growth
-      { x: 0.1, y: 2.7, z: -0.3, size: 0.06 },
+      { x: 0.12, y: 2.85, z: -0.35, size: 0.07 },
     ];
     
     const eyeMat = new THREE.MeshStandardMaterial({
@@ -249,82 +401,90 @@ export class Boss {
       emissiveIntensity: 5,
     });
     
-    eyePositions.forEach(pos => {
-      const eyeGeo = new THREE.SphereGeometry(pos.size, 10, 10);
+    eyePositions.forEach((pos) => {
+      const eyeGeo = new THREE.SphereGeometry(pos.size, 12, 12);
       const eye = new THREE.Mesh(eyeGeo, eyeMat.clone());
       eye.position.set(pos.x, pos.y, pos.z);
       this.eyes.push(eye);
-      bodyGroup.add(eye);
+      this.body.add(eye);
+      
+      // Add point light for main eyes
+      if (pos.size >= 0.08) {
+        const light = new THREE.PointLight(0xff2200, 0.5, 3);
+        light.position.copy(eye.position);
+        this.eyeLights.push(light);
+        this.body.add(light);
+      }
     });
-    
-    this.body = bodyGroup;
-    this.mesh.add(bodyGroup);
-    
-    // === WEAPON - Massive twisted cleaver/scythe ===
+  }
+  
+  _createWeapon() {
+    // Massive twisted cleaver/scythe appendage
     const weaponGroup = new THREE.Group();
     
-    // Handle - wrapped in flesh
-    const handleGeo = new THREE.CylinderGeometry(0.06, 0.08, 1.8, 10);
+    // Handle - fleshy appendage
+    const handleGeo = new THREE.CylinderGeometry(0.08, 0.1, 2.0, 12);
     const handleMat = new THREE.MeshStandardMaterial({
       color: 0x3a2a20,
-      roughness: 0.8,
-      metalness: 0.2,
+      roughness: 0.85,
+      metalness: 0.15,
     });
     const handle = new THREE.Mesh(handleGeo, handleMat);
     weaponGroup.add(handle);
     
     // Flesh wrappings
-    for (let i = 0; i < 4; i++) {
-      const wrapGeo = new THREE.TorusGeometry(0.09, 0.02, 6, 12);
+    for (let i = 0; i < 5; i++) {
+      const wrapGeo = new THREE.TorusGeometry(0.11, 0.025, 6, 14);
       const wrap = new THREE.Mesh(wrapGeo, new THREE.MeshStandardMaterial({
         color: 0x4a2a28,
         roughness: 0.9,
       }));
-      wrap.position.y = -0.6 + i * 0.4;
+      wrap.position.y = -0.7 + i * 0.35;
       wrap.rotation.x = Math.PI / 2;
       weaponGroup.add(wrap);
     }
     
     // Massive blade - jagged and cruel
-    const bladeGeo = new THREE.BoxGeometry(0.08, 1.6, 0.5);
+    const bladeGeo = new THREE.BoxGeometry(0.1, 1.8, 0.6);
     const bladeMat = new THREE.MeshStandardMaterial({
       color: 0x2a2a2a,
-      roughness: 0.3,
-      metalness: 0.9,
+      roughness: 0.25,
+      metalness: 0.95,
     });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
-    blade.position.set(0, 1.4, 0.15);
-    blade.rotation.z = 0.15;
+    blade.position.set(0, 1.5, 0.18);
+    blade.rotation.z = 0.12;
     weaponGroup.add(blade);
     
-    // Blade edge glow
-    const edgeGeo = new THREE.BoxGeometry(0.02, 1.55, 0.02);
+    // Blade edge glow - corrupted energy
+    const edgeGeo = new THREE.BoxGeometry(0.025, 1.75, 0.025);
     const edgeMat = new THREE.MeshStandardMaterial({
       color: 0xff3300,
       emissive: 0xff2200,
-      emissiveIntensity: 2,
+      emissiveIntensity: 3,
     });
     const edge = new THREE.Mesh(edgeGeo, edgeMat);
-    edge.position.set(0, 1.4, 0.41);
-    edge.rotation.z = 0.15;
+    edge.position.set(0, 1.5, 0.5);
+    edge.rotation.z = 0.12;
     weaponGroup.add(edge);
     
-    // Serrated spikes along blade
-    for (let i = 0; i < 5; i++) {
-      const spikeGeo = new THREE.ConeGeometry(0.03, 0.12, 5);
+    // Serrated spikes along blade back
+    for (let i = 0; i < 6; i++) {
+      const spikeGeo = new THREE.ConeGeometry(0.04, 0.15, 6);
       const spike = new THREE.Mesh(spikeGeo, bladeMat);
-      spike.position.set(0, 0.8 + i * 0.25, 0.35);
-      spike.rotation.x = Math.PI / 3;
+      spike.position.set(0, 0.85 + i * 0.22, -0.1);
+      spike.rotation.x = -Math.PI / 4;
       weaponGroup.add(spike);
     }
     
-    weaponGroup.position.set(1.5, 1.8, 0);
+    weaponGroup.position.set(1.6, 1.9, 0);
     weaponGroup.rotation.z = 0.4;
-    this.weapon = weaponGroup;
-    this.weapon.castShadow = true;
-    this.mesh.add(weaponGroup);
+    weaponGroup.castShadow = true;
     
-    // === AoE INDICATOR ===
+    return weaponGroup;
+  }
+  
+  _createAoEIndicator() {
     const aoeGeo = new THREE.RingGeometry(0.5, 6, 32);
     const aoeMat = new THREE.MeshBasicMaterial({
       color: 0xff4400,
@@ -336,39 +496,34 @@ export class Boss {
     this.aoeIndicator.rotation.x = -Math.PI / 2;
     this.aoeIndicator.position.y = 0.1;
     this.mesh.add(this.aoeIndicator);
-    
-    // === AMBIENT EFFECTS ===
-    // Dark aura particles (using simple meshes)
+  }
+  
+  _createAuraParticles() {
     this.auraParticles = [];
-    for (let i = 0; i < 6; i++) {
-      const particleGeo = new THREE.SphereGeometry(0.08, 6, 6);
+    for (let i = 0; i < 8; i++) {
+      const particleGeo = new THREE.SphereGeometry(0.1, 6, 6);
       const particleMat = new THREE.MeshStandardMaterial({
         color: 0x220022,
         emissive: 0x110011,
-        emissiveIntensity: 1,
+        emissiveIntensity: 1.5,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.7,
       });
       const particle = new THREE.Mesh(particleGeo, particleMat);
-      particle.userData.angle = (i / 6) * Math.PI * 2;
+      particle.userData.angle = (i / 8) * Math.PI * 2;
       particle.userData.yOffset = Math.random() * 2;
-      particle.userData.radius = 0.8 + Math.random() * 0.4;
+      particle.userData.radius = 0.9 + Math.random() * 0.5;
       this.auraParticles.push(particle);
       this.mesh.add(particle);
     }
-    
-    // Phase 2 visual change (arm mutation, stored for later)
-    this.mutatedArm = null;
-    
-    scene.add(this.mesh);
-    
-    // Start dormant (eyes dim)
-    this._setDormant();
   }
   
   _setDormant() {
-    this.eyes.forEach(eye => {
+    this.eyes.forEach((eye) => {
       eye.material.emissiveIntensity = 0.5;
+    });
+    this.eyeLights.forEach((light) => {
+      light.intensity = 0.1;
     });
   }
   
@@ -380,9 +535,9 @@ export class Boss {
     
     // Play boss roar and start boss music
     if (this.gm?.audioManager) {
-      this.gm.audioManager.play('bossRoar', { 
-        position: this.mesh.position, 
-        volume: 0.8 
+      this.gm.audioManager.play('bossRoar', {
+        position: this.mesh.position,
+        volume: 0.8,
       });
       this.gm.audioManager.startBossMusic();
     }
@@ -391,17 +546,28 @@ export class Boss {
     let delay = 0;
     this.eyes.forEach((eye, i) => {
       setTimeout(() => {
-        eye.material.emissiveIntensity = 6;
+        eye.material.emissiveIntensity = 7;
         setTimeout(() => {
-          eye.material.emissiveIntensity = 4;
+          eye.material.emissiveIntensity = 4.5;
         }, 200);
       }, delay);
-      delay += 150;
+      delay += 120;
+    });
+    
+    this.eyeLights.forEach((light, i) => {
+      setTimeout(() => {
+        light.intensity = 0.8;
+      }, i * 100);
     });
   }
   
   update(delta, player) {
     if (this.state === STATES.DEAD) return;
+    
+    // Update animation mixer
+    if (this.mixer) {
+      this.mixer.update(delta);
+    }
     
     this.stateTimer += delta;
     this.attackCooldownTimer = Math.max(0, this.attackCooldownTimer - delta);
@@ -419,14 +585,21 @@ export class Boss {
       case STATES.AWAKENING:
         // Rise up animation
         if (this.stateTimer < 2.0) {
-          this.body.position.y = 2.2 + Math.sin(this.stateTimer * Math.PI) * 0.3;
+          this.body.position.y = Math.sin(this.stateTimer * Math.PI) * 0.4;
+          this.body.rotation.z = Math.sin(this.stateTimer * 3) * 0.05;
         } else {
+          this.body.position.y = 0;
+          this.body.rotation.z = 0;
           this._changeState(STATES.IDLE);
         }
         break;
         
       case STATES.IDLE:
         this._faceTarget(player.mesh.position, delta);
+        
+        // Idle breathing animation
+        this.body.position.y = Math.sin(this.stateTimer * 2) * 0.08;
+        this.body.scale.y = 1 + Math.sin(this.stateTimer * 2.5) * 0.02;
         
         // Decide next action
         if (distToPlayer <= this.attackRange && this.attackCooldownTimer <= 0) {
@@ -440,8 +613,9 @@ export class Boss {
         this._moveToward(player.mesh.position, delta);
         this._faceTarget(player.mesh.position, delta);
         
-        // Walking animation
-        this.body.position.y = 2.2 + Math.sin(this.stateTimer * 8) * 0.1;
+        // Walking animation - heavy footfalls
+        this.body.position.y = Math.sin(this.stateTimer * 8) * 0.12;
+        this.body.rotation.z = Math.sin(this.stateTimer * 4) * 0.03;
         
         if (distToPlayer <= this.attackRange) {
           if (this.attackCooldownTimer <= 0) {
@@ -470,11 +644,13 @@ export class Boss {
         
       case STATES.STAGGERED:
         // Wobble during stagger
-        this.body.rotation.z = Math.sin(this.stateTimer * 12) * 0.15 * (1 - this.stateTimer / 2.5);
+        this.body.rotation.z = Math.sin(this.stateTimer * 14) * 0.18 * (1 - this.stateTimer / 2.5);
+        this.body.position.y = Math.sin(this.stateTimer * 8) * 0.1;
         
         if (this.stateTimer >= 2.5) {
           this.posture = 0;
           this.body.rotation.z = 0;
+          this.body.position.y = 0;
           this._changeState(STATES.IDLE);
         }
         break;
@@ -491,32 +667,33 @@ export class Boss {
     
     // Eye pulsing based on health
     const healthRatio = this.health / this.maxHealth;
-    const pulseSpeed = 2 + (1 - healthRatio) * 4;
-    const pulseIntensity = 3 + Math.sin(Date.now() * 0.001 * pulseSpeed) * (1 + (1 - healthRatio) * 2);
-    this.eyes.forEach(eye => {
+    const pulseSpeed = 2 + (1 - healthRatio) * 5;
+    const pulseIntensity = 3.5 + Math.sin(Date.now() * 0.001 * pulseSpeed) * (1.5 + (1 - healthRatio) * 2.5);
+    this.eyes.forEach((eye) => {
       eye.material.emissiveIntensity = pulseIntensity;
+    });
+    this.eyeLights.forEach((light) => {
+      light.intensity = 0.3 + pulseIntensity * 0.1;
     });
     
     // Animate aura particles
     if (this.auraParticles && this.isActive) {
       const time = Date.now() * 0.001;
       this.auraParticles.forEach((particle, i) => {
-        const angle = particle.userData.angle + time * 0.5;
-        const yOff = particle.userData.yOffset + Math.sin(time + i) * 0.3;
+        const angle = particle.userData.angle + time * 0.6;
+        const yOff = particle.userData.yOffset + Math.sin(time + i) * 0.4;
         const radius = particle.userData.radius;
         particle.position.set(
           Math.cos(angle) * radius,
-          1.5 + yOff,
+          1.6 + yOff,
           Math.sin(angle) * radius
         );
-        particle.material.opacity = 0.3 + Math.sin(time * 2 + i) * 0.2;
+        particle.material.opacity = 0.35 + Math.sin(time * 2.5 + i) * 0.25;
       });
     }
   }
   
   _startAttack(player) {
-    const distToPlayer = this.mesh.position.distanceTo(player.mesh.position);
-    
     // Phase 2: chance for AoE if off cooldown
     if (this.phase === 2 && this.config.canAoE && this.aoeCooldownTimer <= 0 && Math.random() < 0.3) {
       this._changeState(STATES.AOE_ATTACK);
@@ -550,11 +727,13 @@ export class Boss {
       
       if (isHeavy) {
         // Raise weapon high
-        this.weapon.rotation.z = -progress * 2.5;
-        this.weapon.position.y = 1.8 + progress * 1.5;
+        this.weapon.rotation.z = -progress * 2.8;
+        this.weapon.position.y = 1.9 + progress * 1.6;
+        this.body.rotation.x = progress * 0.15;
       } else {
         // Pull back
-        this.weapon.rotation.z = 0.3 - progress * 1.5;
+        this.weapon.rotation.z = 0.4 - progress * 1.6;
+        this.body.rotation.z = progress * 0.1;
       }
       return;
     }
@@ -568,29 +747,42 @@ export class Boss {
           Math.cos(this.body.rotation.y)
         );
         this.activeAttack = {
-          position: this.mesh.position.clone().add(attackDir.multiplyScalar(2.0)).add(new THREE.Vector3(0, 1.5, 0)),
+          position: this.mesh.position.clone().add(attackDir.multiplyScalar(2.2)).add(new THREE.Vector3(0, 1.6, 0)),
           range: this.attackRange,
           damage: isHeavy ? this.config.damage * 1.5 : this.config.damage,
           postureDmg: isHeavy ? this.config.postureDmg * 1.5 : this.config.postureDmg,
           isHeavy,
         };
+        
+        // Play swing sound
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('swordSwing', {
+            position: this.mesh.position,
+            volume: 0.7,
+            pitch: isHeavy ? 0.6 : 0.8,
+          });
+        }
       }
       
       // Swing animation
       const strikeProgress = (this.stateTimer - windupTime) / 0.3;
       if (isHeavy) {
-        this.weapon.rotation.z = -2.5 + strikeProgress * 4.0;
-        this.weapon.position.y = 3.3 - strikeProgress * 2.5;
+        this.weapon.rotation.z = -2.8 + strikeProgress * 4.5;
+        this.weapon.position.y = 3.5 - strikeProgress * 2.8;
+        this.body.rotation.x = 0.15 - strikeProgress * 0.25;
       } else {
-        this.weapon.rotation.z = -1.2 + strikeProgress * 2.5;
+        this.weapon.rotation.z = -1.2 + strikeProgress * 2.8;
+        this.body.rotation.z = 0.1 - strikeProgress * 0.15;
       }
     }
     
     // Recovery
     if (this.stateTimer >= strikeTime) {
       this.activeAttack = null;
-      this.weapon.rotation.z *= 0.9;
-      this.weapon.position.y = THREE.MathUtils.lerp(this.weapon.position.y, 1.8, 0.1);
+      this.weapon.rotation.z = THREE.MathUtils.lerp(this.weapon.rotation.z, 0.4, 0.12);
+      this.weapon.position.y = THREE.MathUtils.lerp(this.weapon.position.y, 1.9, 0.12);
+      this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, 0, 0.15);
+      this.body.rotation.z = THREE.MathUtils.lerp(this.body.rotation.z, 0, 0.15);
     }
     
     // End attack
@@ -613,7 +805,8 @@ export class Boss {
       this._faceTarget(player.mesh.position, delta * 3);
       const progress = this.stateTimer / windupTime;
       const swingDir = this.comboCount % 2 === 0 ? 1 : -1;
-      this.weapon.rotation.z = swingDir * progress * 1.5;
+      this.weapon.rotation.z = swingDir * progress * 1.8;
+      this.body.rotation.z = swingDir * progress * 0.08;
       return;
     }
     
@@ -626,17 +819,26 @@ export class Boss {
           Math.cos(this.body.rotation.y)
         );
         this.activeAttack = {
-          position: this.mesh.position.clone().add(attackDir.multiplyScalar(2.0)).add(new THREE.Vector3(0, 1.5, 0)),
+          position: this.mesh.position.clone().add(attackDir.multiplyScalar(2.2)).add(new THREE.Vector3(0, 1.6, 0)),
           range: this.attackRange * 0.9,
           damage: this.config.damage * 0.7,
           postureDmg: this.config.postureDmg * 0.6,
           isCombo: true,
         };
+        
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('swordSwing', {
+            position: this.mesh.position,
+            volume: 0.6,
+            pitch: 0.9 + this.comboCount * 0.1,
+          });
+        }
       }
       
       const strikeProgress = (this.stateTimer - windupTime) / 0.2;
       const swingDir = this.comboCount % 2 === 0 ? 1 : -1;
-      this.weapon.rotation.z = swingDir * (1.5 - strikeProgress * 3);
+      this.weapon.rotation.z = swingDir * (1.8 - strikeProgress * 3.5);
+      this.body.rotation.z = swingDir * (0.08 - strikeProgress * 0.12);
     }
     
     // Check for next combo hit
@@ -651,7 +853,7 @@ export class Boss {
         this.stateTimer = 0;
         // Step forward during combo
         const fwd = new THREE.Vector3(Math.sin(this.body.rotation.y), 0, Math.cos(this.body.rotation.y));
-        this.mesh.position.addScaledVector(fwd, 0.5);
+        this.mesh.position.addScaledVector(fwd, 0.6);
       } else {
         // End combo
         this.comboCount = 0;
@@ -670,25 +872,24 @@ export class Boss {
     // Charge up - show indicator
     if (this.stateTimer < chargeTime) {
       const progress = this.stateTimer / chargeTime;
-      this.aoeIndicator.material.opacity = progress * 0.6;
-      this.aoeIndicator.scale.setScalar(1 + progress * 0.3);
+      this.aoeIndicator.material.opacity = progress * 0.65;
+      this.aoeIndicator.scale.setScalar(1 + progress * 0.35);
       
       // Raise weapon overhead
-      this.weapon.rotation.z = -progress * 3;
-      this.weapon.position.y = 1.8 + progress * 2;
+      this.weapon.rotation.z = -progress * 3.2;
+      this.weapon.position.y = 1.9 + progress * 2.2;
       
       // Body glow
-      const glowHex = Math.floor(0x220000 + progress * 0x110000);
-      this.body.traverse((child) => {
-        if (child.isMesh && child.material && child.material.emissive) {
-          child.material.emissive.setHex(glowHex);
-        }
-      });
+      this._flashModel(progress * 0.5, 0xff2200);
       
       // Eyes intensify
-      this.eyes.forEach(eye => {
-        eye.material.emissiveIntensity = 4 + progress * 6;
+      this.eyes.forEach((eye) => {
+        eye.material.emissiveIntensity = 4 + progress * 7;
       });
+      
+      // Rumble
+      this.body.position.y = Math.sin(this.stateTimer * 20) * 0.05 * progress;
+      
       return;
     }
     
@@ -699,10 +900,17 @@ export class Boss {
         this.aoeIndicator.material.opacity = 1;
         this.aoeIndicator.material.color.setHex(0xff6600);
         
+        // Play explosion sound
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('explosion', {
+            position: this.mesh.position,
+            volume: 0.9,
+          });
+        }
+        
         // AoE damage check
         const distToPlayer = this.mesh.position.distanceTo(player.mesh.position);
         if (distToPlayer < 6 && !player.isInvincible) {
-          // Create special AoE attack for hit detection
           this.activeAttack = {
             position: this.mesh.position.clone(),
             range: 6,
@@ -713,20 +921,16 @@ export class Boss {
         }
         
         // Slam weapon down
-        this.weapon.rotation.z = 0.5;
-        this.weapon.position.y = 0.5;
+        this.weapon.rotation.z = 0.6;
+        this.weapon.position.y = 0.6;
       }
     }
     
     // Recovery
     if (this.stateTimer >= explosionTime) {
       this.activeAttack = null;
-      this.aoeIndicator.material.opacity *= 0.9;
-      this.body.traverse((child) => {
-        if (child.isMesh && child.material && child.material.emissive) {
-          child.material.emissive.setHex(0x000000);
-        }
-      });
+      this.aoeIndicator.material.opacity *= 0.88;
+      this._flashModel(0, 0x000000);
     }
     
     if (this.stateTimer >= recoveryTime) {
@@ -744,14 +948,22 @@ export class Boss {
     const transitionDuration = 3.0;
     
     if (this.stateTimer < transitionDuration) {
-      // Dramatic pose, body convulses
-      this.body.rotation.z = Math.sin(this.stateTimer * 20) * 0.2;
-      this.body.scale.y = 1 + Math.sin(this.stateTimer * 10) * 0.1;
+      // Dramatic convulsions
+      this.body.rotation.z = Math.sin(this.stateTimer * 22) * 0.25;
+      this.body.scale.y = 1 + Math.sin(this.stateTimer * 12) * 0.15;
+      this.body.scale.x = 1 + Math.sin(this.stateTimer * 10) * 0.08;
       
       // Eyes go crazy
       this.eyes.forEach((eye, i) => {
-        eye.material.emissiveIntensity = 5 + Math.sin(this.stateTimer * 15 + i) * 4;
+        eye.material.emissiveIntensity = 6 + Math.sin(this.stateTimer * 18 + i) * 5;
       });
+      
+      // Color shift to Phase 2
+      const progress = this.stateTimer / transitionDuration;
+      const tintColor = new THREE.Color(this.phaseConfigs[1].modelTint);
+      const targetColor = new THREE.Color(this.phaseConfigs[2].modelTint);
+      tintColor.lerp(targetColor, progress);
+      this._applyModelTint(tintColor.getHex(), this.phaseConfigs[2].emissiveColor);
       
       // Create mutated arm at halfway point
       if (this.stateTimer > 1.5 && !this.mutatedArm) {
@@ -762,25 +974,12 @@ export class Boss {
     
     // Transition complete
     this.body.rotation.z = 0;
-    this.body.scale.y = 1;
+    this.body.scale.set(1, 1, 1);
     
-    // Phase 2 color shift - darker, more corrupted
-    this.body.traverse((child) => {
-      if (child.isMesh && child.material && child.material.color) {
-        // Shift colors to more purple/corrupted tones
-        const currentColor = child.material.color.getHex();
-        const r = ((currentColor >> 16) & 0xff);
-        const g = ((currentColor >> 8) & 0xff);
-        const b = (currentColor & 0xff);
-        child.material.color.setRGB(
-          Math.min(1, (r + 30) / 255),
-          Math.max(0, (g - 10) / 255),
-          Math.min(1, (b + 20) / 255)
-        );
-      }
-    });
+    // Final tint application
+    this._applyModelTint(this.phaseConfigs[2].modelTint, this.phaseConfigs[2].emissiveColor);
     
-    this.eyes.forEach(eye => {
+    this.eyes.forEach((eye) => {
       eye.material.color.setHex(0xff4400);
       eye.material.emissive.setHex(0xff4400);
     });
@@ -789,11 +988,10 @@ export class Boss {
   }
   
   _createMutatedArm() {
-    // Extra twisted tentacle-arm emerges from shoulder - more horrific in Phase 2
     this.mutatedArm = new THREE.Group();
     
     // Main tentacle arm
-    const armGeo = new THREE.CapsuleGeometry(0.15, 1.0, 10, 14);
+    const armGeo = new THREE.CapsuleGeometry(0.18, 1.2, 12, 16);
     const armMat = new THREE.MeshStandardMaterial({
       color: 0x3a1528,
       roughness: 0.85,
@@ -801,40 +999,42 @@ export class Boss {
     });
     const arm = new THREE.Mesh(armGeo, armMat);
     arm.position.set(0, 0, 0);
-    arm.rotation.z = 0.6;
-    arm.rotation.x = 0.4;
+    arm.rotation.z = 0.7;
+    arm.rotation.x = 0.45;
     this.mutatedArm.add(arm);
     
     // Clawed tips
     const clawMat = new THREE.MeshStandardMaterial({
       color: 0x222222,
-      roughness: 0.4,
-      metalness: 0.7,
+      roughness: 0.35,
+      metalness: 0.75,
     });
     for (let i = 0; i < 4; i++) {
-      const clawGeo = new THREE.ConeGeometry(0.03, 0.2, 6);
+      const clawGeo = new THREE.ConeGeometry(0.04, 0.25, 6);
       const claw = new THREE.Mesh(clawGeo, clawMat);
-      claw.position.set(-0.4 + (i - 1.5) * 0.08, 0.6, 0.7);
-      claw.rotation.x = -0.8;
+      claw.position.set(-0.5 + (i - 1.5) * 0.1, 0.7, 0.8);
+      claw.rotation.x = -0.85;
       this.mutatedArm.add(claw);
     }
     
     // Pustules on mutated arm
-    for (let i = 0; i < 3; i++) {
-      const pustuleGeo = new THREE.SphereGeometry(0.06 + Math.random() * 0.04, 6, 6);
+    for (let i = 0; i < 4; i++) {
+      const pustuleGeo = new THREE.SphereGeometry(0.07 + Math.random() * 0.05, 6, 6);
       const pustuleMat = new THREE.MeshStandardMaterial({
         color: 0x4a2838,
         roughness: 0.9,
+        emissive: 0x110008,
+        emissiveIntensity: 0.4,
       });
       const pustule = new THREE.Mesh(pustuleGeo, pustuleMat);
-      pustule.position.set(-0.2 + i * 0.15, 0.2 + i * 0.15, 0.35);
+      pustule.position.set(-0.25 + i * 0.18, 0.25 + i * 0.18, 0.4);
       this.mutatedArm.add(pustule);
     }
     
-    this.mutatedArm.position.set(-1.0, 2.6, 0.2);
+    this.mutatedArm.position.set(-1.1, 2.7, 0.25);
     this.mesh.add(this.mutatedArm);
     
-    // Extra eyes on mutated arm and body - Phase 2 grows more eyes
+    // Extra eyes on mutated area - Phase 2 grows more eyes
     const extraEyeMat = new THREE.MeshStandardMaterial({
       color: 0xff4400,
       emissive: 0xff4400,
@@ -842,16 +1042,37 @@ export class Boss {
     });
     
     const extraEyePositions = [
-      { x: -1.2, y: 2.8, z: 0.5, size: 0.06 },
-      { x: -1.0, y: 2.4, z: 0.6, size: 0.05 },
-      { x: 0.5, y: 3.0, z: 0.35, size: 0.04 },
+      { x: -1.3, y: 2.9, z: 0.55, size: 0.07 },
+      { x: -1.1, y: 2.5, z: 0.65, size: 0.055 },
+      { x: 0.55, y: 3.1, z: 0.4, size: 0.045 },
     ];
     
-    extraEyePositions.forEach(pos => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(pos.size, 8, 8), extraEyeMat.clone());
+    extraEyePositions.forEach((pos) => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(pos.size, 10, 10), extraEyeMat.clone());
       eye.position.set(pos.x, pos.y, pos.z);
       this.eyes.push(eye);
       this.mesh.add(eye);
+    });
+  }
+  
+  _flashModel(intensity, color) {
+    const flashColor = new THREE.Color(color);
+    
+    // Flash GLTF model
+    if (this.gltfModel) {
+      this.gltfModel.traverse((child) => {
+        if (child.isMesh && child.material && child.material.emissive !== undefined) {
+          child.material.emissive.lerp(flashColor, intensity);
+          child.material.emissiveIntensity = intensity * 2;
+        }
+      });
+    }
+    
+    // Flash fallback
+    this.body.traverse((child) => {
+      if (child.isMesh && child.material && child.material.emissive !== undefined) {
+        child.material.emissive.lerp(flashColor, intensity);
+      }
     });
   }
   
@@ -874,29 +1095,21 @@ export class Boss {
     
     // Play hit sounds
     if (this.gm?.audioManager) {
-      this.gm.audioManager.play('criticalHit', { 
-        position: this.mesh.position, 
-        volume: 0.7 
+      this.gm.audioManager.play('criticalHit', {
+        position: this.mesh.position,
+        volume: 0.7,
       });
     }
     
-    // Flash on hit - flash all body meshes
-    this.body.traverse((child) => {
-      if (child.isMesh && child.material && child.material.emissive) {
-        child.material.emissive.setHex(0x440000);
-      }
-    });
+    // Flash on hit
+    this._flashModel(0.6, 0xff2200);
     setTimeout(() => {
       if (this.state !== STATES.AOE_ATTACK) {
-        this.body.traverse((child) => {
-          if (child.isMesh && child.material && child.material.emissive) {
-            child.material.emissive.setHex(0x000000);
-          }
-        });
+        this._flashModel(0, 0x000000);
       }
     }, 100);
     
-    // BOSS RECOIL - more subtle than regular enemies but still visible
+    // Hit recoil
     this._applyHitRecoil(attackerPos, amount);
     
     // Check for death
@@ -920,49 +1133,38 @@ export class Boss {
     return 'hit';
   }
   
-  // Visual recoil when hit - bosses show smaller recoil (they're massive)
   _applyHitRecoil(attackerPos, damage) {
-    // Calculate knockback direction (away from attacker)
     let knockDir;
     if (attackerPos) {
       knockDir = new THREE.Vector3().subVectors(this.mesh.position, attackerPos);
       knockDir.y = 0;
       knockDir.normalize();
     } else {
-      // Fallback: recoil backwards
       const faceAngle = this.body.rotation.y;
       knockDir = new THREE.Vector3(-Math.sin(faceAngle), 0, -Math.cos(faceAngle));
     }
     
-    // Boss recoil is much smaller (they're massive)
-    const recoilStrength = Math.min(0.2, damage * 0.005);
+    // Boss recoil is smaller
+    const recoilStrength = Math.min(0.25, damage * 0.006);
     
-    // Quick position offset
     const startPos = this.mesh.position.clone();
     const recoilPos = startPos.clone().add(knockDir.multiplyScalar(recoilStrength));
     
-    // Body tilt for impact feel
     const originalTiltZ = this.body.rotation.z || 0;
     const tiltDirection = Math.random() > 0.5 ? 1 : -1;
-    this.body.rotation.z = originalTiltZ + tiltDirection * 0.08; // Smaller tilt for boss
+    this.body.rotation.z = originalTiltZ + tiltDirection * 0.1;
     
-    // Animate back to original
     let recoilTime = 0;
     const recoilDuration = 0.15;
     
     const animateRecoil = () => {
       recoilTime += 0.016;
       const t = Math.min(1, recoilTime / recoilDuration);
-      
-      // Ease out for snappy recovery
       const easeOut = 1 - Math.pow(1 - t, 3);
       
-      // Lerp position back
       this.mesh.position.lerpVectors(recoilPos, startPos, easeOut);
-      
-      // Lerp tilt back
       this.body.rotation.z = THREE.MathUtils.lerp(
-        originalTiltZ + tiltDirection * 0.08,
+        originalTiltZ + tiltDirection * 0.1,
         originalTiltZ,
         easeOut
       );
@@ -972,7 +1174,6 @@ export class Boss {
       }
     };
     
-    // Move to recoil position immediately, then animate back
     this.mesh.position.copy(recoilPos);
     requestAnimationFrame(animateRecoil);
   }
@@ -981,32 +1182,23 @@ export class Boss {
     this._changeState(STATES.STAGGERED);
     this.activeAttack = null;
     
-    // Play posture break sound
     if (this.gm?.audioManager) {
-      this.gm.audioManager.play('postureBreak', { 
-        position: this.mesh.position, 
-        volume: 0.9 
+      this.gm.audioManager.play('postureBreak', {
+        position: this.mesh.position,
+        volume: 0.9,
       });
     }
     
     // Big flash
-    this.body.traverse((child) => {
-      if (child.isMesh && child.material && child.material.emissive) {
-        child.material.emissive.setHex(0xffcc00);
-      }
-    });
-    this.eyes.forEach(eye => {
+    this._flashModel(1.0, 0xffcc00);
+    this.eyes.forEach((eye) => {
       eye.material.emissive.setHex(0xffcc00);
     });
     
     setTimeout(() => {
       if (this.state === STATES.STAGGERED) {
-        this.body.traverse((child) => {
-          if (child.isMesh && child.material && child.material.emissive) {
-            child.material.emissive.setHex(0x000000);
-          }
-        });
-        this.eyes.forEach(eye => {
+        this._flashModel(0, 0x000000);
+        this.eyes.forEach((eye) => {
           eye.material.emissive.setHex(this.phase === 2 ? 0xff4400 : 0xff2200);
         });
       }
@@ -1022,11 +1214,10 @@ export class Boss {
     this.activeAttack = null;
     this._changeState(STATES.PHASE_TRANSITION);
     
-    // Play boss roar for phase transition
     if (this.gm?.audioManager) {
-      this.gm.audioManager.play('bossRoar', { 
-        position: this.mesh.position, 
-        volume: 1.0 
+      this.gm.audioManager.play('bossRoar', {
+        position: this.mesh.position,
+        volume: 1.0,
       });
     }
     
@@ -1040,7 +1231,9 @@ export class Boss {
     this.activeAttack = null;
     this.isActive = false;
     
-    // Return to ambient music
+    // Play death animation
+    this._playAnimation(STATES.DEAD, 0.8);
+    
     if (this.gm?.audioManager) {
       this.gm.audioManager.startAmbientMusic();
     }
@@ -1050,18 +1243,21 @@ export class Boss {
     // Death animation - collapse
     let deathProgress = 0;
     const deathAnim = () => {
-      deathProgress += 0.02;
-      this.body.position.y = -deathProgress * 1.5;
-      this.body.rotation.x = deathProgress * 0.5;
+      deathProgress += 0.018;
+      this.body.position.y = -deathProgress * 1.8;
+      this.body.rotation.x = deathProgress * 0.6;
+      this.body.rotation.z = deathProgress * 0.3;
       
-      this.eyes.forEach(eye => {
-        eye.material.emissiveIntensity *= 0.95;
+      this.eyes.forEach((eye) => {
+        eye.material.emissiveIntensity *= 0.94;
+      });
+      this.eyeLights.forEach((light) => {
+        light.intensity *= 0.92;
       });
       
       if (deathProgress < 1.0) {
         requestAnimationFrame(deathAnim);
       } else {
-        // Final state - make all transparent
         this._fadeOut();
       }
     };
@@ -1076,35 +1272,35 @@ export class Boss {
   _fadeOut() {
     let opacity = 1;
     const fade = () => {
-      opacity -= 0.01;
+      opacity -= 0.008;
       
-      // Fade body meshes
-      this.body.traverse((child) => {
+      // Fade all meshes
+      const fadeFunc = (child) => {
         if (child.isMesh && child.material) {
-          child.material.transparent = true;
-          child.material.opacity = opacity;
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((mat) => {
+            mat.transparent = true;
+            mat.opacity = opacity;
+          });
         }
-      });
+      };
       
-      // Fade weapon meshes
-      this.weapon.traverse((child) => {
-        if (child.isMesh && child.material) {
-          child.material.transparent = true;
-          child.material.opacity = opacity;
-        }
-      });
+      this.body.traverse(fadeFunc);
+      this.weapon.traverse(fadeFunc);
       
-      // Fade eyes
-      this.eyes.forEach(eye => {
+      this.eyes.forEach((eye) => {
         eye.material.transparent = true;
         eye.material.opacity = opacity;
       });
       
-      // Fade aura particles
       if (this.auraParticles) {
-        this.auraParticles.forEach(p => {
+        this.auraParticles.forEach((p) => {
           p.material.opacity = opacity * 0.6;
         });
+      }
+      
+      if (this.mutatedArm) {
+        this.mutatedArm.traverse(fadeFunc);
       }
       
       if (opacity > 0) {
@@ -1136,13 +1332,15 @@ export class Boss {
   
   _resetWeapon() {
     this.weapon.rotation.z = 0.4;
-    this.weapon.position.set(1.5, 1.8, 0);
+    this.weapon.position.set(1.6, 1.9, 0);
+    this.body.rotation.x = 0;
+    this.body.rotation.z = 0;
   }
   
   _changeState(newState) {
     if (this.state === newState) return;
     
-    if (this.state === STATES.ATTACK || this.state === STATES.HEAVY_ATTACK || 
+    if (this.state === STATES.ATTACK || this.state === STATES.HEAVY_ATTACK ||
         this.state === STATES.AOE_ATTACK || this.state === STATES.COMBO) {
       this.activeAttack = null;
       this.hitThisSwing = false;
@@ -1150,6 +1348,9 @@ export class Boss {
     
     this.state = newState;
     this.stateTimer = 0;
+    
+    // Trigger animation for new state
+    this._playAnimation(newState);
   }
   
   respawn() {
@@ -1171,48 +1372,54 @@ export class Boss {
     this.body.rotation.set(0, 0, 0);
     this.body.scale.set(1, 1, 1);
     
-    // Reset all meshes in body group
-    this.body.traverse((child) => {
+    // Reset all meshes
+    const resetFunc = (child) => {
       if (child.isMesh && child.material) {
-        child.material.opacity = 1;
-        child.material.transparent = false;
-        if (child.material.emissive) {
-          child.material.emissive.setHex(0x000000);
-        }
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((mat) => {
+          mat.opacity = 1;
+          mat.transparent = false;
+          if (mat.emissive) {
+            mat.emissive.setHex(0x000000);
+          }
+        });
       }
-    });
+    };
+    
+    this.body.traverse(resetFunc);
+    this.weapon.traverse(resetFunc);
     
     this._resetWeapon();
     
-    // Reset weapon meshes
-    this.weapon.traverse((child) => {
-      if (child.isMesh && child.material) {
-        child.material.opacity = 1;
-        child.material.transparent = false;
-      }
-    });
-    
-    // Reset eyes - remove extra Phase 2 eyes first
+    // Reset eyes - remove extra Phase 2 eyes
     while (this.eyes.length > 8) {
       const extraEye = this.eyes.pop();
       if (extraEye) this.mesh.remove(extraEye);
     }
     
-    this.eyes.forEach(eye => {
+    this.eyes.forEach((eye) => {
       eye.material.opacity = 1;
       eye.material.transparent = false;
       eye.material.color.setHex(0xff2200);
       eye.material.emissive.setHex(0xff2200);
     });
     
-    // Remove mutated arm if present
+    this.eyeLights.forEach((light) => {
+      light.intensity = 0.1;
+    });
+    
+    // Remove mutated arm
     if (this.mutatedArm) {
       this.mesh.remove(this.mutatedArm);
       this.mutatedArm = null;
     }
     
+    // Reset tint to Phase 1
+    this._applyModelTint(this.phaseConfigs[1].modelTint, this.phaseConfigs[1].emissiveColor);
+    
     this.aoeIndicator.material.opacity = 0;
     
     this._setDormant();
+    this._playAnimation(STATES.IDLE);
   }
 }
