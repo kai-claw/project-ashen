@@ -88,6 +88,139 @@
       background: linear-gradient(90deg, #ccaa33, #ffcc00);
       transition: width 0.15s ease;
     }
+    
+    /* Crucible UI */
+    #crucible-container {
+      position: fixed;
+      z-index: 50;
+    }
+    #crucible-prompt {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 16px;
+      color: #d4af37;
+      text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 12px 24px;
+      border: 1px solid #d4af37;
+      border-radius: 4px;
+    }
+    #crucible-prompt .key {
+      display: inline-block;
+      background: #d4af37;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    #crucible-menu {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 10, 20, 0.95);
+      border: 2px solid #d4af37;
+      border-radius: 8px;
+      padding: 24px;
+      min-width: 400px;
+      font-family: 'Georgia', serif;
+      box-shadow: 0 0 40px rgba(212, 175, 55, 0.3);
+    }
+    .crucible-header {
+      text-align: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 16px;
+    }
+    .crucible-title {
+      font-size: 24px;
+      color: #d4af37;
+      text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+    #crucible-remnant {
+      font-size: 14px;
+      color: #aaa;
+    }
+    .crucible-tracks {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .crucible-track {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      background: rgba(30, 30, 40, 0.8);
+      border: 1px solid #333;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .crucible-track:hover,
+    .crucible-track.selected {
+      border-color: #d4af37;
+      background: rgba(50, 50, 60, 0.9);
+      box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+    }
+    .crucible-track.selected {
+      border-width: 2px;
+    }
+    .crucible-track.maxed {
+      opacity: 0.6;
+      border-color: #666;
+    }
+    .crucible-track.maxed .track-cost {
+      color: #4caf50;
+    }
+    .crucible-track.affordable .track-cost {
+      color: #d4af37;
+    }
+    .crucible-track:not(.affordable):not(.maxed) .track-cost {
+      color: #aa3333;
+    }
+    .track-icon {
+      font-size: 28px;
+      width: 40px;
+      text-align: center;
+    }
+    .track-info {
+      flex: 1;
+    }
+    .track-name {
+      font-size: 16px;
+      color: #e0e0e0;
+      font-weight: bold;
+    }
+    .track-level {
+      font-size: 12px;
+      color: #888;
+    }
+    .track-bonus {
+      font-size: 12px;
+      color: #8bc34a;
+      margin-top: 2px;
+    }
+    .track-cost {
+      font-size: 14px;
+      font-weight: bold;
+      min-width: 80px;
+      text-align: right;
+    }
+    .crucible-footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      border-top: 1px solid #333;
+      padding-top: 12px;
+    }
   </style>
 </head>
 <body>
@@ -114,7 +247,61 @@
     <div class="sub">Death is research. You learned something.</div>
   </div>
   <div id="controls-hint">
-    WASD Move · Space Dodge · LMB Attack · RMB Heavy · Shift Block · Q Lock-on · Click to start
+    WASD Move · Space Dodge · LMB Attack · RMB Heavy · Shift Block · Q Lock-on · E Interact · Click to start
+  </div>
+  
+  <!-- Crucible UI (Infusion Menu) -->
+  <div id="crucible-container">
+    <div id="crucible-prompt" style="display:none;">
+      Press <span class="key">E</span> to access the Crucible
+    </div>
+    <div id="crucible-menu" style="display:none;">
+      <div class="crucible-header">
+        <div class="crucible-title">⚗️ THE CRUCIBLE</div>
+        <div id="crucible-remnant">Remnant: 0</div>
+      </div>
+      <div class="crucible-tracks">
+        <div id="track-strength" class="crucible-track">
+          <div class="track-icon">💪</div>
+          <div class="track-info">
+            <div class="track-name">Strength</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0% damage</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+        <div id="track-vitality" class="crucible-track">
+          <div class="track-icon">❤️</div>
+          <div class="track-info">
+            <div class="track-name">Vitality</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0 HP</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+        <div id="track-stamina" class="crucible-track">
+          <div class="track-icon">⚡</div>
+          <div class="track-info">
+            <div class="track-name">Stamina</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0 stamina</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+        <div id="track-spirit" class="crucible-track">
+          <div class="track-icon">👁️</div>
+          <div class="track-info">
+            <div class="track-name">Spirit</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0% resist</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+      </div>
+      <div class="crucible-footer">
+        ↑↓ Navigate · Enter/F Purchase · Esc Close
+      </div>
+    </div>
   </div>
   
   <!-- Boss health bar (bottom center) -->

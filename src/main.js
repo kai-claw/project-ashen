@@ -5,6 +5,7 @@ import { EnemyManager } from './entities/EnemyManager.js';
 import { World } from './world/World.js';
 import { InputManager } from './systems/InputManager.js';
 import { HUD } from './ui/HUD.js';
+import { CrucibleUI } from './ui/CrucibleUI.js';
 import { CameraController } from './systems/CameraController.js';
 
 // --- Core Setup ---
@@ -44,6 +45,9 @@ gameManager.setEntities(player, enemyManager, scene);
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
 
+// --- Crucible UI (Infusion menu) ---
+const crucibleUI = new CrucibleUI(gameManager, inputManager, player);
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -61,6 +65,7 @@ function animate() {
   enemyManager.update(delta, player);
   cameraController.update(delta);
   hud.update();
+  crucibleUI.update();
   gameManager.update(delta);
 
   // Check for bloodstain collection

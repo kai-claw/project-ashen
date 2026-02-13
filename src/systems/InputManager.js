@@ -90,6 +90,7 @@ export class InputManager {
   get heavyAttack() { return this.consumeBuffer('mouse2'); }
   get block() { return this.keys['ShiftLeft'] || this.keys['ShiftRight']; }
   get lockOn() { return this.consumeBuffer('KeyQ'); }
+  get interact() { return this.consumeBuffer('KeyE'); }
 
   getMovementVector() {
     let x = 0, z = 0;

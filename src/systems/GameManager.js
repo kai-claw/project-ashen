@@ -8,10 +8,13 @@ export class GameManager {
     this.deathCount = 0;
     this.deathLessons = {}; // damageType -> resistance (0-0.25)
 
-    // Infusions
-    this.infusions = { bone: 0, blood: 0, stone: 0 };
-    this.MAX_TOTAL_DEPTH = 10;
+    // Infusions (4 tracks: Strength, Vitality, Stamina, Spirit)
+    this.infusions = { strength: 0, vitality: 0, stamina: 0, spirit: 0 };
+    this.MAX_TOTAL_DEPTH = 20;
     this.MAX_TRACK_DEPTH = 5;
+    
+    // Bonfire position for crucible proximity check
+    this.bonfirePosition = new THREE.Vector3(0, 0, 5);
 
     // Player stats
     this.maxHealth = 100;
@@ -243,13 +246,60 @@ export class GameManager {
 
   getInfusionBonuses() {
     return {
-      damageMult: 1.0 + (this.infusions.bone * 0.1),
-      critChance: this.infusions.bone * 0.05,
-      lifesteal: this.infusions.blood * 0.03,
-      rageDamage: this.infusions.blood * 0.15,
-      poise: this.infusions.stone * 20,
-      resistance: this.infusions.stone * 0.05,
-      dodgeIframes: 1.0 - (this.infusions.stone * 0.08),
+      // Strength: +10% damage per level
+      damageMult: 1.0 + (this.infusions.strength * 0.1),
+      // Vitality: +20 max HP per level
+      bonusHealth: this.infusions.vitality * 20,
+      // Stamina: +15 max stamina per level, +10% regen
+      bonusStamina: this.infusions.stamina * 15,
+      staminaRegenMult: 1.0 + (this.infusions.stamina * 0.1),
+      // Spirit: +5% posture resistance, faster posture regen
+      postureResist: this.infusions.spirit * 0.05,
+      postureRegenMult: 1.0 + (this.infusions.spirit * 0.15),
+    };
+  }
+  
+  // Apply infusion bonuses to stats (call after infusing)
+  applyInfusionBonuses() {
+    const bonuses = this.getInfusionBonuses();
+    this.maxHealth = 100 + bonuses.bonusHealth;
+    this.maxStamina = 100 + bonuses.bonusStamina;
+    // Keep current ratio if alive
+    if (!this.isDead) {
+      this.health = Math.min(this.health, this.maxHealth);
+      this.stamina = Math.min(this.stamina, this.maxStamina);
+    }
+  }
+  
+  // Check if player is near bonfire
+  isNearBonfire() {
+    if (!this.player) return false;
+    const dist = this.player.mesh.position.distanceTo(this.bonfirePosition);
+    return dist < 3.0;
+  }
+  
+  // Get info about a specific track
+  getTrackInfo(track) {
+    const level = this.infusions[track] || 0;
+    const nextLevel = level + 1;
+    const cost = nextLevel <= this.MAX_TRACK_DEPTH ? this.getInfusionCost(track, nextLevel) : null;
+    const canAfford = cost !== null && this.remnant >= cost;
+    const maxed = level >= this.MAX_TRACK_DEPTH;
+    
+    const descriptions = {
+      strength: { name: 'Strength', desc: '+10% damage per level', bonus: `+${level * 10}% damage` },
+      vitality: { name: 'Vitality', desc: '+20 max HP per level', bonus: `+${level * 20} HP` },
+      stamina: { name: 'Stamina', desc: '+15 max stamina, +10% regen per level', bonus: `+${level * 15} stamina` },
+      spirit: { name: 'Spirit', desc: '+5% posture resist, +15% posture regen per level', bonus: `+${level * 5}% resist` },
+    };
+    
+    return {
+      level,
+      nextLevel,
+      cost,
+      canAfford,
+      maxed,
+      ...descriptions[track],
     };
   }
 }
