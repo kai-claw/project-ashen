@@ -41,6 +41,9 @@ const enemyManager = new EnemyManager(scene, gameManager, player);
 gameManager.setCheckpoint(new THREE.Vector3(0, 0, 5));
 gameManager.setEntities(player, enemyManager, scene);
 
+// --- Wire HUD to EnemyManager for boss bar ---
+hud.setEnemyManager(enemyManager);
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
