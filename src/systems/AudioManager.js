@@ -116,6 +116,9 @@ export class AudioManager {
     // Boss roar
     this.soundBuffers.bossRoar = this.createRoarBuffer(0.6);
     
+    // Stamina depleted warning
+    this.soundBuffers.staminaDepleted = this.createStaminaDepletedBuffer(0.15);
+    
     console.log('[AUDIO] Sound buffers generated');
   }
   
@@ -272,6 +275,28 @@ export class AudioManager {
         }
       });
       data[i] = sample * envelope * 0.3;
+    }
+    
+    return { buffer };
+  }
+  
+  /**
+   * Create stamina depleted warning sound (tired gasp/wheeze)
+   */
+  createStaminaDepletedBuffer(duration) {
+    const sampleRate = this.context.sampleRate;
+    const length = sampleRate * duration;
+    const buffer = this.context.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < length; i++) {
+      const t = i / length;
+      // Quick attack, fade out
+      const envelope = Math.exp(-t * 8) * Math.sin(t * Math.PI * 2);
+      // Breathy noise with low tone
+      const noise = (Math.random() * 2 - 1) * 0.6;
+      const tone = Math.sin(2 * Math.PI * 200 * i / sampleRate) * 0.3;
+      data[i] = (noise + tone) * Math.abs(envelope) * 0.25;
     }
     
     return { buffer };

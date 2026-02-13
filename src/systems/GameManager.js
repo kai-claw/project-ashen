@@ -115,12 +115,29 @@ export class GameManager {
 
   // --- Stamina ---
   canUseStamina(amount) {
-    return this.stamina >= amount;
+    const canUse = this.stamina >= amount;
+    // Flash warning if trying to use stamina but can't
+    if (!canUse && this.hud) {
+      this.hud.flashStaminaDepleted();
+      // Play depleted sound
+      if (this.audioManager && this.player) {
+        this.audioManager.play('staminaDepleted', {
+          position: this.player.mesh.position,
+          volume: 0.4
+        });
+      }
+    }
+    return canUse;
   }
 
   useStamina(amount) {
     this.stamina = Math.max(0, this.stamina - amount);
     this.staminaRegenTimer = 0;
+    
+    // Warning when stamina gets very low after use
+    if (this.stamina < 15 && this.hud) {
+      this.hud.flashStaminaDepleted();
+    }
   }
 
   // --- Damage ---

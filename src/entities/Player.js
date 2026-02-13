@@ -49,6 +49,16 @@ export class Player {
     this.dodgeSpeed = 14;
     this.gravity = -30;
     this.grounded = true;
+    
+    // Movement smoothing (acceleration/deceleration)
+    this.currentMoveVelocity = new THREE.Vector3();
+    this.moveAcceleration = 35; // How fast we reach max speed
+    this.moveDeceleration = 25; // How fast we stop
+    
+    // Dodge visual effect tracking
+    this.dodgeGhostMeshes = [];
+    this.lastGhostSpawnTime = 0;
+    this.ghostSpawnInterval = 0.05; // Spawn ghost every 50ms during dodge
 
     // Directions
     this.moveDir = new THREE.Vector3();
@@ -327,7 +337,14 @@ export class Player {
         .addScaledVector(right, move.x)
         .normalize();
 
-      this.mesh.position.addScaledVector(this.moveDir, this.moveSpeed * delta);
+      // Target velocity based on input
+      const targetVelocity = this.moveDir.clone().multiplyScalar(this.moveSpeed);
+      
+      // Smoothly accelerate towards target velocity
+      this.currentMoveVelocity.lerp(targetVelocity, this.moveAcceleration * delta);
+      
+      // Apply smoothed velocity
+      this.mesh.position.addScaledVector(this.currentMoveVelocity, delta);
 
       // Face movement direction - rotate the whole mesh, not just body
       this.facingAngle = Math.atan2(this.moveDir.x, this.moveDir.z);
@@ -339,6 +356,14 @@ export class Player {
 
       if (this.state !== STATES.MOVING) this._changeState(STATES.MOVING);
     } else {
+      // Decelerate to stop (smooth stop, not instant)
+      if (this.currentMoveVelocity.length() > 0.01) {
+        this.currentMoveVelocity.lerp(new THREE.Vector3(0, 0, 0), this.moveDeceleration * delta);
+        this.mesh.position.addScaledVector(this.currentMoveVelocity, delta);
+      } else {
+        this.currentMoveVelocity.set(0, 0, 0);
+      }
+      
       if (this.state === STATES.MOVING) this._changeState(STATES.IDLE);
     }
   }
@@ -386,7 +411,93 @@ export class Player {
     }
 
     this.isInvincible = true;
+    this.lastGhostSpawnTime = 0;
+    
+    // Flash player blue to indicate i-frames started
+    this._flashDodgeStart();
+    
     this._changeState(STATES.DODGING);
+  }
+  
+  // Visual feedback for dodge i-frame start
+  _flashDodgeStart() {
+    // Flash visor bright cyan
+    const originalColor = this.visor.material.emissive.getHex();
+    this.visor.material.emissive.setHex(0x00ffff);
+    this.visor.material.emissiveIntensity = 8;
+    
+    // Flash body with subtle cyan tint
+    this.body.material.emissive.setHex(0x004455);
+    
+    setTimeout(() => {
+      this.visor.material.emissive.setHex(originalColor);
+      this.visor.material.emissiveIntensity = 3;
+      this.body.material.emissive.setHex(0x000000);
+    }, 100);
+  }
+  
+  // Spawn a ghost afterimage during dodge
+  _spawnDodgeGhost() {
+    // Create a semi-transparent clone at current position
+    const ghostGroup = new THREE.Group();
+    
+    // Simple ghost body (just main shapes, not full detail)
+    const ghostMat = new THREE.MeshBasicMaterial({
+      color: 0x4488ff,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+    });
+    
+    // Body ghost
+    const bodyGeo = new THREE.CapsuleGeometry(0.35, 0.6, 4, 8);
+    const bodyGhost = new THREE.Mesh(bodyGeo, ghostMat);
+    bodyGhost.position.y = 1.1;
+    ghostGroup.add(bodyGhost);
+    
+    // Head ghost
+    const headGeo = new THREE.SphereGeometry(0.22, 8, 6);
+    const headGhost = new THREE.Mesh(headGeo, ghostMat);
+    headGhost.position.y = 1.7;
+    ghostGroup.add(headGhost);
+    
+    // Position ghost at player's current location
+    ghostGroup.position.copy(this.mesh.position);
+    ghostGroup.rotation.y = this.mesh.rotation.y;
+    
+    this.scene.add(ghostGroup);
+    
+    // Track for cleanup
+    this.dodgeGhostMeshes.push({
+      mesh: ghostGroup,
+      material: ghostMat,
+      spawnTime: Date.now(),
+      lifetime: 200, // ms
+    });
+  }
+  
+  // Update and clean up dodge ghosts
+  _updateDodgeGhosts() {
+    const now = Date.now();
+    
+    for (let i = this.dodgeGhostMeshes.length - 1; i >= 0; i--) {
+      const ghost = this.dodgeGhostMeshes[i];
+      const age = now - ghost.spawnTime;
+      
+      if (age > ghost.lifetime) {
+        // Remove expired ghost
+        this.scene.remove(ghost.mesh);
+        ghost.mesh.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+        this.dodgeGhostMeshes.splice(i, 1);
+      } else {
+        // Fade out ghost
+        const fadeProgress = age / ghost.lifetime;
+        ghost.material.opacity = 0.4 * (1 - fadeProgress);
+      }
+    }
   }
 
   _processDodge(delta) {
@@ -394,9 +505,23 @@ export class Player {
     const speedCurve = Math.sin(progress * Math.PI);
 
     this.mesh.position.addScaledVector(this.dodgeDir, this.dodgeSpeed * speedCurve * delta);
+    
+    // Spawn ghost afterimages during i-frames
+    this.lastGhostSpawnTime += delta;
+    if (this.isInvincible && this.lastGhostSpawnTime >= this.ghostSpawnInterval) {
+      this._spawnDodgeGhost();
+      this.lastGhostSpawnTime = 0;
+    }
+    
+    // Update existing ghosts
+    this._updateDodgeGhosts();
 
-    // End iframes
-    if (this.stateTimer >= TIMINGS.dodgeIframes) this.isInvincible = false;
+    // End iframes with visual feedback
+    if (this.stateTimer >= TIMINGS.dodgeIframes && this.isInvincible) {
+      this.isInvincible = false;
+      // Flash to indicate i-frames ended
+      this._flashDodgeEnd();
+    }
 
     // End dodge
     if (this.stateTimer >= TIMINGS.dodgeDuration) {
@@ -406,6 +531,20 @@ export class Player {
 
     // Visual: lower body during dodge
     this.body.position.y = 1.1 - (speedCurve * 0.4);
+    
+    // Subtle blue tint while invincible
+    if (this.isInvincible) {
+      this.body.material.emissive.setHex(0x002233);
+    }
+  }
+  
+  // Visual feedback when i-frames end
+  _flashDodgeEnd() {
+    // Brief white flash to show vulnerability returned
+    this.body.material.emissive.setHex(0x222222);
+    setTimeout(() => {
+      this.body.material.emissive.setHex(0x000000);
+    }, 50);
   }
 
   _startAttack(isHeavy) {
