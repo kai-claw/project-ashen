@@ -170,6 +170,7 @@ gameManager.audioManager = audioManager;
 gameManager.particleManager = particleManager;
 gameManager.hud = hud;
 gameManager.cameraController = cameraController;
+gameManager.itemManager = itemManager;  // For boss reward drops
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);

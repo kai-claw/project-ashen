@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AssetManager } from '../systems/AssetManager.js';
+import { BOSS_ITEMS } from '../systems/ItemManager.js';
 
 const STATES = {
   IDLE: 'idle',
@@ -2103,10 +2104,16 @@ export class Enemy {
     const deathDuration = 5000; // 5 seconds
     const startTime = Date.now();
     const targetModel = this.gltfModel || this.fallbackBody;
+    const dropPosition = this.mesh.position.clone();
     
     // Camera shake
     if (this.gm?.cameraController) {
       this.gm.cameraController.shake(0.4, 3.0);
+    }
+    
+    // Show victory notification immediately
+    if (this.gm?.itemManager) {
+      this.gm.itemManager.showVictoryNotification('THE CRYPT LORD');
     }
     
     const animateDeath = () => {
@@ -2153,10 +2160,38 @@ export class Enemy {
         requestAnimationFrame(animateDeath);
       } else {
         this.mesh.visible = false;
+        
+        // === SPAWN BOSS REWARDS ===
+        this._spawnCryptLordRewards(dropPosition);
       }
     };
     
     animateDeath();
+  }
+  
+  // Spawn Crypt Lord boss rewards
+  _spawnCryptLordRewards(position) {
+    if (!this.gm?.itemManager) return;
+    
+    // Determine which unique item to drop (50/50 chance)
+    const dropWeapon = Math.random() < 0.5;
+    const itemDef = dropWeapon 
+      ? BOSS_ITEMS.CRYPT_LORDS_GREATSWORD 
+      : BOSS_ITEMS.LORD_SOUL_FRAGMENT;
+    
+    // Spawn rewards: 2500 remnants + unique item
+    this.gm.itemManager.spawnBossRewards(
+      position,
+      'crypt-lord',
+      this.config.remnantDrop || 2500,
+      itemDef
+    );
+    
+    // Mark boss as permanently defeated (prevent respawn)
+    this.bossDefeated = true;
+    if (this.enemyManager) {
+      this.enemyManager.markBossDefeated('crypt-lord');
+    }
   }
 
   _fadeOutModel() {

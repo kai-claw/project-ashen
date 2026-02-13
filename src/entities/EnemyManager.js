@@ -12,6 +12,9 @@ export class EnemyManager {
     this.enemies = [];
     this.boss = null;
     this.cryptLord = null;  // Second boss - The Crypt Lord
+    
+    // Track permanently defeated bosses (do not respawn)
+    this.defeatedBosses = new Set();
 
     // Spawn enemies from world data or fallback
     this._spawnEnemies();
@@ -313,10 +316,26 @@ export class EnemyManager {
   
   // Reset all enemies to starting state (called on player respawn)
   resetAll() {
-    this.enemies.forEach(enemy => enemy.respawn());
+    this.enemies.forEach(enemy => {
+      // Don't respawn permanently defeated bosses
+      if (enemy.isBoss && this.defeatedBosses.has(enemy.bossId || 'crypt-lord')) {
+        return;
+      }
+      enemy.respawn();
+    });
     if (this.boss) {
       this.boss.respawn();
     }
+  }
+  
+  // Mark a boss as permanently defeated (no respawn)
+  markBossDefeated(bossId) {
+    this.defeatedBosses.add(bossId);
+  }
+  
+  // Check if a boss is defeated
+  isBossDefeated(bossId) {
+    return this.defeatedBosses.has(bossId);
   }
   
   // Get boss reference for HUD
