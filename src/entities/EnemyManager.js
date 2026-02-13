@@ -58,6 +58,9 @@ export class EnemyManager {
   }
 
   update(delta, player) {
+    // Check for dormant enemy triggers (ambush spawns)
+    this._checkDormantTriggers(player);
+    
     // Update regular enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
@@ -268,6 +271,33 @@ export class EnemyManager {
     }
   }
 
+  /**
+   * Check if player is near any dormant enemies and trigger them
+   */
+  _checkDormantTriggers(player) {
+    const playerPos = player.mesh.position;
+    
+    for (const enemy of this.enemies) {
+      // Check if this dormant enemy should wake up
+      if (enemy.checkTrigger && enemy.checkTrigger(playerPos)) {
+        enemy.wake();
+        
+        // Play ambush sound cue
+        if (this.gm?.audioManager) {
+          this.gm.audioManager.play('ambushReveal', { 
+            position: enemy.mesh.position, 
+            volume: 0.8 
+          });
+        }
+        
+        // Camera reaction for dramatic effect
+        if (this.gm?.cameraController) {
+          this.gm.cameraController.shakeLight();
+        }
+      }
+    }
+  }
+  
   // Reset all enemies to starting state (called on player respawn)
   resetAll() {
     this.enemies.forEach(enemy => enemy.respawn());

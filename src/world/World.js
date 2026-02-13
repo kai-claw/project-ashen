@@ -2235,15 +2235,16 @@ export class World {
       
       // === UNDERGROUND CRYPT (Y=-3) ===
       
-      // Entry Antechamber - single hollow knight patrolling
-      { pos: new THREE.Vector3(0, CRYPT_Y, -25), type: 'HOLLOW_SOLDIER', patrol: true },
+      // Entry Antechamber - single hollow knight patrolling around brazier
+      { pos: new THREE.Vector3(0, CRYPT_Y, -25), type: 'HOLLOW_SOLDIER', behavior: 'patrol', patrolRadius: 4 },
       
-      // Ossuary Chamber - ambush (dormant until player enters)
-      { pos: new THREE.Vector3(-20, CRYPT_Y, -45), type: 'BERSERKER', ambush: true },
-      { pos: new THREE.Vector3(-16, CRYPT_Y, -49), type: 'BERSERKER', ambush: true },
+      // Ossuary Chamber - Bone Revenants dormant in bone piles (ambush enemies)
+      // They rise when player enters the chamber (trigger radius 6)
+      { pos: new THREE.Vector3(-20, CRYPT_Y, -45), type: 'BONE_REVENANT', behavior: 'ambush', triggerRadius: 6 },
+      { pos: new THREE.Vector3(-16, CRYPT_Y, -49), type: 'BONE_REVENANT', behavior: 'ambush', triggerRadius: 6 },
       
-      // Ritual Chamber - Elite Crypt Guardian (mini-boss)
-      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'SENTINEL', elite: true },
+      // Ritual Chamber - Crypt Guardian elite (mini-boss guarding the ritual circle)
+      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'CRYPT_GUARDIAN', behavior: 'guard' },
     ];
   }
   
@@ -2293,19 +2294,19 @@ export class World {
     ];
   }
   
-  // Get crypt-specific spawns for underground level
+  // Get crypt-specific spawns for underground level (for reference/future use)
   getCryptEnemySpawns() {
     const CRYPT_Y = -3;
     return [
-      // Entry Antechamber - patrol guard
+      // Entry Antechamber - patrol guard around brazier
       { pos: new THREE.Vector3(0, CRYPT_Y, -25), type: 'HOLLOW_SOLDIER', behavior: 'patrol', patrolRadius: 4 },
       
-      // Ossuary Chamber - ambush enemies (dormant in bone piles)
-      { pos: new THREE.Vector3(-20, CRYPT_Y, -45), type: 'BERSERKER', behavior: 'ambush', triggerZone: 'ossuary' },
-      { pos: new THREE.Vector3(-16, CRYPT_Y, -49), type: 'BERSERKER', behavior: 'ambush', triggerZone: 'ossuary' },
+      // Ossuary Chamber - Bone Revenants rise from bone piles when player enters
+      { pos: new THREE.Vector3(-20, CRYPT_Y, -45), type: 'BONE_REVENANT', behavior: 'ambush', triggerRadius: 6 },
+      { pos: new THREE.Vector3(-16, CRYPT_Y, -49), type: 'BONE_REVENANT', behavior: 'ambush', triggerRadius: 6 },
       
-      // Ritual Chamber - elite guardian
-      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'SENTINEL', behavior: 'guard', elite: true, name: 'Crypt Guardian' },
+      // Ritual Chamber - Crypt Guardian elite (mini-boss)
+      { pos: new THREE.Vector3(0, CRYPT_Y, -55), type: 'CRYPT_GUARDIAN', behavior: 'guard' },
     ];
   }
 }

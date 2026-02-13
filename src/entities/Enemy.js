@@ -10,6 +10,8 @@ const STATES = {
   ATTACK: 'attack',
   STAGGERED: 'staggered',
   DEAD: 'dead',
+  DORMANT: 'dormant',  // Ambush enemies waiting to be triggered
+  RISING: 'rising',    // Ambush enemies emerging from sarcophagus
 };
 
 // Animation name mapping for robot_expressive.glb
@@ -22,6 +24,8 @@ const ENEMY_ANIM_MAP = {
   [STATES.ATTACK]: 'Punch',
   [STATES.STAGGERED]: 'No',
   [STATES.DEAD]: 'Death',
+  [STATES.DORMANT]: 'Idle',   // Hidden/inactive
+  [STATES.RISING]: 'ThumbsUp', // Rising from sarcophagus (reuse standing animation)
 };
 
 // Enemy type presets with model info
@@ -100,6 +104,62 @@ export const ENEMY_TYPES = {
     modelTint: 0x3a3a5a, // Blue-gray armored tint
     animSpeedMult: 0.8,
   },
+  
+  // Elite crypt enemy - mini-boss guarding the ritual chamber
+  CRYPT_GUARDIAN: {
+    name: 'Crypt Guardian',
+    health: 200,           // Double normal sentinel
+    damage: 40,            // Powerful hits
+    postureDmg: 30,        // Heavy posture damage
+    moveSpeed: 1.8,        // Slightly faster than sentinel
+    detectionRange: 12,    // Larger aggro range
+    attackRange: 3.0,      // Long reach
+    attackCooldown: 2.0,   // Faster recovery
+    attackWindup: 0.6,     // Faster windup
+    attackDuration: 0.4,   // Longer active frames
+    remnantDrop: 500,      // Big reward
+    patrolRadius: 3,
+    bodyColor: 0x1a1a2a,   // Dark blue-black
+    eyeColor: 0xff2222,    // Menacing red eyes
+    canChainAttacks: true, // Can combo
+    maxChainAttacks: 2,
+    maxPosture: 150,       // Hard to stagger
+    hasShield: false,      // No shield, pure aggression
+    isElite: true,         // Flag for special behaviors
+    // GLTF settings
+    modelPath: 'assets/models/soldier.glb',
+    modelScale: 1.2,       // Larger than normal
+    modelTint: 0x2a1a3a,   // Purple-black undead tint
+    animSpeedMult: 0.9,
+  },
+  
+  // Bone Revenant - fast ambush enemy from sarcophagi
+  BONE_REVENANT: {
+    name: 'Bone Revenant',
+    health: 40,
+    damage: 18,
+    postureDmg: 12,
+    moveSpeed: 3.5,        // Fast
+    detectionRange: 8,
+    attackRange: 2.0,
+    attackCooldown: 0.9,   // Quick attacks
+    attackWindup: 0.25,    // Fast windup
+    attackDuration: 0.15,
+    remnantDrop: 70,
+    patrolRadius: 4,
+    bodyColor: 0x8a7a5a,   // Bone color
+    eyeColor: 0x44ff44,    // Eerie green glow
+    canChainAttacks: true,
+    maxChainAttacks: 2,
+    maxPosture: 45,
+    hasShield: false,
+    isAmbush: true,        // Flag for dormant start
+    // GLTF settings
+    modelPath: 'assets/models/robot_expressive.glb',
+    modelScale: 0.45,      // Slightly smaller
+    modelTint: 0x8a7a5a,   // Bone-colored tint
+    animSpeedMult: 1.4,    // Fast animations
+  },
 };
 
 export class Enemy {
@@ -118,7 +178,12 @@ export class Enemy {
     this.health = this.maxHealth;
     this.maxPosture = this.config.maxPosture || 60;
     this.posture = 0;
-    this.state = STATES.IDLE;
+    
+    // Check if this enemy should start dormant (ambush behavior)
+    this.isDormant = this.config.behavior === 'ambush' || this.config.isAmbush;
+    this.triggerZone = this.config.triggerZone || null;
+    this.triggerRadius = this.config.triggerRadius || 6; // Default trigger distance
+    this.state = this.isDormant ? STATES.DORMANT : STATES.IDLE;
     this.stateTimer = 0;
     this.hitThisSwing = false;
     this.activeAttack = null;
@@ -152,9 +217,46 @@ export class Enemy {
     this._createHealthBar(2.1);
 
     scene.add(this.mesh);
+    
+    // Hide dormant enemies (ambush behavior)
+    if (this.isDormant) {
+      this.mesh.visible = false;
+    }
 
     // Load GLTF model asynchronously
     this._loadGLTFModel();
+  }
+  
+  /**
+   * Wake up a dormant enemy (called by trigger system)
+   */
+  wake() {
+    if (this.state !== STATES.DORMANT) return;
+    
+    this.mesh.visible = true;
+    this.isDormant = false;
+    this._changeState(STATES.RISING);
+    
+    // Play rising sound if available
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('ambush', { 
+        position: this.mesh.position, 
+        volume: 0.7 
+      });
+    }
+  }
+  
+  /**
+   * Check if player is in trigger range for dormant enemies
+   */
+  checkTrigger(playerPos) {
+    if (this.state !== STATES.DORMANT) return false;
+    
+    const dx = playerPos.x - this.mesh.position.x;
+    const dz = playerPos.z - this.mesh.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    
+    return dist < this.triggerRadius;
   }
 
   _createFallbackMesh() {
@@ -473,6 +575,32 @@ export class Enemy {
           this._changeState(distToPlayer < this.config.detectionRange ? STATES.CHASE : STATES.IDLE);
         }
         break;
+        
+      case STATES.DORMANT:
+        // Dormant enemies don't do anything until triggered
+        // Trigger check happens in EnemyManager
+        break;
+        
+      case STATES.RISING:
+        // Rising from sarcophagus - animate emergence
+        if (this.stateTimer < 0.5) {
+          // First half: rising motion
+          const targetModel = this.gltfModel || this.fallbackBody;
+          if (targetModel) {
+            // Rise up from below
+            const riseProgress = this.stateTimer / 0.5;
+            targetModel.position.y = THREE.MathUtils.lerp(-0.8, 0, riseProgress);
+          }
+        } else if (this.stateTimer >= 0.8) {
+          // Emergence complete - start chasing
+          const targetModel = this.gltfModel || this.fallbackBody;
+          if (targetModel) targetModel.position.y = 0;
+          this.healthBarGroup.visible = true;
+          this._changeState(STATES.CHASE);
+        }
+        // Face player while rising
+        this._faceTarget(player.mesh.position, delta * 2);
+        break;
     }
 
     // Posture regen
@@ -760,7 +888,6 @@ export class Enemy {
   respawn() {
     this.health = this.maxHealth;
     this.posture = 0;
-    this.state = STATES.IDLE;
     this.isDead = false;
     this.stateTimer = 0;
     this.chainAttackCount = 0;
@@ -768,11 +895,17 @@ export class Enemy {
     this.isBlocking = false;
     this.mesh.position.copy(this.spawnPos);
     
+    // Check if this enemy should respawn dormant (ambush behavior)
+    const shouldBeDormant = this.config.behavior === 'ambush' || this.config.isAmbush;
+    this.isDormant = shouldBeDormant;
+    this.state = shouldBeDormant ? STATES.DORMANT : STATES.IDLE;
+    
     // Reset model
     const targetModel = this.gltfModel || this.fallbackBody;
     if (targetModel) {
       targetModel.rotation.x = 0;
       targetModel.rotation.z = 0;
+      targetModel.position.y = 0;
       targetModel.traverse((child) => {
         if (child.isMesh && child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
@@ -784,7 +917,8 @@ export class Enemy {
       });
     }
     
-    this.mesh.visible = true;
+    // Dormant enemies stay hidden until triggered again
+    this.mesh.visible = !shouldBeDormant;
     this.healthBarGroup.visible = false;
     this.breakIndicator.visible = false;
     this.healthFill.scale.x = 1;
@@ -792,7 +926,7 @@ export class Enemy {
     this.postureFill.scale.x = 0;
     this.postureFill.position.x = 0;
     
-    this._playAnimation(STATES.IDLE, { loop: true });
+    this._playAnimation(shouldBeDormant ? STATES.DORMANT : STATES.IDLE, { loop: true });
   }
 
   _moveToward(target, speed, delta) {
