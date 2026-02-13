@@ -9,6 +9,7 @@ import { HUD } from './ui/HUD.js';
 import { CrucibleUI } from './ui/CrucibleUI.js';
 import { CameraController } from './systems/CameraController.js';
 import { AudioManager } from './systems/AudioManager.js';
+import { ParticleManager } from './systems/ParticleManager.js';
 
 // --- Core Setup ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -30,6 +31,7 @@ const clock = new THREE.Clock();
 const gameManager = new GameManager();
 const inputManager = new InputManager(renderer.domElement);
 const audioManager = new AudioManager(camera);
+const particleManager = new ParticleManager(scene);
 const hud = new HUD(gameManager);
 
 // Initialize audio on first user interaction
@@ -57,13 +59,14 @@ itemManager.initItems(world.getItemSpawns());
 const player = new Player(scene, gameManager, inputManager);
 const cameraController = new CameraController(camera, player.mesh, inputManager);
 player.setCameraController(cameraController); // Wire camera controller for movement direction
-const enemyManager = new EnemyManager(scene, gameManager, player, world);
+const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager);
 
 // --- Wire Up GameManager ---
 gameManager.setCheckpoint(world.bonfirePosition.clone());
 gameManager.setEntities(player, enemyManager, scene);
 gameManager.bonfirePosition = world.bonfirePosition;
 gameManager.audioManager = audioManager;
+gameManager.particleManager = particleManager;
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -92,6 +95,7 @@ function animate() {
   crucibleUI.update();
   gameManager.update(delta);
   audioManager.updateListener();
+  particleManager.update(delta);
 
   // Check for bloodstain collection
   gameManager.collectBloodstain();
@@ -145,3 +149,4 @@ window.player = player;
 window.world = world;
 window.itemManager = itemManager;
 window.audioManager = audioManager;
+window.particleManager = particleManager;

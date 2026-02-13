@@ -265,6 +265,12 @@ export class Player {
     this.facingAngle = camYaw;
     this.body.rotation.y = camYaw;
     
+    // Spawn slash trail particle effect
+    if (this.gm.particleManager) {
+      const attackDir = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+      this.gm.particleManager.spawnSlashTrail(this.mesh.position.clone(), attackDir, isHeavy);
+    }
+    
     this._changeState(isHeavy ? STATES.HEAVY_ATTACKING : STATES.ATTACKING);
   }
 

@@ -3,11 +3,12 @@ import { Enemy, ENEMY_TYPES } from './Enemy.js';
 import { Boss } from './Boss.js';
 
 export class EnemyManager {
-  constructor(scene, gameManager, player, world = null) {
+  constructor(scene, gameManager, player, world = null, particleManager = null) {
     this.scene = scene;
     this.gm = gameManager;
     this.player = player;
     this.world = world;
+    this.particleManager = particleManager;
     this.enemies = [];
     this.boss = null;
 
@@ -75,9 +76,25 @@ export class EnemyManager {
           player.hitThisSwing = true;
           console.log(`[COMBAT] Player hit ${enemy.config.name} for ${player.activeAttack.damage} damage! Result: ${result}`);
 
+          // Spawn hit particles
+          if (this.particleManager) {
+            const hitPos = enemy.mesh.position.clone();
+            const hitDir = enemy.mesh.position.clone().sub(player.mesh.position).normalize();
+            this.particleManager.spawnHitSparks(hitPos, 8, player.activeAttack.isHeavy);
+            this.particleManager.spawnBlood(hitPos, hitDir, Math.ceil(player.activeAttack.damage / 5));
+            
+            if (result === 'posture_broken') {
+              this.particleManager.spawnPostureBreak(hitPos);
+            }
+          }
+
           if (result === 'died') {
             this.gm.addRemnant(enemy.config.remnantDrop);
             console.log(`[COMBAT] ${enemy.config.name} died! Dropped ${enemy.config.remnantDrop} remnant`);
+            // Spawn death particles
+            if (this.particleManager) {
+              this.particleManager.spawnDeathBurst(enemy.mesh.position.clone());
+            }
             // Respawn after delay
             setTimeout(() => {
               enemy.respawn();
@@ -101,6 +118,21 @@ export class EnemyManager {
           enemy.hitThisSwing = true;
           player.flashDamage();
           console.log(`[COMBAT] ${enemy.config.name} hit player for ${enemy.activeAttack.damage} damage! Result: ${result}, HP: ${this.gm.health}/${this.gm.maxHealth}`);
+
+          // Spawn hit particles
+          if (this.particleManager) {
+            const hitPos = player.mesh.position.clone();
+            const hitDir = player.mesh.position.clone().sub(enemy.mesh.position).normalize();
+            if (player.isBlocking && result !== 'guard_broken') {
+              this.particleManager.spawnBlockSparks(hitPos);
+            } else {
+              this.particleManager.spawnHitSparks(hitPos, 6, false);
+              this.particleManager.spawnBlood(hitPos, hitDir, Math.ceil(enemy.activeAttack.damage / 5));
+            }
+            if (result === 'guard_broken' || result === 'posture_broken') {
+              this.particleManager.spawnPostureBreak(hitPos);
+            }
+          }
 
           if (result === 'died') {
             console.log('[COMBAT] Player died!');
@@ -130,6 +162,23 @@ export class EnemyManager {
           );
           player.hitThisSwing = true;
           console.log(`[BOSS] Player hit ${this.boss.name} for ${player.activeAttack.damage} damage! Result: ${result}`);
+          
+          // Spawn boss hit particles (more dramatic)
+          if (this.particleManager) {
+            const hitPos = this.boss.mesh.position.clone();
+            const hitDir = this.boss.mesh.position.clone().sub(player.mesh.position).normalize();
+            this.particleManager.spawnHitSparks(hitPos, 12, player.activeAttack.isHeavy);
+            this.particleManager.spawnBlood(hitPos, hitDir, Math.ceil(player.activeAttack.damage / 3));
+            
+            if (result === 'posture_broken') {
+              this.particleManager.spawnPostureBreak(hitPos);
+            }
+            if (result === 'died') {
+              // Epic death burst for boss
+              this.particleManager.spawnDeathBurst(hitPos);
+              this.particleManager.spawnDeathBurst(hitPos); // Double for boss
+            }
+          }
         }
       }
       
@@ -148,6 +197,22 @@ export class EnemyManager {
           this.boss.hitThisSwing = true;
           player.flashDamage();
           console.log(`[BOSS] ${this.boss.name} hit player for ${this.boss.activeAttack.damage} damage! Result: ${result}`);
+          
+          // Spawn hit particles (boss hits are more dramatic)
+          if (this.particleManager) {
+            const hitPos = player.mesh.position.clone();
+            const hitDir = player.mesh.position.clone().sub(this.boss.mesh.position).normalize();
+            if (player.isBlocking && result !== 'guard_broken') {
+              this.particleManager.spawnBlockSparks(hitPos);
+              this.particleManager.spawnBlockSparks(hitPos); // Extra sparks for boss block
+            } else {
+              this.particleManager.spawnHitSparks(hitPos, 10, true);
+              this.particleManager.spawnBlood(hitPos, hitDir, Math.ceil(this.boss.activeAttack.damage / 4));
+            }
+            if (result === 'guard_broken' || result === 'posture_broken') {
+              this.particleManager.spawnPostureBreak(hitPos);
+            }
+          }
           
           if (result === 'died') {
             console.log('[BOSS] Player died to boss!');
