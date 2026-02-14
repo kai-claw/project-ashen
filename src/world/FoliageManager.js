@@ -1,80 +1,238 @@
 import * as THREE from 'three';
 
 /**
- * FoliageManager - Procedural vegetation placement
- * Phase 12: Open World Foundation
+ * FoliageManager - Procedural vegetation with dynamic chunk loading
+ * Phase 12/15-HOTFIX: Infinite world foliage generation
  * 
- * Places trees and grass using instanced meshes for performance.
- * Respects terrain slope, biome density, and castle exclusion zone.
+ * Places trees, grass, and bushes per-chunk as player explores.
+ * Uses seeded random for consistent vegetation across sessions.
  */
 export class FoliageManager {
   constructor(scene, terrain) {
     this.scene = scene;
     this.terrain = terrain;
     
+    // Chunk configuration (match terrain)
+    this.chunkSize = 64;
+    this.loadDistance = 3;      // Load foliage within 3 chunks
+    this.unloadDistance = 5;    // Unload beyond 5 chunks
+    
     // Tree configuration
-    this.treeCount = 500;           // Total trees to place
+    this.treesPerChunk = 15;        // Trees per chunk (density varies by biome)
     this.treeMinDistance = 4;       // Minimum spacing between trees
-    this.treeMaxSlope = 0.4;        // Max slope for tree placement (0=flat, 1=45deg)
+    this.treeMaxSlope = 0.4;        // Max slope for tree placement
     this.castleExclusionRadius = 35; // No trees near castle
-    this.trunkCollisionRadius = 0.4; // Collision radius for tree trunks
+    this.trunkCollisionRadius = 0.4;
     
-    // Grass configuration
-    this.grassPatchCount = 2000;    // Grass patches
-    this.bushCount = 200;           // Bush clusters
+    // Grass/bush config
+    this.grassPerChunk = 100;
+    this.bushesPerChunk = 12;
     
-    // Storage
-    this.trees = [];                // Tree position data for collision
-    this.treeColliders = [];        // Collision data
-    this.instancedTrunks = null;    // Instanced trunk mesh
-    this.instancedFoliage = null;   // Instanced foliage mesh
-    this.instancedPines = null;     // Pine tree foliage (cones)
-    this.grassMesh = null;
-    this.bushMesh = null;
+    // Chunk storage
+    this.chunks = new Map(); // key = "cx,cz", value = { trees: [], meshes: [] }
     
-    // Generate vegetation
-    this._generateTrees();
-    this._generateGrass();
-    this._generateBushes();
+    // Global tree colliders (for collision detection)
+    this.treeColliders = [];
     
-    console.log(`[FoliageManager] Placed ${this.trees.length} trees, ${this.grassPatchCount} grass patches, ${this.bushCount} bushes`);
+    // Shared geometries and materials (reused across chunks)
+    this._createSharedAssets();
+    
+    // Track player position
+    this.lastPlayerChunkX = null;
+    this.lastPlayerChunkZ = null;
+    
+    // Initial generation around origin
+    this.update(0, 0);
+    
+    console.log(`[FoliageManager] Initialized with chunk-based generation`);
   }
   
-  // ========================================
-  // TREE GENERATION
-  // ========================================
-  
-  _generateTrees() {
-    // Collect valid tree positions
-    const positions = [];
-    const maxAttempts = this.treeCount * 5;
-    let attempts = 0;
+  /**
+   * Create shared geometries and materials
+   */
+  _createSharedAssets() {
+    // Oak tree geometries
+    this.oakTrunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 3, 6);
+    this.oakTrunkGeo.translate(0, 1.5, 0);
     
-    while (positions.length < this.treeCount && attempts < maxAttempts) {
-      attempts++;
+    this.oakFoliageGeo = new THREE.IcosahedronGeometry(1.8, 1);
+    this.oakFoliageGeo.translate(0, 4.2, 0);
+    
+    // Pine tree geometries
+    this.pineTrunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 4, 6);
+    this.pineTrunkGeo.translate(0, 2, 0);
+    
+    this.pineFoliageGeo = new THREE.ConeGeometry(1.5, 3, 6);
+    this.pineFoliageGeo.translate(0, 5.5, 0);
+    
+    // Grass geometry
+    this.grassGeo = new THREE.PlaneGeometry(0.3, 0.5);
+    this.grassGeo.translate(0, 0.25, 0);
+    
+    // Bush geometry
+    this.bushGeo = new THREE.IcosahedronGeometry(0.5, 1);
+    this.bushGeo.scale(1, 0.7, 1);
+    this.bushGeo.translate(0, 0.35, 0);
+    
+    // Materials
+    this.oakTrunkMat = new THREE.MeshStandardMaterial({
+      color: 0x4a3525,
+      roughness: 0.95,
+    });
+    
+    this.oakFoliageMat = new THREE.MeshStandardMaterial({
+      color: 0x2d5a1e,
+      roughness: 0.9,
+    });
+    
+    this.pineTrunkMat = new THREE.MeshStandardMaterial({
+      color: 0x3a2a1a,
+      roughness: 0.95,
+    });
+    
+    this.pineFoliageMat = new THREE.MeshStandardMaterial({
+      color: 0x1a4a18,
+      roughness: 0.85,
+    });
+    
+    this.grassMat = new THREE.MeshStandardMaterial({
+      color: 0x4a7a30,
+      roughness: 0.9,
+      side: THREE.DoubleSide,
+      alphaTest: 0.5,
+    });
+    
+    this.bushMat = new THREE.MeshStandardMaterial({
+      color: 0x3a6a28,
+      roughness: 0.9,
+    });
+  }
+  
+  /**
+   * Seeded random number generator for consistent world generation
+   */
+  _seededRandom(seed) {
+    const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  
+  /**
+   * Get chunk key for Map storage
+   */
+  _chunkKey(cx, cz) {
+    return `${cx},${cz}`;
+  }
+  
+  /**
+   * Convert world position to chunk coordinates
+   */
+  _worldToChunk(x, z) {
+    return {
+      cx: Math.floor(x / this.chunkSize),
+      cz: Math.floor(z / this.chunkSize),
+    };
+  }
+  
+  /**
+   * Update foliage based on player position - call every frame
+   */
+  update(playerX, playerZ) {
+    const { cx, cz } = this._worldToChunk(playerX, playerZ);
+    
+    // Only update if player moved to different chunk
+    if (cx === this.lastPlayerChunkX && cz === this.lastPlayerChunkZ) {
+      return;
+    }
+    
+    this.lastPlayerChunkX = cx;
+    this.lastPlayerChunkZ = cz;
+    
+    // Calculate needed chunks
+    const neededChunks = new Set();
+    
+    for (let dx = -this.loadDistance; dx <= this.loadDistance; dx++) {
+      for (let dz = -this.loadDistance; dz <= this.loadDistance; dz++) {
+        const chunkX = cx + dx;
+        const chunkZ = cz + dz;
+        const key = this._chunkKey(chunkX, chunkZ);
+        neededChunks.add(key);
+        
+        // Load if not already loaded
+        if (!this.chunks.has(key)) {
+          this._loadChunk(chunkX, chunkZ);
+        }
+      }
+    }
+    
+    // Unload distant chunks
+    const toUnload = [];
+    for (const [key] of this.chunks) {
+      if (!neededChunks.has(key)) {
+        const [chunkX, chunkZ] = key.split(',').map(Number);
+        const dx = Math.abs(chunkX - cx);
+        const dz = Math.abs(chunkZ - cz);
+        if (dx > this.unloadDistance || dz > this.unloadDistance) {
+          toUnload.push(key);
+        }
+      }
+    }
+    
+    for (const key of toUnload) {
+      this._unloadChunk(key);
+    }
+  }
+  
+  /**
+   * Generate foliage for a specific chunk
+   */
+  _loadChunk(cx, cz) {
+    const key = this._chunkKey(cx, cz);
+    if (this.chunks.has(key)) return;
+    
+    const chunkData = {
+      trees: [],
+      colliders: [],
+      meshes: [],
+    };
+    
+    const worldOffsetX = cx * this.chunkSize;
+    const worldOffsetZ = cz * this.chunkSize;
+    
+    // Generate seed for this chunk
+    const chunkSeed = cx * 73856093 + cz * 19349663;
+    
+    // === GENERATE TREES ===
+    const treePositions = [];
+    const attempts = this.treesPerChunk * 5;
+    
+    for (let i = 0; i < attempts && treePositions.length < this.treesPerChunk; i++) {
+      // Seeded random position within chunk
+      const rand1 = this._seededRandom(chunkSeed + i * 3);
+      const rand2 = this._seededRandom(chunkSeed + i * 3 + 1);
       
-      // Random position within terrain bounds (offset from center)
-      const halfSize = this.terrain.size / 2;
-      const x = (Math.random() - 0.5) * (this.terrain.size - 20);
-      const z = (Math.random() - 0.5) * (this.terrain.size - 20);
+      const localX = rand1 * this.chunkSize;
+      const localZ = rand2 * this.chunkSize;
+      const worldX = worldOffsetX + localX;
+      const worldZ = worldOffsetZ + localZ;
       
-      // Check castle exclusion
-      const distFromOrigin = Math.sqrt(x * x + z * z);
+      // Castle exclusion
+      const distFromOrigin = Math.sqrt(worldX * worldX + worldZ * worldZ);
       if (distFromOrigin < this.castleExclusionRadius) continue;
       
-      // Check terrain slope
-      const slope = this.terrain.getTerrainSlope(x, z);
+      // Slope check
+      const slope = this.terrain.getTerrainSlope(worldX, worldZ);
       if (slope > this.treeMaxSlope) continue;
       
-      // Check biome density
-      const biomeParams = this.terrain.getBiomeParams(x, z);
-      if (Math.random() > biomeParams.treeDensity * 3) continue; // Scaled probability
+      // Biome density check
+      const biomeParams = this.terrain.getBiomeParams(worldX, worldZ);
+      const densityRand = this._seededRandom(chunkSeed + i * 3 + 2);
+      if (densityRand > biomeParams.treeDensity * 3) continue;
       
-      // Check minimum distance from other trees
+      // Minimum distance from other trees in this chunk
       let tooClose = false;
-      for (const pos of positions) {
-        const dx = x - pos.x;
-        const dz = z - pos.z;
+      for (const pos of treePositions) {
+        const dx = worldX - pos.x;
+        const dz = worldZ - pos.z;
         if (dx * dx + dz * dz < this.treeMinDistance * this.treeMinDistance) {
           tooClose = true;
           break;
@@ -82,252 +240,253 @@ export class FoliageManager {
       }
       if (tooClose) continue;
       
-      // Valid position - get terrain height
-      const y = this.terrain.getTerrainHeight(x, z);
+      // Valid position
+      const worldY = this.terrain.getTerrainHeight(worldX, worldZ);
+      const biome = this.terrain.getBiome(worldX, worldZ);
+      const isPine = (biome === 'dense_woods' || biome === 'dark_frontier') && 
+                     this._seededRandom(chunkSeed + i * 7) > 0.3;
       
-      // Tree type based on biome
-      const biome = this.terrain.getBiome(x, z);
-      const isPine = (biome === 'dense_woods' || biome === 'dark_frontier') && Math.random() > 0.3;
+      const scale = 0.7 + this._seededRandom(chunkSeed + i * 5) * 0.6;
+      const rotation = this._seededRandom(chunkSeed + i * 11) * Math.PI * 2;
       
-      // Random scale variation
-      const scale = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
-      const rotation = Math.random() * Math.PI * 2;
-      
-      positions.push({ x, y, z, scale, rotation, isPine });
+      treePositions.push({ x: worldX, y: worldY, z: worldZ, scale, rotation, isPine });
     }
     
-    this.trees = positions;
+    // Create tree meshes
+    if (treePositions.length > 0) {
+      this._createTreeMeshes(chunkData, treePositions);
+    }
     
-    // Create instanced meshes
-    this._createTreeInstances();
+    // === GENERATE GRASS ===
+    this._createGrassMesh(chunkData, cx, cz, chunkSeed);
+    
+    // === GENERATE BUSHES ===
+    this._createBushMesh(chunkData, cx, cz, chunkSeed + 999);
+    
+    // Store chunk data
+    this.chunks.set(key, chunkData);
+    
+    // Add colliders to global list
+    this.treeColliders.push(...chunkData.colliders);
   }
   
-  _createTreeInstances() {
-    // Separate oak and pine trees
-    const oakTrees = this.trees.filter(t => !t.isPine);
-    const pineTrees = this.trees.filter(t => t.isPine);
+  /**
+   * Create tree instance meshes for a chunk
+   */
+  _createTreeMeshes(chunkData, positions) {
+    const oakTrees = positions.filter(t => !t.isPine);
+    const pineTrees = positions.filter(t => t.isPine);
     
-    // === OAK TREES ===
+    const matrix = new THREE.Matrix4();
+    
+    // Oak trees
     if (oakTrees.length > 0) {
-      // Trunk geometry (tapered cylinder)
-      const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 3, 6);
-      trunkGeo.translate(0, 1.5, 0); // Origin at base
+      const oakTrunks = new THREE.InstancedMesh(this.oakTrunkGeo, this.oakTrunkMat, oakTrees.length);
+      const oakFoliage = new THREE.InstancedMesh(this.oakFoliageGeo, this.oakFoliageMat, oakTrees.length);
       
-      const trunkMat = new THREE.MeshStandardMaterial({
-        color: 0x4a3525,
-        roughness: 0.95,
-      });
+      oakTrunks.castShadow = true;
+      oakTrunks.receiveShadow = true;
+      oakFoliage.castShadow = true;
+      oakFoliage.receiveShadow = true;
       
-      this.instancedTrunks = new THREE.InstancedMesh(trunkGeo, trunkMat, oakTrees.length);
-      this.instancedTrunks.castShadow = true;
-      this.instancedTrunks.receiveShadow = true;
-      
-      // Foliage geometry (sphere cluster)
-      const foliageGeo = new THREE.IcosahedronGeometry(1.8, 1);
-      foliageGeo.translate(0, 4.2, 0);
-      
-      const foliageMat = new THREE.MeshStandardMaterial({
-        color: 0x2d5a1e,
-        roughness: 0.9,
-      });
-      
-      this.instancedFoliage = new THREE.InstancedMesh(foliageGeo, foliageMat, oakTrees.length);
-      this.instancedFoliage.castShadow = true;
-      this.instancedFoliage.receiveShadow = true;
-      
-      // Set instance matrices
-      const matrix = new THREE.Matrix4();
       oakTrees.forEach((tree, i) => {
         matrix.makeRotationY(tree.rotation);
         matrix.scale(new THREE.Vector3(tree.scale, tree.scale, tree.scale));
         matrix.setPosition(tree.x, tree.y, tree.z);
         
-        this.instancedTrunks.setMatrixAt(i, matrix);
-        this.instancedFoliage.setMatrixAt(i, matrix);
+        oakTrunks.setMatrixAt(i, matrix);
+        oakFoliage.setMatrixAt(i, matrix);
         
-        // Store collision data
-        this.treeColliders.push({
+        chunkData.colliders.push({
           x: tree.x,
           z: tree.z,
           radius: this.trunkCollisionRadius * tree.scale,
           height: 4 * tree.scale,
           baseY: tree.y,
+          chunkKey: null, // Will be set by caller
         });
       });
       
-      this.instancedTrunks.instanceMatrix.needsUpdate = true;
-      this.instancedFoliage.instanceMatrix.needsUpdate = true;
+      oakTrunks.instanceMatrix.needsUpdate = true;
+      oakFoliage.instanceMatrix.needsUpdate = true;
       
-      this.scene.add(this.instancedTrunks);
-      this.scene.add(this.instancedFoliage);
+      this.scene.add(oakTrunks);
+      this.scene.add(oakFoliage);
+      
+      chunkData.meshes.push(oakTrunks, oakFoliage);
     }
     
-    // === PINE TREES ===
+    // Pine trees
     if (pineTrees.length > 0) {
-      // Pine trunk (taller, thinner)
-      const pinetrunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 4, 6);
-      pinetrunkGeo.translate(0, 2, 0);
+      const pineTrunks = new THREE.InstancedMesh(this.pineTrunkGeo, this.pineTrunkMat, pineTrees.length);
+      const pineFoliage = new THREE.InstancedMesh(this.pineFoliageGeo, this.pineFoliageMat, pineTrees.length);
       
-      const pinetrunkMat = new THREE.MeshStandardMaterial({
-        color: 0x3a2a1a,
-        roughness: 0.95,
-      });
+      pineTrunks.castShadow = true;
+      pineTrunks.receiveShadow = true;
+      pineFoliage.castShadow = true;
+      pineFoliage.receiveShadow = true;
       
-      const instancedPineTrunks = new THREE.InstancedMesh(pinetrunkGeo, pinetrunkMat, pineTrees.length);
-      instancedPineTrunks.castShadow = true;
-      instancedPineTrunks.receiveShadow = true;
-      
-      // Pine foliage (stacked cones)
-      const pineFoliageGeo = new THREE.ConeGeometry(1.5, 3, 6);
-      pineFoliageGeo.translate(0, 5.5, 0);
-      
-      const pineFoliageMat = new THREE.MeshStandardMaterial({
-        color: 0x1a4a18,
-        roughness: 0.85,
-      });
-      
-      this.instancedPines = new THREE.InstancedMesh(pineFoliageGeo, pineFoliageMat, pineTrees.length);
-      this.instancedPines.castShadow = true;
-      this.instancedPines.receiveShadow = true;
-      
-      const matrix = new THREE.Matrix4();
       pineTrees.forEach((tree, i) => {
         matrix.makeRotationY(tree.rotation);
         matrix.scale(new THREE.Vector3(tree.scale, tree.scale, tree.scale));
         matrix.setPosition(tree.x, tree.y, tree.z);
         
-        instancedPineTrunks.setMatrixAt(i, matrix);
-        this.instancedPines.setMatrixAt(i, matrix);
+        pineTrunks.setMatrixAt(i, matrix);
+        pineFoliage.setMatrixAt(i, matrix);
         
-        this.treeColliders.push({
+        chunkData.colliders.push({
           x: tree.x,
           z: tree.z,
-          radius: this.trunkCollisionRadius * tree.scale * 0.9, // Pines slightly thinner
+          radius: this.trunkCollisionRadius * tree.scale * 0.9,
           height: 5 * tree.scale,
           baseY: tree.y,
         });
       });
       
-      instancedPineTrunks.instanceMatrix.needsUpdate = true;
-      this.instancedPines.instanceMatrix.needsUpdate = true;
+      pineTrunks.instanceMatrix.needsUpdate = true;
+      pineFoliage.instanceMatrix.needsUpdate = true;
       
-      this.scene.add(instancedPineTrunks);
-      this.scene.add(this.instancedPines);
+      this.scene.add(pineTrunks);
+      this.scene.add(pineFoliage);
+      
+      chunkData.meshes.push(pineTrunks, pineFoliage);
     }
+    
+    chunkData.trees = positions;
   }
   
-  // ========================================
-  // GRASS GENERATION
-  // ========================================
-  
-  _generateGrass() {
-    // Grass as instanced small quads/tufts
-    const grassGeo = new THREE.PlaneGeometry(0.3, 0.5);
-    grassGeo.translate(0, 0.25, 0);
+  /**
+   * Create grass instances for a chunk
+   */
+  _createGrassMesh(chunkData, cx, cz, seed) {
+    const worldOffsetX = cx * this.chunkSize;
+    const worldOffsetZ = cz * this.chunkSize;
     
-    const grassMat = new THREE.MeshStandardMaterial({
-      color: 0x4a7a30,
-      roughness: 0.9,
-      side: THREE.DoubleSide,
-      alphaTest: 0.5,
-    });
-    
-    this.grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, this.grassPatchCount * 3);
-    this.grassMesh.receiveShadow = true;
+    const grassMesh = new THREE.InstancedMesh(this.grassGeo, this.grassMat, this.grassPerChunk * 3);
+    grassMesh.receiveShadow = true;
     
     const matrix = new THREE.Matrix4();
     let instanceIndex = 0;
     
-    for (let i = 0; i < this.grassPatchCount; i++) {
-      const x = (Math.random() - 0.5) * this.terrain.size * 0.9;
-      const z = (Math.random() - 0.5) * this.terrain.size * 0.9;
+    for (let i = 0; i < this.grassPerChunk; i++) {
+      const rand1 = this._seededRandom(seed + i * 2);
+      const rand2 = this._seededRandom(seed + i * 2 + 1);
+      
+      const worldX = worldOffsetX + rand1 * this.chunkSize;
+      const worldZ = worldOffsetZ + rand2 * this.chunkSize;
       
       // Skip castle area
-      if (x * x + z * z < this.castleExclusionRadius * this.castleExclusionRadius) continue;
+      if (worldX * worldX + worldZ * worldZ < this.castleExclusionRadius * this.castleExclusionRadius) continue;
       
       // Check biome grass density
-      const biomeParams = this.terrain.getBiomeParams(x, z);
-      if (Math.random() > biomeParams.grassDensity) continue;
+      const biomeParams = this.terrain.getBiomeParams(worldX, worldZ);
+      const densityRand = this._seededRandom(seed + i * 3);
+      if (densityRand > biomeParams.grassDensity) continue;
       
-      const y = this.terrain.getTerrainHeight(x, z);
+      const worldY = this.terrain.getTerrainHeight(worldX, worldZ);
       
-      // Place 3 grass blades per patch (crossed for fullness)
+      // Place 3 grass blades per patch
       for (let j = 0; j < 3; j++) {
-        const offsetX = (Math.random() - 0.5) * 0.3;
-        const offsetZ = (Math.random() - 0.5) * 0.3;
-        const rotY = (j / 3) * Math.PI + Math.random() * 0.5;
-        const scale = 0.5 + Math.random() * 0.5;
+        const offsetX = (this._seededRandom(seed + i * 10 + j) - 0.5) * 0.3;
+        const offsetZ = (this._seededRandom(seed + i * 10 + j + 5) - 0.5) * 0.3;
+        const rotY = (j / 3) * Math.PI + this._seededRandom(seed + i * 20 + j) * 0.5;
+        const scale = 0.5 + this._seededRandom(seed + i * 30 + j) * 0.5;
         
         matrix.makeRotationY(rotY);
         matrix.scale(new THREE.Vector3(scale, scale, scale));
-        matrix.setPosition(x + offsetX, y, z + offsetZ);
+        matrix.setPosition(worldX + offsetX, worldY, worldZ + offsetZ);
         
-        this.grassMesh.setMatrixAt(instanceIndex, matrix);
+        grassMesh.setMatrixAt(instanceIndex, matrix);
         instanceIndex++;
         
-        if (instanceIndex >= this.grassPatchCount * 3) break;
+        if (instanceIndex >= this.grassPerChunk * 3) break;
       }
-      if (instanceIndex >= this.grassPatchCount * 3) break;
+      if (instanceIndex >= this.grassPerChunk * 3) break;
     }
     
-    this.grassMesh.instanceMatrix.needsUpdate = true;
-    this.grassMesh.count = instanceIndex;
+    grassMesh.instanceMatrix.needsUpdate = true;
+    grassMesh.count = instanceIndex;
     
-    this.scene.add(this.grassMesh);
+    this.scene.add(grassMesh);
+    chunkData.meshes.push(grassMesh);
   }
   
-  // ========================================
-  // BUSH GENERATION
-  // ========================================
-  
-  _generateBushes() {
-    // Bushes as small scaled icosahedrons
-    const bushGeo = new THREE.IcosahedronGeometry(0.5, 1);
-    bushGeo.scale(1, 0.7, 1); // Flatten slightly
-    bushGeo.translate(0, 0.35, 0);
+  /**
+   * Create bush instances for a chunk
+   */
+  _createBushMesh(chunkData, cx, cz, seed) {
+    const worldOffsetX = cx * this.chunkSize;
+    const worldOffsetZ = cz * this.chunkSize;
     
-    const bushMat = new THREE.MeshStandardMaterial({
-      color: 0x3a6a28,
-      roughness: 0.9,
-    });
-    
-    this.bushMesh = new THREE.InstancedMesh(bushGeo, bushMat, this.bushCount);
-    this.bushMesh.castShadow = true;
-    this.bushMesh.receiveShadow = true;
+    const bushMesh = new THREE.InstancedMesh(this.bushGeo, this.bushMat, this.bushesPerChunk);
+    bushMesh.castShadow = true;
+    bushMesh.receiveShadow = true;
     
     const matrix = new THREE.Matrix4();
     let placed = 0;
     
-    for (let i = 0; i < this.bushCount * 3 && placed < this.bushCount; i++) {
-      const x = (Math.random() - 0.5) * this.terrain.size * 0.85;
-      const z = (Math.random() - 0.5) * this.terrain.size * 0.85;
+    for (let i = 0; i < this.bushesPerChunk * 3 && placed < this.bushesPerChunk; i++) {
+      const rand1 = this._seededRandom(seed + i * 2);
+      const rand2 = this._seededRandom(seed + i * 2 + 1);
+      
+      const worldX = worldOffsetX + rand1 * this.chunkSize;
+      const worldZ = worldOffsetZ + rand2 * this.chunkSize;
       
       // Skip castle area
-      if (x * x + z * z < (this.castleExclusionRadius + 5) * (this.castleExclusionRadius + 5)) continue;
+      const exclusionRadiusSq = (this.castleExclusionRadius + 5) * (this.castleExclusionRadius + 5);
+      if (worldX * worldX + worldZ * worldZ < exclusionRadiusSq) continue;
       
       // Prefer areas with grass
-      const biomeParams = this.terrain.getBiomeParams(x, z);
-      if (Math.random() > biomeParams.grassDensity * 0.8) continue;
+      const biomeParams = this.terrain.getBiomeParams(worldX, worldZ);
+      const densityRand = this._seededRandom(seed + i * 3);
+      if (densityRand > biomeParams.grassDensity * 0.8) continue;
       
       // Not too steep
-      if (this.terrain.getTerrainSlope(x, z) > 0.3) continue;
+      if (this.terrain.getTerrainSlope(worldX, worldZ) > 0.3) continue;
       
-      const y = this.terrain.getTerrainHeight(x, z);
-      const scale = 0.6 + Math.random() * 0.8;
-      const rotY = Math.random() * Math.PI * 2;
+      const worldY = this.terrain.getTerrainHeight(worldX, worldZ);
+      const scale = 0.6 + this._seededRandom(seed + i * 4) * 0.8;
+      const rotY = this._seededRandom(seed + i * 5) * Math.PI * 2;
       
       matrix.makeRotationY(rotY);
       matrix.scale(new THREE.Vector3(scale, scale, scale));
-      matrix.setPosition(x, y, z);
+      matrix.setPosition(worldX, worldY, worldZ);
       
-      this.bushMesh.setMatrixAt(placed, matrix);
+      bushMesh.setMatrixAt(placed, matrix);
       placed++;
     }
     
-    this.bushMesh.instanceMatrix.needsUpdate = true;
-    this.bushMesh.count = placed;
+    bushMesh.instanceMatrix.needsUpdate = true;
+    bushMesh.count = placed;
     
-    this.scene.add(this.bushMesh);
+    this.scene.add(bushMesh);
+    chunkData.meshes.push(bushMesh);
+  }
+  
+  /**
+   * Unload a foliage chunk
+   */
+  _unloadChunk(key) {
+    const chunk = this.chunks.get(key);
+    if (!chunk) return;
+    
+    // Remove meshes from scene
+    for (const mesh of chunk.meshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      // Don't dispose shared materials
+    }
+    
+    // Remove colliders from global list
+    this.treeColliders = this.treeColliders.filter(c => {
+      // Check if collider belongs to this chunk
+      for (const cc of chunk.colliders) {
+        if (c === cc) return false;
+      }
+      return true;
+    });
+    
+    this.chunks.delete(key);
   }
   
   // ========================================
@@ -384,35 +543,37 @@ export class FoliageManager {
     return false;
   }
   
+  /**
+   * Get loaded chunk count (for debugging)
+   */
+  getLoadedChunkCount() {
+    return this.chunks.size;
+  }
+  
   // ========================================
   // CLEANUP
   // ========================================
   
   dispose() {
-    if (this.instancedTrunks) {
-      this.scene.remove(this.instancedTrunks);
-      this.instancedTrunks.geometry.dispose();
-      this.instancedTrunks.material.dispose();
+    // Unload all chunks
+    for (const [key] of this.chunks) {
+      this._unloadChunk(key);
     }
-    if (this.instancedFoliage) {
-      this.scene.remove(this.instancedFoliage);
-      this.instancedFoliage.geometry.dispose();
-      this.instancedFoliage.material.dispose();
-    }
-    if (this.instancedPines) {
-      this.scene.remove(this.instancedPines);
-      this.instancedPines.geometry.dispose();
-      this.instancedPines.material.dispose();
-    }
-    if (this.grassMesh) {
-      this.scene.remove(this.grassMesh);
-      this.grassMesh.geometry.dispose();
-      this.grassMesh.material.dispose();
-    }
-    if (this.bushMesh) {
-      this.scene.remove(this.bushMesh);
-      this.bushMesh.geometry.dispose();
-      this.bushMesh.material.dispose();
-    }
+    
+    // Dispose shared geometries
+    this.oakTrunkGeo.dispose();
+    this.oakFoliageGeo.dispose();
+    this.pineTrunkGeo.dispose();
+    this.pineFoliageGeo.dispose();
+    this.grassGeo.dispose();
+    this.bushGeo.dispose();
+    
+    // Dispose shared materials
+    this.oakTrunkMat.dispose();
+    this.oakFoliageMat.dispose();
+    this.pineTrunkMat.dispose();
+    this.pineFoliageMat.dispose();
+    this.grassMat.dispose();
+    this.bushMat.dispose();
   }
 }

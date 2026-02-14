@@ -2,19 +2,23 @@ import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
 
 /**
- * TerrainGenerator - Procedural heightmap-based terrain
- * Phase 12: Open World Foundation
+ * TerrainGenerator - Infinite Procedural Terrain with Chunking
+ * Phase 12/15: Open World with Dynamic Chunk Loading
  * 
  * Creates continuous terrain using multi-octave simplex noise.
- * Single 256x256 unit chunk for initial implementation.
+ * Chunks are dynamically loaded/unloaded based on player position.
  */
 export class TerrainGenerator {
   constructor(scene) {
     this.scene = scene;
     
-    // Terrain parameters
-    this.size = 256;           // 256x256 units
-    this.resolution = 128;     // 128x128 vertices (2 units per vertex for performance)
+    // Chunk parameters
+    this.chunkSize = 64;       // 64x64 units per chunk
+    this.chunkResolution = 32; // 32x32 vertices per chunk (2 units per vertex)
+    this.loadDistance = 3;     // Load chunks within 3 chunks of player
+    this.unloadDistance = 5;   // Unload chunks beyond 5 chunks from player
+    
+    // Terrain parameters  
     this.heightScale = 25;     // Max terrain height variation
     this.baseHeight = 0;       // Sea level
     
@@ -34,16 +38,18 @@ export class TerrainGenerator {
       { frequency: 0.08, amplitude: 0.05 },    // Micro detail
     ];
     
-    // Terrain mesh and data
-    this.mesh = null;
-    this.heightData = null;  // 2D array for fast lookup
-    this.geometry = null;
+    // Chunk storage: key = "chunkX,chunkZ", value = { mesh, geometry }
+    this.chunks = new Map();
     
-    // Collision data
-    this.colliders = [];
+    // Track player position for chunk management
+    this.lastPlayerChunkX = null;
+    this.lastPlayerChunkZ = null;
     
-    // Generate on construction
-    this._generateTerrain();
+    // Shared material for all chunks
+    this.terrainMaterial = this._createTerrainMaterial();
+    
+    // Generate initial chunks around origin
+    this._updateChunks(0, 0);
   }
   
   /**
@@ -67,7 +73,7 @@ export class TerrainGenerator {
   
   /**
    * Get terrain height at world position with castle flattening
-   * This is the main collision function
+   * This is the main collision function - works for ANY world position
    */
   getTerrainHeight(x, z) {
     const distFromOrigin = Math.sqrt(x * x + z * z);
@@ -125,56 +131,145 @@ export class TerrainGenerator {
   }
   
   /**
-   * Generate the terrain mesh
+   * Convert world position to chunk coordinates
    */
-  _generateTerrain() {
-    const halfSize = this.size / 2;
-    const segmentSize = this.size / this.resolution;
+  _worldToChunk(x, z) {
+    return {
+      chunkX: Math.floor(x / this.chunkSize),
+      chunkZ: Math.floor(z / this.chunkSize),
+    };
+  }
+  
+  /**
+   * Get chunk key for Map storage
+   */
+  _chunkKey(chunkX, chunkZ) {
+    return `${chunkX},${chunkZ}`;
+  }
+  
+  /**
+   * Update chunks based on player world position
+   * Call this every frame from GameManager
+   */
+  update(playerX, playerZ) {
+    const { chunkX, chunkZ } = this._worldToChunk(playerX, playerZ);
+    
+    // Only update if player moved to different chunk
+    if (chunkX === this.lastPlayerChunkX && chunkZ === this.lastPlayerChunkZ) {
+      return;
+    }
+    
+    this.lastPlayerChunkX = chunkX;
+    this.lastPlayerChunkZ = chunkZ;
+    
+    this._updateChunks(chunkX, chunkZ);
+  }
+  
+  /**
+   * Load/unload chunks around player
+   */
+  _updateChunks(playerChunkX, playerChunkZ) {
+    // Calculate which chunks should be loaded
+    const neededChunks = new Set();
+    
+    for (let dx = -this.loadDistance; dx <= this.loadDistance; dx++) {
+      for (let dz = -this.loadDistance; dz <= this.loadDistance; dz++) {
+        const cx = playerChunkX + dx;
+        const cz = playerChunkZ + dz;
+        neededChunks.add(this._chunkKey(cx, cz));
+        
+        // Load chunk if not already loaded
+        if (!this.chunks.has(this._chunkKey(cx, cz))) {
+          this._loadChunk(cx, cz);
+        }
+      }
+    }
+    
+    // Unload distant chunks
+    const chunksToUnload = [];
+    for (const [key, chunk] of this.chunks) {
+      const [cx, cz] = key.split(',').map(Number);
+      const dx = Math.abs(cx - playerChunkX);
+      const dz = Math.abs(cz - playerChunkZ);
+      
+      if (dx > this.unloadDistance || dz > this.unloadDistance) {
+        chunksToUnload.push(key);
+      }
+    }
+    
+    for (const key of chunksToUnload) {
+      this._unloadChunk(key);
+    }
+  }
+  
+  /**
+   * Generate and load a single terrain chunk
+   */
+  _loadChunk(chunkX, chunkZ) {
+    const key = this._chunkKey(chunkX, chunkZ);
+    if (this.chunks.has(key)) return;
+    
+    const worldOffsetX = chunkX * this.chunkSize;
+    const worldOffsetZ = chunkZ * this.chunkSize;
     
     // Create geometry
-    this.geometry = new THREE.PlaneGeometry(
-      this.size,
-      this.size,
-      this.resolution,
-      this.resolution
+    const geometry = new THREE.PlaneGeometry(
+      this.chunkSize,
+      this.chunkSize,
+      this.chunkResolution,
+      this.chunkResolution
     );
     
-    // Rotate to XZ plane (Three.js PlaneGeometry is in XY by default)
-    this.geometry.rotateX(-Math.PI / 2);
+    // Rotate to XZ plane
+    geometry.rotateX(-Math.PI / 2);
     
     // Modify vertices to match heightmap
-    const positions = this.geometry.attributes.position.array;
-    const vertexCount = (this.resolution + 1) * (this.resolution + 1);
-    
-    // Also store height data for fast collision lookup
-    this.heightData = new Float32Array(vertexCount);
+    const positions = geometry.attributes.position.array;
     
     for (let i = 0; i < positions.length; i += 3) {
-      const x = positions[i];
-      const z = positions[i + 2];
+      // Local position within chunk
+      const localX = positions[i];
+      const localZ = positions[i + 2];
       
-      // Get height at this position
-      const height = this.getTerrainHeight(x, z);
+      // Convert to world position
+      const worldX = localX + worldOffsetX + this.chunkSize / 2;
+      const worldZ = localZ + worldOffsetZ + this.chunkSize / 2;
+      
+      // Get height at world position
+      const height = this.getTerrainHeight(worldX, worldZ);
       positions[i + 1] = height;
-      
-      // Store in height data array
-      this.heightData[i / 3] = height;
     }
     
     // Recompute normals for proper lighting
-    this.geometry.computeVertexNormals();
-    
-    // Create material with grass/dirt based on slope
-    const material = this._createTerrainMaterial();
+    geometry.computeVertexNormals();
     
     // Create mesh
-    this.mesh = new THREE.Mesh(this.geometry, material);
-    this.mesh.receiveShadow = true;
-    this.mesh.castShadow = false; // Terrain doesn't cast shadows (performance)
+    const mesh = new THREE.Mesh(geometry, this.terrainMaterial);
+    mesh.position.set(
+      worldOffsetX + this.chunkSize / 2,
+      0,
+      worldOffsetZ + this.chunkSize / 2
+    );
+    mesh.receiveShadow = true;
+    mesh.castShadow = false;
     
-    this.scene.add(this.mesh);
+    this.scene.add(mesh);
     
-    console.log(`[TerrainGenerator] Created ${this.size}x${this.size} terrain with ${vertexCount} vertices`);
+    // Store chunk data
+    this.chunks.set(key, { mesh, geometry });
+  }
+  
+  /**
+   * Unload a chunk to free memory
+   */
+  _unloadChunk(key) {
+    const chunk = this.chunks.get(key);
+    if (!chunk) return;
+    
+    this.scene.remove(chunk.mesh);
+    chunk.geometry.dispose();
+    
+    this.chunks.delete(key);
   }
   
   /**
@@ -217,7 +312,7 @@ export class TerrainGenerator {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(16, 16); // Tile across terrain
+    texture.repeat.set(4, 4); // Tile across each chunk
     
     return new THREE.MeshStandardMaterial({
       map: texture,
@@ -321,18 +416,32 @@ export class TerrainGenerator {
    * Returns intersection point or null
    */
   raycast(raycaster) {
-    const intersects = raycaster.intersectObject(this.mesh);
-    return intersects.length > 0 ? intersects[0].point : null;
+    // Check all loaded chunks
+    for (const [key, chunk] of this.chunks) {
+      const intersects = raycaster.intersectObject(chunk.mesh);
+      if (intersects.length > 0) {
+        return intersects[0].point;
+      }
+    }
+    return null;
+  }
+  
+  /**
+   * Get loaded chunk count (for debugging)
+   */
+  getLoadedChunkCount() {
+    return this.chunks.size;
   }
   
   /**
    * Cleanup
    */
   dispose() {
-    if (this.mesh) {
-      this.scene.remove(this.mesh);
-      this.geometry.dispose();
-      this.mesh.material.dispose();
+    for (const [key, chunk] of this.chunks) {
+      this.scene.remove(chunk.mesh);
+      chunk.geometry.dispose();
     }
+    this.chunks.clear();
+    this.terrainMaterial.dispose();
   }
 }

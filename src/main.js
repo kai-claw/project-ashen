@@ -208,6 +208,26 @@ function animate() {
     enemyManager.update(delta, player);
     particleManager.update(delta);
     
+    // Update terrain chunks based on player position (infinite world)
+    if (world.terrain && world.terrain.update) {
+      world.terrain.update(player.mesh.position.x, player.mesh.position.z);
+    }
+    
+    // Update foliage chunks (trees, grass, bushes) for infinite world
+    if (world.foliage && world.foliage.update) {
+      world.foliage.update(player.mesh.position.x, player.mesh.position.z);
+    }
+    
+    // Update villages for infinite world
+    if (world.villages && world.villages.update) {
+      world.villages.update(player.mesh.position.x, player.mesh.position.z);
+    }
+    
+    // Update ruins for infinite world
+    if (world.ruinsManager && world.ruinsManager.update) {
+      world.ruinsManager.update(player.mesh.position.x, player.mesh.position.z);
+    }
+    
     // Boss arena update (ritual circle damage pulse in Phase 2)
     if (world.bossArena && world.bossArena.active) {
       const arenaDamage = world.updateBossArena(delta, player.mesh.position);

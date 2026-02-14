@@ -566,7 +566,7 @@ export class Player {
     if (move.x !== 0 || move.z !== 0) {
       const camYaw = this._getCameraYaw();
       const forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-      const right = new THREE.Vector3(-Math.cos(camYaw), 0, Math.sin(camYaw));
+      const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
       this.dodgeDir.set(0, 0, 0)
         .addScaledVector(forward, -move.z)
         .addScaledVector(right, move.x)
@@ -802,7 +802,7 @@ export class Player {
     if (move.x !== 0 || move.z !== 0) {
       const camYaw = this._getCameraYaw();
       const forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-      const right = new THREE.Vector3(-Math.cos(camYaw), 0, Math.sin(camYaw));
+      const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
       const dir = new THREE.Vector3()
         .addScaledVector(forward, -move.z)
         .addScaledVector(right, move.x)
@@ -832,7 +832,7 @@ export class Player {
     if (move.x !== 0 || move.z !== 0) {
       const camYaw = this._getCameraYaw();
       const forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-      const right = new THREE.Vector3(-Math.cos(camYaw), 0, Math.sin(camYaw));
+      const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
       this.dashDir.set(0, 0, 0)
         .addScaledVector(forward, -move.z)
         .addScaledVector(right, move.x)
