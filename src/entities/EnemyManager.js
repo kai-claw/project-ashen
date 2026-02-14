@@ -85,6 +85,15 @@ export class EnemyManager {
     this.maxEnemies = 30;              // Performance limit
     this.spawnCheckRadius = 60;        // How far to check for spawning
     this.despawnRadius = 100;          // Despawn enemies far from player
+    
+    // ========== GROUP COORDINATION CONFIG ==========
+    this.groupRadius = 30;              // Enemies within 30 units form a group
+    this.maxActiveAttackers = 3;        // Max enemies attacking simultaneously
+    this.groupJoinDelayMin = 0.5;       // Min delay before follower joins (seconds)
+    this.groupJoinDelayMax = 2.0;       // Max delay before follower joins (seconds)
+    this.leaderDeathConfusionTime = 1.0; // Confusion duration when leader dies
+    this.activeGroups = new Map();      // Map<groupId, { leader, members, attackers }>
+    this.nextGroupId = 1;               // Auto-increment group ID
 
     // Spawn enemies using terrain-based system
     this._spawnEnemies();
@@ -362,6 +371,9 @@ export class EnemyManager {
     
     // Coordinate flanking behavior when multiple enemies engage
     this._coordinateFlanking(player);
+    
+    // Coordinate group combat tactics (staggered attacks, max attackers, etc.)
+    this._coordinateGroups(player);
     
     // Update regular enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -657,6 +669,225 @@ export class EnemyManager {
   }
   
   /**
+   * Coordinate group combat tactics for enemies near each other
+   * - Assigns enemies to groups based on proximity
+   * - First enemy to aggro becomes leader, others hold back 2s
+   * - Limits active attackers to 3 at once
+   * - Triggers confusion when leader dies
+   */
+  _coordinateGroups(player) {
+    const playerPos = player.mesh.position;
+    
+    // Find all enemies currently in combat (chasing, attacking, etc.)
+    const combatEnemies = this.enemies.filter(enemy => {
+      if (enemy.isDead || enemy.state === 'dead') return false;
+      if (enemy.state === 'staggered' || enemy.state === 'dormant' || enemy.state === 'rising') return false;
+      if (enemy.isBoss) return false;
+      
+      // Must be in detection range and combat state
+      const dist = enemy.mesh.position.distanceTo(playerPos);
+      if (dist > (enemy.config.detectionRange || 10) * 1.5) return false;
+      
+      return enemy.state === 'chase' || enemy.state === 'circle' || 
+             enemy.state === 'attack' || enemy.state === 'flank' ||
+             enemy.isInCombat?.() || false;
+    });
+    
+    if (combatEnemies.length === 0) {
+      // No enemies in combat - clear all groups
+      this.activeGroups.clear();
+      return;
+    }
+    
+    // Clean up dead/disengaged enemies from groups
+    for (const [groupId, group] of this.activeGroups) {
+      group.members = group.members.filter(e => 
+        !e.isDead && e.state !== 'dead' && e.state !== 'idle' && e.state !== 'patrol'
+      );
+      
+      // If leader died, trigger confusion in remaining members
+      if (group.leader && (group.leader.isDead || group.leader.state === 'dead')) {
+        this._handleLeaderDeath(group);
+        group.leader = null;
+      }
+      
+      // Remove empty groups
+      if (group.members.length === 0) {
+        this.activeGroups.delete(groupId);
+      }
+    }
+    
+    // Find enemies not yet in a group
+    const ungroupedEnemies = combatEnemies.filter(e => e.groupId === null);
+    
+    // Try to add ungrouped enemies to existing groups (within groupRadius)
+    for (const enemy of ungroupedEnemies) {
+      let joinedGroup = false;
+      
+      for (const [groupId, group] of this.activeGroups) {
+        if (group.members.length === 0) continue;
+        
+        // Check if enemy is close to any group member
+        const isNearGroup = group.members.some(member => {
+          const dist = enemy.mesh.position.distanceTo(member.mesh.position);
+          return dist < this.groupRadius;
+        });
+        
+        if (isNearGroup) {
+          // Join existing group as follower
+          const joinDelay = this.groupJoinDelayMin + 
+            Math.random() * (this.groupJoinDelayMax - this.groupJoinDelayMin);
+          enemy.joinGroup(groupId, false, joinDelay);
+          group.members.push(enemy);
+          joinedGroup = true;
+          break;
+        }
+      }
+      
+      // If not near any group, create a new group with this enemy as leader
+      if (!joinedGroup) {
+        const newGroupId = `group_${this.nextGroupId++}`;
+        enemy.joinGroup(newGroupId, true, 0); // Leader, no delay
+        this.activeGroups.set(newGroupId, {
+          leader: enemy,
+          members: [enemy],
+          attackers: [],
+        });
+      }
+    }
+    
+    // Merge nearby groups (if two leaders got close)
+    this._mergeNearbyGroups();
+    
+    // Manage attack queue for each group (max 3 attackers)
+    this._manageGroupAttackers(player);
+  }
+  
+  /**
+   * Handle leader death - trigger confusion in remaining group members
+   */
+  _handleLeaderDeath(group) {
+    for (const member of group.members) {
+      if (!member.isDead && member.state !== 'dead' && !member.isGroupLeader) {
+        member.triggerConfusion(this.leaderDeathConfusionTime);
+      }
+    }
+    
+    // Promote new leader after confusion (highest health remaining)
+    setTimeout(() => {
+      const aliveMembers = group.members.filter(m => !m.isDead && m.state !== 'dead');
+      if (aliveMembers.length > 0) {
+        // Pick highest health member as new leader
+        aliveMembers.sort((a, b) => b.health - a.health);
+        const newLeader = aliveMembers[0];
+        newLeader.isGroupLeader = true;
+        group.leader = newLeader;
+      }
+    }, this.leaderDeathConfusionTime * 1000);
+  }
+  
+  /**
+   * Merge groups whose members are now close to each other
+   */
+  _mergeNearbyGroups() {
+    const groupIds = Array.from(this.activeGroups.keys());
+    
+    for (let i = 0; i < groupIds.length; i++) {
+      for (let j = i + 1; j < groupIds.length; j++) {
+        const groupA = this.activeGroups.get(groupIds[i]);
+        const groupB = this.activeGroups.get(groupIds[j]);
+        
+        if (!groupA || !groupB) continue;
+        if (groupA.members.length === 0 || groupB.members.length === 0) continue;
+        
+        // Check if any members of groups are within groupRadius
+        let shouldMerge = false;
+        for (const memberA of groupA.members) {
+          for (const memberB of groupB.members) {
+            const dist = memberA.mesh.position.distanceTo(memberB.mesh.position);
+            if (dist < this.groupRadius) {
+              shouldMerge = true;
+              break;
+            }
+          }
+          if (shouldMerge) break;
+        }
+        
+        if (shouldMerge) {
+          // Merge groupB into groupA
+          for (const member of groupB.members) {
+            member.groupId = groupIds[i];
+            member.isGroupLeader = false; // Only one leader
+            groupA.members.push(member);
+          }
+          
+          // Keep the higher health leader
+          if (groupB.leader && groupA.leader) {
+            if (groupB.leader.health > groupA.leader.health) {
+              groupA.leader.isGroupLeader = false;
+              groupB.leader.isGroupLeader = true;
+              groupA.leader = groupB.leader;
+            }
+          }
+          
+          // Remove merged group
+          this.activeGroups.delete(groupIds[j]);
+        }
+      }
+    }
+  }
+  
+  /**
+   * Manage attack queue - limit active attackers to maxActiveAttackers
+   * Others circle/wait for their turn
+   */
+  _manageGroupAttackers(player) {
+    for (const [groupId, group] of this.activeGroups) {
+      // Find members currently attacking
+      const currentAttackers = group.members.filter(m => 
+        m.isAttacking?.() || m.state === 'attack'
+      );
+      
+      // Find members wanting to attack (in range, not already attacking)
+      const wantingToAttack = group.members.filter(m => {
+        if (m.isDead || m.state === 'dead') return false;
+        if (m.isAttacking?.() || m.state === 'attack') return false;
+        if (m.isWaitingToJoin || m.isConfused) return false;
+        
+        const dist = m.mesh.position.distanceTo(player.mesh.position);
+        return dist <= (m.config.attackRange || 2.2);
+      });
+      
+      // Calculate how many more can attack
+      const availableSlots = this.maxActiveAttackers - currentAttackers.length;
+      
+      // Allow attackers up to limit
+      let slotsUsed = 0;
+      for (const member of group.members) {
+        if (member.isDead || member.state === 'dead') continue;
+        
+        if (member.isAttacking?.() || member.state === 'attack') {
+          // Already attacking - allowed
+          member.canAttackInGroup = true;
+        } else if (slotsUsed < availableSlots && wantingToAttack.includes(member)) {
+          // Has a slot and wants to attack - allowed
+          member.canAttackInGroup = true;
+          slotsUsed++;
+        } else if (wantingToAttack.includes(member)) {
+          // Wants to attack but no slot - must circle
+          member.canAttackInGroup = false;
+        } else {
+          // Not in attack range yet - can attack when they get there
+          member.canAttackInGroup = true;
+        }
+      }
+      
+      // Update attackers list
+      group.attackers = currentAttackers;
+    }
+  }
+  
+  /**
    * Get the current difficulty zone for player position (for UI display)
    */
   getPlayerZone(playerPos) {
@@ -666,6 +897,9 @@ export class EnemyManager {
   
   // Reset all enemies to starting state (called on player respawn)
   resetAll() {
+    // Clear all active groups
+    this.activeGroups.clear();
+    
     this.enemies.forEach(enemy => {
       // Don't respawn permanently defeated bosses
       if (enemy.isBoss && this.defeatedBosses.has(enemy.bossId || 'crypt-lord')) {

@@ -333,6 +333,18 @@ export class Enemy {
     this.flankDirection = 1;         // 1 = flank right, -1 = flank left
     this.flankProgress = 0;          // Track progress to flank position
     
+    // ========== GROUP COORDINATION ==========
+    this.groupId = null;              // Assigned by EnemyManager when enemies form a group
+    this.isGroupLeader = false;       // First enemy to aggro becomes leader
+    this.groupJoinDelay = 0;          // Delay before joining combat after leader aggros (2s max)
+    this.isWaitingToJoin = false;     // True while waiting for group join delay
+    this.groupConfusionTimer = 0;     // Brief confusion when leader dies (1s)
+    this.isConfused = false;          // True during confusion state
+    this.attackQueuePosition = -1;    // Position in attack queue (-1 = not queued)
+    this.canAttackInGroup = true;     // EnemyManager sets false when max attackers reached
+    this.lastGroupAttackTime = 0;     // Timestamp of last attack in group context
+    this.groupEngageTime = 0;         // When this enemy first engaged with group
+    
     // ========== BOSS-SPECIFIC INITIALIZATION ==========
     if (this.config.isBoss) {
       this.isBoss = true;
@@ -667,7 +679,40 @@ export class Enemy {
         if (!this.isBoss && distToPlayer > this.config.detectionRange * 1.5) {
           this._changeState(STATES.IDLE);
           this.healthBarGroup.visible = false;
+          // Reset group state on disengage
+          this._resetGroupState();
           break;
+        }
+        
+        // ========== GROUP COORDINATION: Wait to join combat ==========
+        // If waiting to join group combat, count down delay before engaging
+        if (!this.isBoss && this.isWaitingToJoin) {
+          this.groupJoinDelay -= delta;
+          if (this.groupJoinDelay <= 0) {
+            // Done waiting, can now engage fully
+            this.isWaitingToJoin = false;
+            this.groupEngageTime = Date.now();
+          } else {
+            // Still waiting - circle/approach slowly but don't attack
+            this._moveToward(player.mesh.position, this.config.moveSpeed * 0.4, delta);
+            this._faceTarget(player.mesh.position, delta);
+            break;
+          }
+        }
+        
+        // ========== GROUP COORDINATION: Confusion when leader dies ==========
+        if (!this.isBoss && this.isConfused) {
+          this.groupConfusionTimer -= delta;
+          if (this.groupConfusionTimer <= 0) {
+            // Confusion ends
+            this.isConfused = false;
+            this.groupConfusionTimer = 0;
+          } else {
+            // During confusion: stand still, look around erratically
+            const wobble = Math.sin(this.stateTimer * 8) * 0.5;
+            this.mesh.rotation.y += wobble * delta;
+            break;
+          }
         }
         
         // Retreat behavior for eligible enemies (ranged/fast types, not tanks)
@@ -699,6 +744,15 @@ export class Enemy {
             // Boss selects from special attacks
             this._selectBossAttack(distToPlayer, healthPercent);
           } else {
+            // ========== GROUP COORDINATION: Check if allowed to attack ==========
+            // If in a group and not allowed to attack (max attackers reached), circle instead
+            if (this.groupId !== null && !this.canAttackInGroup) {
+              // Force circle/hold position - max attackers already active
+              this._changeState(STATES.CIRCLE);
+              break;
+            }
+            // Mark attack start time for group coordination
+            this.lastGroupAttackTime = Date.now();
             this._changeState(STATES.ATTACK);
           }
           break;
@@ -1067,6 +1121,87 @@ export class Enemy {
     // Randomize flank direction
     this.flankDirection = Math.random() > 0.5 ? 1 : -1;
     return true;
+  }
+  
+  // ========== GROUP COORDINATION HELPERS ==========
+  
+  /**
+   * Reset group state (called on disengage, death, respawn)
+   */
+  _resetGroupState() {
+    this.groupId = null;
+    this.isGroupLeader = false;
+    this.groupJoinDelay = 0;
+    this.isWaitingToJoin = false;
+    this.groupConfusionTimer = 0;
+    this.isConfused = false;
+    this.attackQueuePosition = -1;
+    this.canAttackInGroup = true;
+    this.groupEngageTime = 0;
+  }
+  
+  /**
+   * Join a combat group (called by EnemyManager)
+   * @param {string} groupId - Group identifier
+   * @param {boolean} isLeader - Whether this enemy is the group leader (first to aggro)
+   * @param {number} joinDelay - Delay before fully engaging (0 for leader, 0-2s for followers)
+   */
+  joinGroup(groupId, isLeader, joinDelay = 0) {
+    this.groupId = groupId;
+    this.isGroupLeader = isLeader;
+    
+    if (isLeader) {
+      // Leaders engage immediately
+      this.groupJoinDelay = 0;
+      this.isWaitingToJoin = false;
+      this.groupEngageTime = Date.now();
+    } else {
+      // Followers wait before joining
+      this.groupJoinDelay = joinDelay;
+      this.isWaitingToJoin = joinDelay > 0;
+      this.groupEngageTime = 0;
+    }
+  }
+  
+  /**
+   * Trigger confusion state (called when group leader dies)
+   * @param {number} duration - Confusion duration in seconds (default 1s)
+   */
+  triggerConfusion(duration = 1.0) {
+    if (this.isBoss) return; // Bosses don't get confused
+    if (this.state === STATES.DEAD) return;
+    
+    this.isConfused = true;
+    this.groupConfusionTimer = duration;
+    // Reset group leadership since leader died
+    this.isGroupLeader = false;
+  }
+  
+  /**
+   * Check if this enemy is currently in an attack state
+   * @returns {boolean} True if attacking
+   */
+  isAttacking() {
+    return this.state === STATES.ATTACK || 
+           this.state === STATES.BOSS_SLAM ||
+           this.state === STATES.BOSS_SWEEP ||
+           this.state === STATES.BOSS_COMBO ||
+           this.state === STATES.BOSS_CHARGE ||
+           this.state === STATES.BOSS_GRAB ||
+           this.state === STATES.BOSS_AOE ||
+           this.state === STATES.BOSS_PROJECTILE;
+  }
+  
+  /**
+   * Check if enemy is in active combat (chasing, attacking, etc.)
+   * @returns {boolean} True if in combat
+   */
+  isInCombat() {
+    return this.state === STATES.CHASE ||
+           this.state === STATES.CIRCLE ||
+           this.state === STATES.FLANK ||
+           this.state === STATES.ATTACK ||
+           this.isAttacking();
   }
 
   // ========== BOSS ATTACK SELECTION ==========
@@ -2510,6 +2645,9 @@ export class Enemy {
     this.isRetreating = false;
     this.retreatStartPos = null;
     this.retreatWallHits = 0;
+    
+    // Reset group coordination state
+    this._resetGroupState();
     
     // Find valid spawn position (not inside walls)
     let spawnPosition = this.spawnPos.clone();
