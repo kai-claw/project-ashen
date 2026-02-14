@@ -342,9 +342,10 @@ export class Player {
       this._applyWallCollision();
 
       this.facingAngle = Math.atan2(this.moveDir.x, this.moveDir.z);
+      // Add Math.PI offset to match GLTF model's default orientation
       this.mesh.rotation.y = THREE.MathUtils.lerp(
         this.mesh.rotation.y,
-        this.facingAngle,
+        this.facingAngle + Math.PI,
         10 * delta
       );
 
@@ -658,7 +659,8 @@ export class Player {
     
     const camYaw = this._getCameraYaw();
     this.facingAngle = camYaw;
-    this.mesh.rotation.y = camYaw;
+    // Add Math.PI offset to match GLTF model's default orientation
+    this.mesh.rotation.y = camYaw + Math.PI;
     
     if (this.gm.particleManager) {
       // Slash trail disabled - was creating visual artifacts
