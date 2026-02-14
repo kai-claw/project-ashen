@@ -6,7 +6,9 @@ import {
   buildEliteEnemyModel, 
   buildBerserkerModel, 
   buildRevenantModel, 
-  buildSentinelModel, 
+  buildSentinelModel,
+  buildRangedEnemyModel,
+  buildBossModel,
   updateEnemyModel, 
   flashEnemyModel 
 } from '../models/ModelBuilder.js';
@@ -285,6 +287,44 @@ export const ENEMY_TYPES = {
     animSpeedMult: 1.4,
   },
   
+  // Corrupted Archer - ranged enemy that attacks from distance
+  CORRUPTED_ARCHER: {
+    name: 'Corrupted Archer',
+    health: 30,            // Fragile
+    damage: 22,            // Projectiles hurt
+    postureDmg: 8,         // Low posture damage
+    moveSpeed: 2.8,        // Mobile
+    detectionRange: 18,    // Long detection for ranged
+    attackRange: 12,       // RANGED attack range
+    attackCooldown: 2.5,   // Time between shots
+    attackWindup: 0.8,     // Charging projectile
+    attackDuration: 0.2,
+    remnantDrop: 55,
+    patrolRadius: 5,
+    bodyColor: 0x3a4a3a,   // Sickly gray-green
+    eyeColor: 0x88ff44,    // Toxic green
+    canChainAttacks: false,
+    maxPosture: 35,        // Easy to stagger
+    hasShield: false,
+    isRanged: true,        // Flag for ranged behavior
+    preferredRange: 10,    // Tries to maintain this distance
+    canRetreat: true,      // Always retreats when close
+    retreatHealthThreshold: 0.5, // Retreat at 50% HP or when player closes
+    retreatDistance: 8,    // Retreat distance
+    canFlank: true,        // Repositions frequently
+    // Attack variety - ranged has different patterns
+    attackVariety: {
+      enabled: true,
+      heavyChance: 0.3,      // Charged shot
+      quickJabChance: 0.4,   // Quick shot
+      comboEnabled: false,
+    },
+    // Model settings - use procedural ranged model
+    proceduralModel: 'ranged',
+    modelScale: 0.85,
+    animSpeedMult: 1.2,
+  },
+  
   // ========== THE CRYPT LORD - SECOND BOSS ==========
   // Full boss fight with multi-phase combat
   CRYPT_LORD: {
@@ -324,8 +364,8 @@ export const ENEMY_TYPES = {
     },
     
     // Model settings - bosses still use GLTF for complex animations
-    // But fallback to elite procedural model if GLTF fails
-    proceduralModel: 'elite',
+    // But fallback to massive procedural boss model if GLTF fails
+    proceduralModel: 'boss',
     modelPath: 'assets/models/soldier.glb',
     modelScale: 1.8,
     animSpeedMult: 0.85,
@@ -537,8 +577,14 @@ export class Enemy {
       case 'revenant':
         proceduralModel = buildRevenantModel({ scale });
         break;
+      case 'ranged':
+        proceduralModel = buildRangedEnemyModel({ scale });
+        break;
       case 'elite':
         proceduralModel = buildEliteEnemyModel({ scale });
+        break;
+      case 'boss':
+        proceduralModel = buildBossModel({ scale });
         break;
       case 'standard':
       default:

@@ -6,36 +6,57 @@ import * as THREE from 'three';
  */
 
 // Color palettes for enemy types
+// DANGER LEVELS: lighter = weaker, darker = stronger (more dangerous)
 const ENEMY_PALETTES = {
+  // Danger Level 1: Standard grunt - lighter grays
   standard: {
-    body: 0x3a3a35,      // Ashen gray
-    accent: 0x2a2520,    // Dark brown
+    body: 0x4a4a45,      // Medium ashen gray (lightest body)
+    accent: 0x3a3530,    // Medium brown
     glow: 0xff3333,      // Red glow
-    corruption: 0x1a1a15 // Near black
+    corruption: 0x2a2a25 // Dark gray
   },
-  elite: {
-    body: 0x2a1515,      // Dark crimson
-    accent: 0x4a2020,    // Blood red
-    glow: 0xff4400,      // Orange-red glow
-    corruption: 0x150a0a // Deep crimson-black
-  },
+  // Danger Level 2: Berserker - aggressive reds, medium dark
   berserker: {
     body: 0x4a2020,      // Angry red-brown
     accent: 0x662222,    // Brighter red
-    glow: 0xff6600,      // Orange glow
+    glow: 0xff6600,      // Orange glow (frenzied)
     corruption: 0x200808 // Dark blood
   },
+  // Danger Level 2: Revenant - bone/undead theme
   revenant: {
-    body: 0x8a7a5a,      // Bone color
+    body: 0x8a7a5a,      // Bone color (unique - recognizable)
     accent: 0x5a4a3a,    // Darker bone
-    glow: 0x44ff44,      // Eerie green
-    corruption: 0x3a3020 // Decayed
+    glow: 0x44ff44,      // Eerie green (poison/death)
+    corruption: 0x3a3020 // Decayed brown
   },
+  // Danger Level 3: Ranged - sickly, corrupted, thin
+  ranged: {
+    body: 0x3a4a3a,      // Sickly gray-green
+    accent: 0x2a3a2a,    // Darker green-gray
+    glow: 0x88ff44,      // Toxic green glow
+    corruption: 0x1a2a1a // Deep green-black
+  },
+  // Danger Level 3: Sentinel/Tank - armored blue-steel
   sentinel: {
-    body: 0x3a3a4a,      // Blue-gray
+    body: 0x3a3a4a,      // Blue-gray (armored)
     accent: 0x2a2a35,    // Darker blue-gray
-    glow: 0x4444ff,      // Blue glow
+    glow: 0x4444ff,      // Blue glow (cold/defensive)
     corruption: 0x1a1a25 // Deep blue-black
+  },
+  // Danger Level 4: Elite - darkest non-boss, crimson
+  elite: {
+    body: 0x2a1515,      // Dark crimson (very dark)
+    accent: 0x1a0a0a,    // Near-black red
+    glow: 0xff4400,      // Orange-red glow (danger!)
+    corruption: 0x150a0a // Deep crimson-black
+  },
+  // Danger Level 5: BOSS - darkest, most intimidating
+  boss: {
+    body: 0x1a1020,      // Deep purple-black
+    accent: 0x0a0810,    // Near-black purple
+    glow: 0xff2222,      // Intense red glow
+    corruption: 0x050408,// Abyss black
+    secondary: 0x3a1040  // Purple accent for cape/details
   }
 };
 
@@ -491,6 +512,621 @@ export function buildSentinelModel(config = {}) {
 }
 
 /**
+ * Build a ranged enemy - thin, elongated limbs, projectile 'arms'
+ * These enemies attack from distance with corrupted energy projectiles
+ */
+export function buildRangedEnemyModel(config = {}) {
+  const colors = ENEMY_PALETTES.ranged;
+  const scale = (config.scale || 1.0) * 0.85; // Slightly smaller/thinner
+  const group = new THREE.Group();
+  
+  // === BODY - Thin, almost emaciated torso ===
+  const torsoMat = new THREE.MeshStandardMaterial({
+    color: colors.body,
+    roughness: 0.8,
+    metalness: 0.2,
+  });
+  
+  // Thin elongated torso
+  const torsoGeo = new THREE.CapsuleGeometry(0.25, 0.5, 8, 16);
+  const torso = new THREE.Mesh(torsoGeo, torsoMat);
+  torso.position.set(0, 1.0, 0);
+  torso.scale.set(0.8, 1.1, 0.7); // Thin and tall
+  torso.castShadow = true;
+  group.add(torso);
+  
+  // === HEAD - Small, hunched forward, predatory ===
+  const headMat = new THREE.MeshStandardMaterial({
+    color: colors.accent,
+    roughness: 0.75,
+    metalness: 0.1,
+  });
+  
+  // Elongated skull shape
+  const headGeo = new THREE.SphereGeometry(0.18, 12, 10);
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.set(0, 1.6, 0.15);
+  head.scale.set(0.9, 1.2, 0.85); // Elongated
+  head.castShadow = true;
+  group.add(head);
+  
+  // === GLOWING EYES - Toxic green ===
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 5,
+  });
+  
+  const eyeGeo = new THREE.SphereGeometry(0.04, 8, 6);
+  
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.06, 1.65, 0.28);
+  group.add(leftEye);
+  
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+  rightEye.position.set(0.06, 1.65, 0.28);
+  group.add(rightEye);
+  
+  // Eye glow light
+  const eyeLight = new THREE.PointLight(colors.glow, 0.4, 2);
+  eyeLight.position.set(0, 1.65, 0.3);
+  group.add(eyeLight);
+  
+  group.userData.eyes = [leftEye, rightEye];
+  group.userData.eyeLight = eyeLight;
+  group.userData.eyeMaterial = eyeMat;
+  
+  // === ARMS - Extremely long, thin, projectile-like forearms ===
+  const limbMat = new THREE.MeshStandardMaterial({
+    color: colors.body,
+    roughness: 0.8,
+    metalness: 0.15,
+  });
+  
+  // Upper arms - thin
+  const upperArmGeo = new THREE.CapsuleGeometry(0.06, 0.35, 6, 10);
+  
+  const leftUpperArm = new THREE.Mesh(upperArmGeo, limbMat);
+  leftUpperArm.position.set(-0.3, 1.1, 0);
+  leftUpperArm.rotation.z = 0.4;
+  leftUpperArm.rotation.x = 0.3;
+  leftUpperArm.castShadow = true;
+  group.add(leftUpperArm);
+  
+  const rightUpperArm = new THREE.Mesh(upperArmGeo, limbMat);
+  rightUpperArm.position.set(0.3, 1.1, 0);
+  rightUpperArm.rotation.z = -0.4;
+  rightUpperArm.rotation.x = 0.3;
+  rightUpperArm.castShadow = true;
+  group.add(rightUpperArm);
+  
+  // Lower arms - VERY long, thin, ending in projectile 'cannons'
+  const lowerArmGeo = new THREE.CapsuleGeometry(0.05, 0.5, 6, 10);
+  
+  const leftLowerArm = new THREE.Mesh(lowerArmGeo, limbMat);
+  leftLowerArm.position.set(-0.5, 0.55, 0.1);
+  leftLowerArm.rotation.z = 0.2;
+  leftLowerArm.rotation.x = 0.4;
+  leftLowerArm.castShadow = true;
+  group.add(leftLowerArm);
+  
+  const rightLowerArm = new THREE.Mesh(lowerArmGeo, limbMat);
+  rightLowerArm.position.set(0.5, 0.55, 0.1);
+  rightLowerArm.rotation.z = -0.2;
+  rightLowerArm.rotation.x = 0.4;
+  rightLowerArm.castShadow = true;
+  group.add(rightLowerArm);
+  
+  // === PROJECTILE ARM TIPS - Glowing 'cannons' ===
+  const cannonMat = new THREE.MeshStandardMaterial({
+    color: colors.corruption,
+    roughness: 0.4,
+    metalness: 0.6,
+    emissive: colors.glow,
+    emissiveIntensity: 1.5,
+  });
+  
+  const cannonGeo = new THREE.CylinderGeometry(0.06, 0.03, 0.15, 8);
+  
+  const leftCannon = new THREE.Mesh(cannonGeo, cannonMat);
+  leftCannon.position.set(-0.58, 0.15, 0.2);
+  leftCannon.rotation.x = 0.5;
+  leftCannon.rotation.z = 0.2;
+  leftCannon.castShadow = true;
+  group.add(leftCannon);
+  
+  const rightCannon = new THREE.Mesh(cannonGeo, cannonMat);
+  rightCannon.position.set(0.58, 0.15, 0.2);
+  rightCannon.rotation.x = 0.5;
+  rightCannon.rotation.z = -0.2;
+  rightCannon.castShadow = true;
+  group.add(rightCannon);
+  
+  // Cannon glow orbs (projectile charge)
+  const orbMat = new THREE.MeshStandardMaterial({
+    color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 3,
+    transparent: true,
+    opacity: 0.8,
+  });
+  
+  const orbGeo = new THREE.SphereGeometry(0.04, 8, 6);
+  
+  const leftOrb = new THREE.Mesh(orbGeo, orbMat);
+  leftOrb.position.set(-0.6, 0.08, 0.25);
+  group.add(leftOrb);
+  
+  const rightOrb = new THREE.Mesh(orbGeo, orbMat);
+  rightOrb.position.set(0.6, 0.08, 0.25);
+  group.add(rightOrb);
+  
+  // Store for charging animation
+  group.userData.projectileOrbs = [leftOrb, rightOrb];
+  
+  // === LEGS - Thin, digitigrade (backward knee) stance ===
+  const legGeo = new THREE.CapsuleGeometry(0.07, 0.3, 6, 10);
+  
+  const leftLeg = new THREE.Mesh(legGeo, limbMat);
+  leftLeg.position.set(-0.15, 0.4, 0);
+  leftLeg.rotation.x = 0.15;
+  leftLeg.castShadow = true;
+  group.add(leftLeg);
+  
+  const rightLeg = new THREE.Mesh(legGeo, limbMat);
+  rightLeg.position.set(0.15, 0.4, 0);
+  rightLeg.rotation.x = 0.15;
+  rightLeg.castShadow = true;
+  group.add(rightLeg);
+  
+  // Lower legs (digitigrade)
+  const lowerLegGeo = new THREE.CapsuleGeometry(0.05, 0.25, 6, 10);
+  
+  const leftLowerLeg = new THREE.Mesh(lowerLegGeo, limbMat);
+  leftLowerLeg.position.set(-0.15, 0.12, 0.1);
+  leftLowerLeg.rotation.x = -0.4;
+  leftLowerLeg.castShadow = true;
+  group.add(leftLowerLeg);
+  
+  const rightLowerLeg = new THREE.Mesh(lowerLegGeo, limbMat);
+  rightLowerLeg.position.set(0.15, 0.12, 0.1);
+  rightLowerLeg.rotation.x = -0.4;
+  rightLowerLeg.castShadow = true;
+  group.add(rightLowerLeg);
+  
+  // Feet
+  const footGeo = new THREE.BoxGeometry(0.1, 0.05, 0.2);
+  const footMat = new THREE.MeshStandardMaterial({
+    color: colors.corruption,
+    roughness: 0.7,
+    metalness: 0.2,
+  });
+  
+  const leftFoot = new THREE.Mesh(footGeo, footMat);
+  leftFoot.position.set(-0.15, 0.025, 0.15);
+  leftFoot.castShadow = true;
+  group.add(leftFoot);
+  
+  const rightFoot = new THREE.Mesh(footGeo, footMat);
+  rightFoot.position.set(0.15, 0.025, 0.15);
+  rightFoot.castShadow = true;
+  group.add(rightFoot);
+  
+  // === CORRUPTION TENDRILS - Energy wisps ===
+  const tendrilMat = new THREE.MeshStandardMaterial({
+    color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 2,
+    transparent: true,
+    opacity: 0.6,
+  });
+  
+  const tendrilGeo = new THREE.CapsuleGeometry(0.02, 0.25, 4, 6);
+  
+  // Tendrils floating behind the ranged enemy
+  for (let i = 0; i < 4; i++) {
+    const tendril = new THREE.Mesh(tendrilGeo, tendrilMat);
+    const angle = (i / 4) * Math.PI * 0.6 - Math.PI * 0.3;
+    tendril.position.set(
+      Math.sin(angle) * 0.3,
+      0.8 + i * 0.15,
+      -0.2
+    );
+    tendril.rotation.x = -0.5 + Math.random() * 0.3;
+    tendril.rotation.z = Math.sin(angle) * 0.3;
+    group.add(tendril);
+  }
+  
+  // Corruption particles
+  group.userData.particles = createCorruptionParticles(colors.glow);
+  group.add(group.userData.particles);
+  
+  // Apply scale
+  group.scale.setScalar(scale);
+  
+  // Store materials for effects
+  group.userData.bodyMaterial = torsoMat;
+  group.userData.limbMaterial = limbMat;
+  group.userData.type = 'ranged';
+  group.userData.isEnemyModel = true;
+  group.userData.isRanged = true;
+  
+  return group;
+}
+
+/**
+ * Build a BOSS enemy model - massive scale, unique intimidating silhouette
+ * The Crypt Lord: towering figure with cape, crown, massive presence
+ */
+export function buildBossModel(config = {}) {
+  const colors = ENEMY_PALETTES.boss;
+  const scale = (config.scale || 1.0) * 1.8; // Massive - 80% larger than elite
+  const group = new THREE.Group();
+  
+  // === TORSO - Massive, broad, powerful ===
+  const torsoMat = new THREE.MeshStandardMaterial({
+    color: colors.body,
+    roughness: 0.7,
+    metalness: 0.3,
+  });
+  
+  // Wide powerful torso
+  const torsoGeo = new THREE.CapsuleGeometry(0.5, 0.6, 10, 20);
+  const torso = new THREE.Mesh(torsoGeo, torsoMat);
+  torso.position.set(0, 1.0, 0);
+  torso.scale.set(1.4, 1.0, 1.1);
+  torso.castShadow = true;
+  group.add(torso);
+  
+  // Upper torso/chest - even broader
+  const chestGeo = new THREE.SphereGeometry(0.45, 12, 10);
+  const chest = new THREE.Mesh(chestGeo, torsoMat);
+  chest.position.set(0, 1.4, 0.05);
+  chest.scale.set(1.3, 0.9, 1.0);
+  chest.castShadow = true;
+  group.add(chest);
+  
+  // === ARMOR PLATES - Boss has heavy armor ===
+  const armorMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a25,
+    roughness: 0.3,
+    metalness: 0.8,
+  });
+  
+  // Chest plate
+  const chestPlateMat = new THREE.MeshStandardMaterial({
+    color: 0x2a1a30,
+    roughness: 0.35,
+    metalness: 0.7,
+    emissive: colors.glow,
+    emissiveIntensity: 0.15,
+  });
+  
+  const chestPlateGeo = new THREE.BoxGeometry(0.7, 0.5, 0.15);
+  const chestPlate = new THREE.Mesh(chestPlateGeo, chestPlateMat);
+  chestPlate.position.set(0, 1.35, 0.35);
+  chestPlate.castShadow = true;
+  group.add(chestPlate);
+  
+  // === SHOULDERS - Massive pauldrons with spikes ===
+  const pauldronGeo = new THREE.SphereGeometry(0.25, 10, 8);
+  
+  const leftPauldron = new THREE.Mesh(pauldronGeo, armorMat);
+  leftPauldron.position.set(-0.6, 1.55, 0);
+  leftPauldron.scale.set(1.2, 0.9, 1.0);
+  leftPauldron.castShadow = true;
+  group.add(leftPauldron);
+  
+  const rightPauldron = new THREE.Mesh(pauldronGeo, armorMat);
+  rightPauldron.position.set(0.6, 1.55, 0);
+  rightPauldron.scale.set(1.2, 0.9, 1.0);
+  rightPauldron.castShadow = true;
+  group.add(rightPauldron);
+  
+  // Pauldron spikes
+  const spikeGeo = new THREE.ConeGeometry(0.08, 0.3, 5);
+  const spikeMat = new THREE.MeshStandardMaterial({
+    color: colors.corruption,
+    roughness: 0.5,
+    metalness: 0.6,
+  });
+  
+  [[-0.7, 1.7, 0], [0.7, 1.7, 0], [-0.5, 1.75, -0.1], [0.5, 1.75, -0.1]].forEach(pos => {
+    const spike = new THREE.Mesh(spikeGeo, spikeMat);
+    spike.position.set(...pos);
+    spike.rotation.x = -0.3;
+    spike.castShadow = true;
+    group.add(spike);
+  });
+  
+  // === HEAD - Smaller relative to body, skull-like, CROWNED ===
+  const headMat = new THREE.MeshStandardMaterial({
+    color: colors.accent,
+    roughness: 0.75,
+    metalness: 0.2,
+  });
+  
+  const headGeo = new THREE.SphereGeometry(0.22, 12, 10);
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.set(0, 1.85, 0.1);
+  head.scale.set(1.0, 1.1, 0.95);
+  head.castShadow = true;
+  group.add(head);
+  
+  // === CROWN - Jagged, corrupted crown ===
+  const crownMat = new THREE.MeshStandardMaterial({
+    color: 0x2a1a10,
+    roughness: 0.4,
+    metalness: 0.85,
+    emissive: 0x3a1a20,
+    emissiveIntensity: 0.3,
+  });
+  
+  const crownBase = new THREE.Mesh(
+    new THREE.TorusGeometry(0.18, 0.03, 8, 16),
+    crownMat
+  );
+  crownBase.position.set(0, 2.05, 0.05);
+  crownBase.rotation.x = Math.PI / 2;
+  group.add(crownBase);
+  
+  // Crown spikes (5 points)
+  const crownSpikeGeo = new THREE.ConeGeometry(0.04, 0.18, 4);
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const crownSpike = new THREE.Mesh(crownSpikeGeo, crownMat);
+    crownSpike.position.set(
+      Math.sin(angle) * 0.17,
+      2.12,
+      Math.cos(angle) * 0.15 + 0.05
+    );
+    crownSpike.rotation.z = Math.sin(angle) * 0.2;
+    group.add(crownSpike);
+  }
+  
+  // === GLOWING EYES - Intense red ===
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 6,
+  });
+  
+  const eyeGeo = new THREE.SphereGeometry(0.05, 8, 6);
+  
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.08, 1.9, 0.25);
+  group.add(leftEye);
+  
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+  rightEye.position.set(0.08, 1.9, 0.25);
+  group.add(rightEye);
+  
+  // Boss eye glow is stronger
+  const eyeLight = new THREE.PointLight(colors.glow, 1.0, 4);
+  eyeLight.position.set(0, 1.9, 0.3);
+  group.add(eyeLight);
+  
+  group.userData.eyes = [leftEye, rightEye];
+  group.userData.eyeLight = eyeLight;
+  group.userData.eyeMaterial = eyeMat;
+  
+  // === CAPE/CLOAK - Flowing behind ===
+  const capeMat = new THREE.MeshStandardMaterial({
+    color: colors.secondary || 0x2a1030,
+    roughness: 0.8,
+    metalness: 0.1,
+    side: THREE.DoubleSide,
+  });
+  
+  // Cape as a curved plane
+  const capeGeo = new THREE.PlaneGeometry(1.0, 1.2, 8, 12);
+  // Curve the cape
+  const capePositions = capeGeo.attributes.position;
+  for (let i = 0; i < capePositions.count; i++) {
+    const y = capePositions.getY(i);
+    const x = capePositions.getX(i);
+    // Curve outward at bottom
+    capePositions.setZ(i, -0.1 - y * 0.15 - Math.abs(x) * 0.1);
+  }
+  capeGeo.computeVertexNormals();
+  
+  const cape = new THREE.Mesh(capeGeo, capeMat);
+  cape.position.set(0, 1.0, -0.35);
+  cape.rotation.x = 0.1;
+  cape.castShadow = true;
+  group.add(cape);
+  
+  group.userData.cape = cape; // For animation
+  
+  // === ARMS - Powerful, armored ===
+  const limbMat = new THREE.MeshStandardMaterial({
+    color: colors.body,
+    roughness: 0.75,
+    metalness: 0.25,
+  });
+  
+  const upperArmGeo = new THREE.CapsuleGeometry(0.14, 0.4, 8, 12);
+  
+  const leftUpperArm = new THREE.Mesh(upperArmGeo, limbMat);
+  leftUpperArm.position.set(-0.55, 1.3, 0);
+  leftUpperArm.rotation.z = 0.35;
+  leftUpperArm.castShadow = true;
+  group.add(leftUpperArm);
+  
+  const rightUpperArm = new THREE.Mesh(upperArmGeo, limbMat);
+  rightUpperArm.position.set(0.55, 1.3, 0);
+  rightUpperArm.rotation.z = -0.35;
+  rightUpperArm.castShadow = true;
+  group.add(rightUpperArm);
+  
+  const lowerArmGeo = new THREE.CapsuleGeometry(0.11, 0.45, 8, 12);
+  
+  const leftLowerArm = new THREE.Mesh(lowerArmGeo, limbMat);
+  leftLowerArm.position.set(-0.75, 0.7, 0.1);
+  leftLowerArm.rotation.z = 0.15;
+  leftLowerArm.castShadow = true;
+  group.add(leftLowerArm);
+  
+  const rightLowerArm = new THREE.Mesh(lowerArmGeo, limbMat);
+  rightLowerArm.position.set(0.75, 0.7, 0.1);
+  rightLowerArm.rotation.z = -0.15;
+  rightLowerArm.castShadow = true;
+  group.add(rightLowerArm);
+  
+  // Gauntlets
+  const gauntletMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a20,
+    roughness: 0.35,
+    metalness: 0.75,
+  });
+  
+  const gauntletGeo = new THREE.SphereGeometry(0.12, 10, 8);
+  
+  const leftGauntlet = new THREE.Mesh(gauntletGeo, gauntletMat);
+  leftGauntlet.position.set(-0.8, 0.3, 0.15);
+  leftGauntlet.scale.set(1.1, 0.9, 1.2);
+  leftGauntlet.castShadow = true;
+  group.add(leftGauntlet);
+  
+  const rightGauntlet = new THREE.Mesh(gauntletGeo, gauntletMat);
+  rightGauntlet.position.set(0.8, 0.3, 0.15);
+  rightGauntlet.scale.set(1.1, 0.9, 1.2);
+  rightGauntlet.castShadow = true;
+  group.add(rightGauntlet);
+  
+  // === LEGS - Powerful, armored ===
+  const legGeo = new THREE.CapsuleGeometry(0.15, 0.45, 8, 12);
+  
+  const leftLeg = new THREE.Mesh(legGeo, limbMat);
+  leftLeg.position.set(-0.25, 0.45, 0);
+  leftLeg.castShadow = true;
+  group.add(leftLeg);
+  
+  const rightLeg = new THREE.Mesh(legGeo, limbMat);
+  rightLeg.position.set(0.25, 0.45, 0);
+  rightLeg.castShadow = true;
+  group.add(rightLeg);
+  
+  // Armored boots
+  const bootGeo = new THREE.BoxGeometry(0.2, 0.12, 0.3);
+  
+  const leftBoot = new THREE.Mesh(bootGeo, armorMat);
+  leftBoot.position.set(-0.25, 0.06, 0.05);
+  leftBoot.castShadow = true;
+  group.add(leftBoot);
+  
+  const rightBoot = new THREE.Mesh(bootGeo, armorMat);
+  rightBoot.position.set(0.25, 0.06, 0.05);
+  rightBoot.castShadow = true;
+  group.add(rightBoot);
+  
+  // === GREATSWORD (optional - carried by boss) ===
+  const swordGroup = new THREE.Group();
+  
+  const bladeMat = new THREE.MeshStandardMaterial({
+    color: 0x3a3a45,
+    roughness: 0.25,
+    metalness: 0.9,
+    emissive: 0x200010,
+    emissiveIntensity: 0.2,
+  });
+  
+  const bladeGeo = new THREE.BoxGeometry(0.08, 1.4, 0.02);
+  const blade = new THREE.Mesh(bladeGeo, bladeMat);
+  blade.position.y = 0.7;
+  swordGroup.add(blade);
+  
+  // Blade edge taper (simple)
+  const edgeGeo = new THREE.ConeGeometry(0.04, 0.2, 4);
+  const edge = new THREE.Mesh(edgeGeo, bladeMat);
+  edge.position.y = 1.45;
+  swordGroup.add(edge);
+  
+  // Hilt
+  const hiltMat = new THREE.MeshStandardMaterial({
+    color: 0x2a1a15,
+    roughness: 0.5,
+    metalness: 0.7,
+  });
+  
+  const hiltGeo = new THREE.CylinderGeometry(0.03, 0.035, 0.25, 8);
+  const hilt = new THREE.Mesh(hiltGeo, hiltMat);
+  hilt.position.y = -0.12;
+  swordGroup.add(hilt);
+  
+  // Crossguard
+  const guardGeo = new THREE.BoxGeometry(0.25, 0.04, 0.06);
+  const guard = new THREE.Mesh(guardGeo, hiltMat);
+  guard.position.y = 0.02;
+  swordGroup.add(guard);
+  
+  // Position sword in right hand
+  swordGroup.position.set(0.85, 0.6, 0.2);
+  swordGroup.rotation.z = -0.3;
+  group.add(swordGroup);
+  
+  group.userData.sword = swordGroup;
+  
+  // === CORRUPTION AURA - Larger, more intense ===
+  group.userData.particles = createBossCorruptionParticles(colors.glow);
+  group.add(group.userData.particles);
+  
+  // Apply scale
+  group.scale.setScalar(scale);
+  
+  // Store materials for effects
+  group.userData.bodyMaterial = torsoMat;
+  group.userData.limbMaterial = limbMat;
+  group.userData.type = 'boss';
+  group.userData.isEnemyModel = true;
+  group.userData.isBoss = true;
+  
+  return group;
+}
+
+/**
+ * Create boss-specific corruption particles (larger, more intense)
+ */
+function createBossCorruptionParticles(glowColor) {
+  const particleCount = 40; // More particles for boss
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+  
+  const color = new THREE.Color(glowColor);
+  
+  for (let i = 0; i < particleCount; i++) {
+    // Wider spread for boss
+    positions[i * 3] = (Math.random() - 0.5) * 1.2;
+    positions[i * 3 + 1] = Math.random() * 2.0 + 0.3;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 1.0;
+    
+    // Color with variation
+    colors[i * 3] = color.r * (0.7 + Math.random() * 0.5);
+    colors[i * 3 + 1] = color.g * (0.7 + Math.random() * 0.5);
+    colors[i * 3 + 2] = color.b * (0.7 + Math.random() * 0.5);
+  }
+  
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  
+  const material = new THREE.PointsMaterial({
+    size: 0.12, // Larger particles
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  
+  const particles = new THREE.Points(geometry, material);
+  particles.userData.time = 0;
+  particles.userData.basePositions = positions.slice();
+  
+  return particles;
+}
+
+/**
  * Update enemy model animations (call each frame)
  */
 export function updateEnemyModel(model, delta) {
@@ -565,6 +1201,8 @@ export const ModelBuilder = {
   buildBerserkerModel,
   buildRevenantModel,
   buildSentinelModel,
+  buildRangedEnemyModel,
+  buildBossModel,
   updateEnemyModel,
   flashEnemyModel,
   ENEMY_PALETTES
