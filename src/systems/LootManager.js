@@ -259,6 +259,15 @@ export class LootManager {
     // Spawn visual drops
     this._spawnDrops(drops, position);
     
+    // Roll for equipment drop (via EquipmentManager)
+    if (this.equipmentManager) {
+      const equipment = this.equipmentManager.generateEquipmentDrop(tableKey);
+      if (equipment) {
+        this.equipmentManager.addToInventory(equipment);
+        console.log(`[LootManager] Equipment dropped: ${equipment.name}`);
+      }
+    }
+    
     return drops;
   }
   

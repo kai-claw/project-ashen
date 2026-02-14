@@ -10,6 +10,7 @@ import { World } from './world/World.js';
 import { InputManager } from './systems/InputManager.js';
 import { ItemManager } from './systems/ItemManager.js';
 import { LootManager } from './systems/LootManager.js';
+import { EquipmentManager } from './systems/EquipmentManager.js';
 import { HUD } from './ui/HUD.js';
 import { CrucibleUI } from './ui/CrucibleUI.js';
 import { StatsUI } from './ui/StatsUI.js';
@@ -160,6 +161,10 @@ itemManager.initItems(world.getItemSpawns());
 // --- Loot System ---
 const lootManager = new LootManager(scene, gameManager);
 
+// --- Equipment System ---
+const equipmentManager = new EquipmentManager(scene, gameManager, lootManager);
+lootManager.equipmentManager = equipmentManager; // Link for equipment drops
+
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
 player.setWorld(world); // Enable collision detection
@@ -182,6 +187,7 @@ gameManager.cameraController = cameraController;
 gameManager.itemManager = itemManager;  // For boss reward drops
 gameManager.floatingText = floatingText; // For XP gain text
 gameManager.lootManager = lootManager;  // For inventory/potions
+gameManager.equipmentManager = equipmentManager; // For equipment stats
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -219,6 +225,11 @@ function animate() {
     if (inputManager.useStaminaPotion) {
       lootManager.useItem('stamina-potion');
     }
+  }
+  
+  // Equipment UI toggle (I key)
+  if (inputManager.openEquipment) {
+    equipmentManager.toggleUI();
   }
   
   // Check hitstop - pause game entities during freeze frame
@@ -398,5 +409,11 @@ window.player = player;
 window.world = world;
 window.itemManager = itemManager;
 window.lootManager = lootManager;
+window.equipmentManager = equipmentManager;
 window.audioManager = audioManager;
 window.particleManager = particleManager;
+
+// Initialize equipment visuals after player is created
+gameManager.playerMesh = player.mesh;
+equipmentManager.applyEquipmentStats();
+equipmentManager.updateWeaponVisual();

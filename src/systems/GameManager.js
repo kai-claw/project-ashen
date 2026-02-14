@@ -278,9 +278,12 @@ export class GameManager {
     const statBonuses = this.getStatBonuses();
     const infusionBonuses = this.getInfusionBonuses();
     
-    // Combine stat + infusion bonuses for max health/stamina
-    this.maxHealth = 100 + statBonuses.bonusHealth + infusionBonuses.bonusHealth;
-    this.maxStamina = 100 + statBonuses.bonusStamina + infusionBonuses.bonusStamina;
+    // Get equipment bonuses
+    const equipBonuses = this.equipmentBonuses || { health: 0, stamina: 0 };
+    
+    // Combine stat + infusion + equipment bonuses for max health/stamina
+    this.maxHealth = 100 + statBonuses.bonusHealth + infusionBonuses.bonusHealth + (equipBonuses.health || 0);
+    this.maxStamina = 100 + statBonuses.bonusStamina + infusionBonuses.bonusStamina + (equipBonuses.stamina || 0);
     
     // Update mind stat for cooldown modifier
     this.mindStat = this.stats.mind;
@@ -290,6 +293,13 @@ export class GameManager {
       this.health = Math.min(this.health, this.maxHealth);
       this.stamina = Math.min(this.stamina, this.maxStamina);
     }
+  }
+  
+  /**
+   * Shorthand wrapper for external callers like EquipmentManager
+   */
+  applyStatBonuses() {
+    this._applyStatBonuses();
   }
   
   /**
@@ -517,7 +527,7 @@ export class GameManager {
   }
   
   /**
-   * Get current damage multiplier (includes stats, infusions, and War Cry)
+   * Get current damage multiplier (includes stats, infusions, equipment, and War Cry)
    */
   getDamageMultiplier() {
     // Base from infusions
@@ -530,6 +540,38 @@ export class GameManager {
       mult += this.warCryDamageBonus;
     }
     return mult;
+  }
+  
+  /**
+   * Get flat damage bonus from equipment
+   */
+  getEquipmentDamageBonus() {
+    if (!this.equipmentBonuses) return 0;
+    return this.equipmentBonuses.damage || 0;
+  }
+  
+  /**
+   * Get defense value from equipment (reduces incoming damage)
+   */
+  getEquipmentDefense() {
+    if (!this.equipmentBonuses) return 0;
+    return this.equipmentBonuses.defense || 0;
+  }
+  
+  /**
+   * Get crit chance from equipment (0-100)
+   */
+  getEquipmentCritChance() {
+    if (!this.equipmentBonuses) return 0;
+    return this.equipmentBonuses.critChance || 0;
+  }
+  
+  /**
+   * Get crit damage bonus from equipment (percentage)
+   */
+  getEquipmentCritDamage() {
+    if (!this.equipmentBonuses) return 0;
+    return this.equipmentBonuses.critDamage || 0;
   }
   
   /**
@@ -716,6 +758,12 @@ export class GameManager {
     // Apply death lesson resistance
     const resistance = this.deathLessons[damageType] || 0;
     let finalDamage = Math.floor(amount * (1 - resistance));
+    
+    // Apply equipment defense (flat reduction, minimum 1 damage)
+    const defense = this.getEquipmentDefense();
+    if (defense > 0) {
+      finalDamage = Math.max(1, finalDamage - defense);
+    }
 
     if (isBlocking) {
       const blockCost = finalDamage * 0.5;

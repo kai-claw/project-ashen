@@ -124,6 +124,9 @@ export class InputManager {
   get useHealthPotion() { return this.consumeBuffer('Digit1'); }
   get useStaminaPotion() { return this.consumeBuffer('Digit2'); }
   
+  // --- Equipment/Inventory UI ---
+  get openEquipment() { return this.consumeBuffer('KeyI'); }
+  
   // Check if LMB is being held (for charge indicator)
   get isChargingAttack() { 
     return this.mouseButtons[0] && this.lmbHoldStart > 0; 

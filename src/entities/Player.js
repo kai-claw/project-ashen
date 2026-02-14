@@ -833,14 +833,30 @@ export class Player {
     const damageMultiplier = this.gm.getDamageMultiplier();
     const baseDamage = isHeavy ? this.heavyDamage : this.lightDamage;
     
+    // Add equipment flat damage bonus
+    const equipDamageBonus = this.gm.getEquipmentDamageBonus ? this.gm.getEquipmentDamageBonus() : 0;
+    
+    // Calculate base damage
+    let finalDamage = Math.floor((baseDamage + equipDamageBonus) * damageMultiplier);
+    
+    // Check for critical hit
+    let isCrit = false;
+    const critChance = this.gm.getEquipmentCritChance ? this.gm.getEquipmentCritChance() : 0;
+    if (critChance > 0 && Math.random() * 100 < critChance) {
+      isCrit = true;
+      const critDamageBonus = this.gm.getEquipmentCritDamage ? this.gm.getEquipmentCritDamage() : 50;
+      finalDamage = Math.floor(finalDamage * (1.5 + critDamageBonus / 100));
+    }
+    
     this.activeAttack = {
       position: this.mesh.position.clone().add(
         new THREE.Vector3(Math.sin(this.facingAngle), 1, Math.cos(this.facingAngle)).multiplyScalar(1.2)
       ),
       range: this.attackRange,
-      damage: Math.floor(baseDamage * damageMultiplier),
+      damage: finalDamage,
       postureDmg: isHeavy ? this.heavyPostureDmg : this.lightPostureDmg,
       isHeavy,
+      isCrit,
     };
   }
 
