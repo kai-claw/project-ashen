@@ -725,89 +725,218 @@ export class Enemy {
   
   /**
    * Update procedural animation for enemies using ModelBuilder models
-   * Handles bobbing, arm swinging, head movement based on state
+   * Handles hostile, jerky movements that feel alien vs player's controlled motions
+   * ENEMY ANIMATION PHILOSOPHY:
+   * - Jerky/erratic vs player's smooth
+   * - Twitchy head movements (corruption/hostility)
+   * - Aggressive forward posture
+   * - Faster, frantic attack windups
+   * - Dramatic death dissolve/collapse
    */
   _updateProceduralAnimation(delta) {
     if (!this.proceduralModel) return;
     
     const time = this.stateTimer;
+    const globalTime = Date.now() * 0.001; // Persistent time for erratic effects
     const speedMult = this.config.animSpeedMult || 1.0;
     
     // Get model children for animation
     const model = this.proceduralModel;
     
-    // Base bobbing animation (subtle idle breathing)
+    // Base bobbing animation
     let bobAmount = 0.02;
     let bobSpeed = 2;
+    
+    // ========== ERRATIC TWITCH SYSTEM ==========
+    // Random micro-twitches that make enemies feel corrupted/hostile
+    // Use noise-like pattern based on entity-unique offset
+    const entityOffset = (this.mesh?.uuid?.charCodeAt(0) || 0) * 0.1;
+    const twitchIntensity = this.config.isElite ? 0.08 : 0.05;
+    const baseTwitch = Math.sin(globalTime * 12 + entityOffset) * Math.sin(globalTime * 7.3) * twitchIntensity;
     
     // Adjust animation based on state
     switch (this.state) {
       case STATES.IDLE:
       case STATES.DORMANT:
-        // Slow idle breathing
-        bobAmount = 0.015;
-        bobSpeed = 1.5;
-        // Slight side-to-side head movement
-        model.rotation.y = Math.sin(time * 0.8) * 0.05;
+        // JERKY IDLE: Erratic breathing, twitchy head snaps
+        bobAmount = 0.02;
+        bobSpeed = 2.5;
+        
+        // Twitchy head movement - irregular snaps, not smooth
+        const idleHeadBase = Math.sin(time * 1.2) * 0.06;
+        const idleTwitch = Math.sin(time * 8.5) * Math.sin(time * 13.2) * 0.08;
+        const idleSnap = (Math.random() < 0.002) ? (Math.random() - 0.5) * 0.2 : 0;
+        model.rotation.y = idleHeadBase + idleTwitch + idleSnap;
+        
+        // Subtle body sway - asymmetric and unsettling
+        model.rotation.z = Math.sin(time * 0.7) * 0.02 + baseTwitch * 0.5;
+        
+        // Occasional forward jerk (checking for threats)
+        if (Math.sin(time * 0.3) > 0.95) {
+          model.rotation.x = 0.05;
+        } else {
+          model.rotation.x = THREE.MathUtils.lerp(model.rotation.x, 0, delta * 2);
+        }
         break;
         
       case STATES.PATROL:
+        // JERKY PATROL: Uneven gait, head constantly scanning
+        bobAmount = 0.05;
+        bobSpeed = 7 * speedMult;
+        
+        // Head scanning - erratic left-right with twitches
+        const patrolScan = Math.sin(time * 1.8) * 0.15;
+        const patrolTwitch = Math.sin(time * 11) * 0.04;
+        model.rotation.y = patrolScan + patrolTwitch;
+        
+        // Slight asymmetric sway
+        model.rotation.z = Math.sin(time * bobSpeed) * 0.03;
+        break;
+        
       case STATES.CIRCLE:
-        // Walking bob
-        bobAmount = 0.04;
-        bobSpeed = 6 * speedMult;
+        // CIRCLING: Predatory stalking, low crouch
+        bobAmount = 0.03;
+        bobSpeed = 5 * speedMult;
+        
+        // Low predatory crouch
+        model.rotation.x = 0.08;
+        
+        // Head tracking with twitchy focus
+        model.rotation.y = baseTwitch * 2;
+        model.rotation.z = Math.sin(time * 3) * 0.02;
         break;
         
       case STATES.CHASE:
       case STATES.FLANK:
-        // Running - more aggressive bob
-        bobAmount = 0.06;
-        bobSpeed = 10 * speedMult;
-        // Forward lean
-        model.rotation.x = 0.15;
+        // AGGRESSIVE PURSUIT: Heavy forward lean, frantic movement
+        bobAmount = 0.08;
+        bobSpeed = 12 * speedMult;
+        
+        // Aggressive forward lean - hunched predator
+        model.rotation.x = 0.25;
+        
+        // Frantic head bobbing while running
+        const chaseHeadBob = Math.sin(time * bobSpeed * 1.5) * 0.06;
+        model.rotation.y = chaseHeadBob + baseTwitch;
+        
+        // Asymmetric body roll (uneven gait)
+        model.rotation.z = Math.sin(time * bobSpeed) * 0.04;
         break;
         
       case STATES.RETREAT:
-        // Backing away - backward lean
-        bobAmount = 0.03;
-        bobSpeed = 5 * speedMult;
-        model.rotation.x = -0.1;
+        // PANICKED RETREAT: Looking back, stumbling motion
+        bobAmount = 0.04;
+        bobSpeed = 8 * speedMult;
+        
+        // Backward lean while fleeing
+        model.rotation.x = -0.15;
+        
+        // Head looking back (toward threat)
+        model.rotation.y = Math.sin(time * 2) * 0.1;
+        
+        // Stumbling side-to-side
+        model.rotation.z = Math.sin(time * bobSpeed) * 0.06 + baseTwitch;
         break;
         
       case STATES.ATTACK:
-        // Attack lunge
-        bobAmount = 0.02;
-        bobSpeed = 15 * speedMult;
-        // Forward strike lean
-        const attackProgress = Math.min(time / 0.3, 1);
-        model.rotation.x = 0.3 * Math.sin(attackProgress * Math.PI);
+        // FRANTIC ATTACK: Fast, aggressive windup and strike
+        bobAmount = 0.03;
+        bobSpeed = 18 * speedMult;
+        
+        const windupTime = (this.config.attackWindup || 0.5) * 
+          (ATTACK_CONFIGS[this.currentAttackType]?.windupMult || 1.0);
+        
+        if (time < windupTime) {
+          // WINDUP: Pull back aggressively, trembling with anticipation
+          const windupProgress = time / windupTime;
+          
+          // Pull back - dramatic telegraph
+          model.rotation.x = -0.2 * windupProgress;
+          
+          // Trembling intensity increases as attack approaches
+          const tremble = Math.sin(time * 30) * 0.03 * windupProgress;
+          model.rotation.z = tremble;
+          model.rotation.y = Math.sin(time * 25) * 0.02 * windupProgress;
+          
+          // Slight crouch before lunging
+          model.position.y = -0.05 * windupProgress;
+        } else {
+          // STRIKE: Explosive forward lunge
+          const strikeTime = time - windupTime;
+          const strikeDuration = 0.15;
+          const strikeProgress = Math.min(strikeTime / strikeDuration, 1);
+          
+          // Explosive forward lean
+          model.rotation.x = THREE.MathUtils.lerp(-0.2, 0.4, strikeProgress);
+          
+          // Strike follow-through
+          model.rotation.z = Math.sin(strikeProgress * Math.PI) * 0.1;
+          
+          // Lunge forward
+          model.position.y = -0.05 + strikeProgress * 0.08;
+        }
         break;
         
       case STATES.STAGGERED:
-        // Wobble effect
-        model.rotation.z = Math.sin(time * 15) * 0.1 * (1 - time / 1.5);
-        model.rotation.x = Math.cos(time * 12) * 0.05;
+        // STAGGERED: Violent wobbling, losing control
+        const staggerDecay = Math.max(0, 1 - time / 1.5);
+        model.rotation.z = Math.sin(time * 18) * 0.15 * staggerDecay;
+        model.rotation.x = Math.cos(time * 14) * 0.08 * staggerDecay;
+        model.rotation.y = Math.sin(time * 11) * 0.1 * staggerDecay;
+        
+        // Sinking down while staggered
+        model.position.y = -0.1 * staggerDecay;
         bobAmount = 0;
         break;
         
       case STATES.RISING:
-        // Rising from ground
+        // RISING: Emerging from ground/sarcophagus
         const riseProgress = Math.min(time / 0.8, 1);
-        model.position.y = THREE.MathUtils.lerp(-0.5, 0, riseProgress);
-        model.rotation.x = (1 - riseProgress) * 0.5;
+        
+        // Rise up with jerky motion
+        const riseY = THREE.MathUtils.lerp(-0.6, 0, this._easeOutBack(riseProgress));
+        model.position.y = riseY;
+        
+        // Hunched then straightening
+        model.rotation.x = (1 - riseProgress) * 0.6;
+        
+        // Twitchy awakening
+        model.rotation.z = Math.sin(time * 15) * 0.05 * (1 - riseProgress);
+        bobAmount = 0;
+        break;
+        
+      case STATES.DEAD:
+        // DEATH: Dramatic collapse and dissolve (handled separately but add twitch)
+        if (time < 0.5) {
+          // Initial death spasm
+          const deathSpasm = Math.sin(time * 20) * Math.exp(-time * 3);
+          model.rotation.z = deathSpasm * 0.2;
+          model.rotation.x = time * 0.3;
+        }
         bobAmount = 0;
         break;
         
       default:
-        // Reset rotation for unknown states
+        // Reset rotation smoothly
         model.rotation.x = THREE.MathUtils.lerp(model.rotation.x, 0, delta * 3);
         model.rotation.z = THREE.MathUtils.lerp(model.rotation.z, 0, delta * 3);
     }
     
     // Apply bob (only if not dead/staggered)
     if (bobAmount > 0 && this.state !== STATES.STAGGERED && this.state !== STATES.DEAD) {
-      model.position.y = Math.sin(time * bobSpeed) * bobAmount;
+      // Add slight irregularity to bob
+      const bobIrregularity = Math.sin(time * bobSpeed * 0.7) * 0.2;
+      model.position.y = (model.position.y || 0) + Math.sin(time * bobSpeed + bobIrregularity) * bobAmount;
     }
+  }
+  
+  /**
+   * Easing function for dramatic motion
+   */
+  _easeOutBack(t) {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
   }
   
   _createHealthBar(heightOffset) {
@@ -2964,10 +3093,118 @@ export class Enemy {
       return; // Skip normal fade
     }
 
-    // Fade out after death animation (normal enemies)
-    setTimeout(() => {
-      this._fadeOutModel();
-    }, 2000);
+    // === DRAMATIC ENEMY DEATH SEQUENCE ===
+    // Regular enemies get dramatic collapse + dissolve effect
+    this._enemyDeathSequence();
+  }
+  
+  /**
+   * Dramatic death sequence for regular enemies
+   * Collapse, twitch, dissolve with corruption particles
+   */
+  _enemyDeathSequence() {
+    const deathDuration = 2500; // 2.5 seconds for dramatic death
+    const startTime = Date.now();
+    const targetModel = this.gltfModel || this.fallbackBody;
+    const initialY = targetModel?.position.y || 0;
+    const initialRotX = targetModel?.rotation.x || 0;
+    const initialRotZ = targetModel?.rotation.z || 0;
+    
+    // Enemy type affects death style
+    const isElite = this.config.isElite;
+    const deathColor = isElite ? 0x660033 : 0x333333; // Dark red for elites, gray for regular
+    
+    // Death particle burst (if particle manager available)
+    if (this.gm?.particleManager) {
+      this.gm.particleManager.spawnDeathBurst(this.mesh.position.clone());
+    }
+    
+    const animateDeath = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / deathDuration, 1);
+      
+      if (targetModel) {
+        // Phase 1 (0-30%): Collapse with death spasms
+        if (progress < 0.3) {
+          const collapseProgress = progress / 0.3;
+          
+          // Fall to knees/collapse
+          targetModel.position.y = initialY - collapseProgress * 0.4;
+          
+          // Dramatic forward/sideways collapse based on enemy type
+          const collapseDir = (this.mesh.uuid?.charCodeAt(0) || 0) % 2 === 0 ? 1 : -1;
+          targetModel.rotation.x = initialRotX + collapseProgress * 0.4;
+          targetModel.rotation.z = initialRotZ + collapseProgress * 0.25 * collapseDir;
+          
+          // Death twitches - violent shaking that fades
+          const twitchIntensity = (1 - collapseProgress) * 0.15;
+          const twitch = Math.sin(elapsed * 0.025) * twitchIntensity;
+          targetModel.rotation.z += twitch;
+          targetModel.rotation.y = Math.sin(elapsed * 0.03) * twitchIntensity * 0.5;
+        }
+        // Phase 2 (30-100%): Dissolve into corruption
+        else {
+          const dissolveProgress = (progress - 0.3) / 0.7;
+          
+          // Continue sinking
+          targetModel.position.y = initialY - 0.4 - dissolveProgress * 0.3;
+          
+          // Final rotation locked in
+          const collapseDir = (this.mesh.uuid?.charCodeAt(0) || 0) % 2 === 0 ? 1 : -1;
+          targetModel.rotation.x = initialRotX + 0.4 + dissolveProgress * 0.1;
+          targetModel.rotation.z = initialRotZ + 0.25 * collapseDir;
+          
+          // Flicker/dissolve effect
+          if (elapsed % 150 < 75) {
+            this._flashModel(deathColor, 30);
+          }
+          
+          // Fade opacity and shrink (dissolving into corruption)
+          targetModel.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach(mat => {
+                mat.transparent = true;
+                mat.opacity = Math.max(0, 1 - dissolveProgress * 1.2);
+              });
+            }
+          });
+          
+          // Shrink slightly as they dissolve
+          const shrinkScale = 1 - dissolveProgress * 0.15;
+          targetModel.scale.setScalar(shrinkScale * (this.config.modelScale || 1.0));
+          
+          // Spawn dissolve particles periodically (wisps rising from body)
+          if (this.gm?.particleManager && elapsed % 300 < 50 && dissolveProgress < 0.8) {
+            const particlePos = this.mesh.position.clone().add(
+              new THREE.Vector3(
+                (Math.random() - 0.5) * 0.8,
+                Math.random() * 1.2,
+                (Math.random() - 0.5) * 0.8
+              )
+            );
+            this.gm.particleManager.spawnHitSparks(particlePos, 2, false);
+          }
+        }
+      }
+      
+      // Fade eyes (corruption draining)
+      if (this.eye) {
+        this.eye.material.emissiveIntensity = Math.max(0, 3 * (1 - progress * 1.5));
+        if (this.eye.material.opacity !== undefined) {
+          this.eye.material.opacity = Math.max(0, 1 - progress);
+        }
+      }
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateDeath);
+      } else {
+        // Death complete - hide mesh
+        this.mesh.visible = false;
+      }
+    };
+    
+    animateDeath();
   }
   
   _cryptLordDeathSequence() {
