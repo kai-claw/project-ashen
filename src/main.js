@@ -24,6 +24,7 @@ import { InteractionManager } from './systems/InteractionManager.js';
 import { ShopManager } from './systems/ShopManager.js';
 import { DialogueManager } from './systems/DialogueManager.js';
 import { WeaponManager } from './systems/WeaponManager.js';
+import { AttackAnimator } from './systems/AttackAnimator.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -175,6 +176,10 @@ lootManager.equipmentManager = equipmentManager; // Link for equipment drops
 const weaponManager = new WeaponManager(gameManager, equipmentManager);
 equipmentManager.weaponManager = weaponManager; // Link for weapon sync
 
+// --- Attack Animation System ---
+// Note: cameraController is created later, will be linked after player
+let attackAnimator = null;
+
 // --- Chest System ---
 const chestManager = new ChestManager(
   scene,
@@ -194,6 +199,21 @@ const player = new Player(scene, gameManager, inputManager);
 player.setWorld(world); // Enable collision detection
 const cameraController = new CameraController(camera, player.mesh, inputManager);
 player.setCameraController(cameraController);
+
+// Initialize attack animator now that all dependencies exist
+attackAnimator = new AttackAnimator(equipmentManager, weaponManager, particleManager, cameraController);
+
+// Hook weapon manager attack callbacks to animator
+weaponManager.onAttackStart = (data) => {
+  const speedMult = gameManager.getAttackSpeedMultiplier ? gameManager.getAttackSpeedMultiplier() : 1.0;
+  attackAnimator.startAttack(data.attackType, speedMult);
+};
+weaponManager.onAttackEnd = () => {
+  // Animation handles its own completion
+};
+
+// Link animator to gameManager
+gameManager.attackAnimator = attackAnimator;
 
 const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager, lootManager);
 
@@ -250,6 +270,7 @@ gameManager.floatingText = floatingText; // For XP gain text
 gameManager.lootManager = lootManager;  // For inventory/potions
 gameManager.equipmentManager = equipmentManager; // For equipment stats
 gameManager.weaponManager = weaponManager; // For weapon stats/attacks
+gameManager.attackAnimator = attackAnimator; // Will be set after creation
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -360,6 +381,11 @@ function animate() {
   
   // Weapon system update
   weaponManager.update(delta);
+  
+  // Attack animation update
+  if (attackAnimator) {
+    attackAnimator.update(delta);
+  }
   
   // Weapon switching hotkeys (when not in UI)
   if (!gameManager.isDead && !shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive()) {
@@ -516,6 +542,8 @@ window.particleManager = particleManager;
 window.interactionManager = interactionManager;
 window.shopManager = shopManager;
 window.dialogueManager = dialogueManager;
+window.attackAnimator = attackAnimator;
+window.weaponManager = weaponManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;

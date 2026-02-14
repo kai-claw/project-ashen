@@ -769,6 +769,12 @@ export class Player {
       );
     }
     
+    // Trigger weapon attack animation (Phase 19)
+    if (this.gm.attackAnimator) {
+      const speedMult = this.gm.getAttackSpeedMultiplier ? this.gm.getAttackSpeedMultiplier() : 1.0;
+      this.gm.attackAnimator.startAttack(isHeavy ? 'heavy' : 'light', speedMult);
+    }
+    
     this._changeState(isHeavy ? STATES.HEAVY_ATTACKING : STATES.ATTACKING);
   }
 
@@ -973,6 +979,12 @@ export class Player {
       this.gm.cameraController.shakeHeavy();
     }
     
+    // Trigger heavy weapon attack animation (Phase 19)
+    if (this.gm.attackAnimator) {
+      const speedMult = this.gm.getAttackSpeedMultiplier ? this.gm.getAttackSpeedMultiplier() : 1.0;
+      this.gm.attackAnimator.startAttack('heavy', speedMult * 0.7); // Slower for charged
+    }
+    
     this._changeState(STATES.CHARGED_ATTACKING);
   }
   
@@ -1133,8 +1145,15 @@ export class Player {
     if (this.state === newState) return;
     
     // Cleanup old state
-    if (this.state === STATES.ATTACKING || this.state === STATES.HEAVY_ATTACKING) {
+    if (this.state === STATES.ATTACKING || this.state === STATES.HEAVY_ATTACKING || this.state === STATES.CHARGED_ATTACKING) {
       this.activeAttack = null;
+      
+      // Cancel attack animation if interrupted (e.g., staggered)
+      if (newState === STATES.STAGGERED || newState === STATES.DEAD) {
+        if (this.gm.attackAnimator) {
+          this.gm.attackAnimator.cancel();
+        }
+      }
     }
 
     this.state = newState;
