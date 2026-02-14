@@ -25,6 +25,7 @@ import { ShopManager } from './systems/ShopManager.js';
 import { DialogueManager } from './systems/DialogueManager.js';
 import { WeaponManager } from './systems/WeaponManager.js';
 import { AttackAnimator } from './systems/AttackAnimator.js';
+import { ManaManager } from './systems/ManaManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -139,6 +140,8 @@ composer.addPass(colorGradingPass);
 // --- Systems ---
 const clock = new THREE.Clock();
 const gameManager = new GameManager();
+const manaManager = new ManaManager(gameManager);
+gameManager.manaManager = manaManager; // Cross-reference for stat updates
 const inputManager = new InputManager(renderer.domElement);
 const audioManager = new AudioManager(camera);
 const particleManager = new ParticleManager(scene);
@@ -300,7 +303,7 @@ function animate() {
 
   inputManager.update(delta);
   
-  // Potion hotkeys (Ctrl+1 = Health, Ctrl+2 = Stamina)
+  // Potion hotkeys (Ctrl+1 = Health, Ctrl+2 = Stamina, Ctrl+3 = Mana)
   if (!gameManager.isDead) {
     if (inputManager.useHealthPotion) {
       lootManager.useItem('health-potion');
@@ -308,6 +311,10 @@ function animate() {
     }
     if (inputManager.useStaminaPotion) {
       lootManager.useItem('stamina-potion');
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.5 });
+    }
+    if (inputManager.useManaPotion) {
+      lootManager.useItem('mana-potion');
       if (audioManager) audioManager.play('itemPickup', { volume: 0.5 });
     }
   }
@@ -437,6 +444,7 @@ function animate() {
   crucibleUI.update();
   statsUI.update();
   gameManager.update(delta);
+  manaManager.update(delta); // Phase 20: Mana regeneration
   audioManager.updateListener();
   floatingText.update(delta);
 
@@ -561,6 +569,7 @@ window.shopManager = shopManager;
 window.dialogueManager = dialogueManager;
 window.attackAnimator = attackAnimator;
 window.weaponManager = weaponManager;
+window.manaManager = manaManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;

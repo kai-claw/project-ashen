@@ -147,6 +147,14 @@ export class StatsUI {
         desc: '+5% cooldown reduction per point',
         getBonus: (val) => `-${val * 5}% cooldowns`
       },
+      { 
+        id: 'intelligence', 
+        name: 'Intelligence', 
+        icon: '🔮', 
+        color: '#4488ff',
+        desc: '+10 Max Mana, +5% mana regen per point',
+        getBonus: (val) => `+${val * 10} Mana`
+      },
     ];
     
     // Create stat rows
@@ -371,11 +379,14 @@ export class StatsUI {
     
     // Update derived stats
     const bonuses = this.gm.getStatBonuses();
+    const maxMana = this.gm.manaManager ? this.gm.manaManager.maxMana : 100;
     this.derivedStats.innerHTML = `
       <div>Max HP: <span style="color: #ff6666">${this.gm.maxHealth}</span></div>
       <div>Max Stamina: <span style="color: #66ff88">${this.gm.maxStamina}</span></div>
+      <div>Max Mana: <span style="color: #4488ff">${maxMana}</span></div>
       <div>Damage Mult: <span style="color: #ff8844">${(bonuses.damageMult * 100).toFixed(0)}%</span></div>
       <div>Attack Speed: <span style="color: #88ccff">${(bonuses.attackSpeedMult * 100).toFixed(0)}%</span></div>
+      <div>Mana Regen: <span style="color: #4488ff">${(bonuses.manaRegenMult * 100).toFixed(0)}%</span></div>
       <div>Stamina Regen: <span style="color: #66ff88">${(bonuses.staminaRegenMult * 100).toFixed(0)}%</span></div>
       <div>Cooldown Mult: <span style="color: #cc88ff">${(bonuses.cooldownMult * 100).toFixed(0)}%</span></div>
     `;

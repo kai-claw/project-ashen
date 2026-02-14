@@ -35,6 +35,18 @@ export const ITEM_TYPES = {
     maxStack: 10,
     hotkey: '2',
   },
+  MANA_POTION: {
+    id: 'mana-potion',
+    name: 'Mana Potion',
+    type: 'consumable',
+    description: 'Restores 50 Mana when used (Phase 20)',
+    effect: { manaAmount: 50 },
+    color: 0x4488ff,
+    emissive: 0x2255cc,
+    stackable: true,
+    maxStack: 10,
+    hotkey: '3',
+  },
   IRON_ORE: {
     id: 'iron-ore',
     name: 'Iron Ore',
@@ -102,6 +114,7 @@ const LOOT_TABLES = {
   revenant: [
     { itemId: 'gold', chance: 0.85, minQty: 8, maxQty: 18 },
     { itemId: 'stamina-potion', chance: 0.2, minQty: 1, maxQty: 1 },
+    { itemId: 'mana-potion', chance: 0.15, minQty: 1, maxQty: 1 },
     { itemId: 'dark-shard', chance: 0.2, minQty: 1, maxQty: 2 },
     { itemId: 'spirit-essence', chance: 0.1, minQty: 1, maxQty: 1 },
   ],
@@ -115,6 +128,7 @@ const LOOT_TABLES = {
     { itemId: 'gold', chance: 1.0, minQty: 30, maxQty: 60 },
     { itemId: 'health-potion', chance: 0.4, minQty: 1, maxQty: 2 },
     { itemId: 'stamina-potion', chance: 0.35, minQty: 1, maxQty: 2 },
+    { itemId: 'mana-potion', chance: 0.3, minQty: 1, maxQty: 2 },
     { itemId: 'iron-ore', chance: 0.4, minQty: 2, maxQty: 4 },
     { itemId: 'dark-shard', chance: 0.3, minQty: 1, maxQty: 3 },
     { itemId: 'spirit-essence', chance: 0.2, minQty: 1, maxQty: 1 },
@@ -124,6 +138,7 @@ const LOOT_TABLES = {
     { itemId: 'gold', chance: 1.0, minQty: 200, maxQty: 400 },
     { itemId: 'health-potion', chance: 1.0, minQty: 3, maxQty: 5 },
     { itemId: 'stamina-potion', chance: 1.0, minQty: 3, maxQty: 5 },
+    { itemId: 'mana-potion', chance: 1.0, minQty: 2, maxQty: 4 },
     { itemId: 'dark-shard', chance: 1.0, minQty: 5, maxQty: 10 },
     { itemId: 'spirit-essence', chance: 1.0, minQty: 3, maxQty: 5 },
   ],
@@ -526,6 +541,20 @@ export class LootManager {
             `+${itemDef.effect.staminaAmount} Stamina`,
             this.gm.player.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)),
             { color: '#44ff44', duration: 1.5 }
+          );
+        }
+      }
+      
+      // Phase 20: Mana potion support
+      if (itemDef.effect.manaAmount && this.gm?.manaManager) {
+        const restored = this.gm.manaManager.restoreMana(itemDef.effect.manaAmount);
+        
+        // Visual feedback
+        if (this.gm.floatingText && this.gm.player && restored > 0) {
+          this.gm.floatingText.spawn(
+            `+${restored} Mana`,
+            this.gm.player.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)),
+            { color: '#4488ff', duration: 1.5 }
           );
         }
       }

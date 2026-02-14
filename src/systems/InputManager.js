@@ -120,9 +120,10 @@ export class InputManager {
   get warCryAbility() { return this.consumeBuffer('KeyG'); }
   get chargedAttack() { return this.consumeBuffer('chargedAttack'); }
   
-  // --- Potion Hotkeys (hold Ctrl + 1/2 for potions, plain 1-4 for weapons) ---
+  // --- Potion Hotkeys (hold Ctrl + 1/2/3 for potions, plain 1-4 for weapons) ---
   get useHealthPotion() { return (this.keys['ControlLeft'] || this.keys['ControlRight']) && this.consumeBuffer('Digit1'); }
   get useStaminaPotion() { return (this.keys['ControlLeft'] || this.keys['ControlRight']) && this.consumeBuffer('Digit2'); }
+  get useManaPotion() { return (this.keys['ControlLeft'] || this.keys['ControlRight']) && this.consumeBuffer('Digit3'); }
   
   // --- Weapon Switching ---
   get cycleWeapon() { return this.consumeBuffer('KeyQ') || this.consumeBuffer('Tab'); }

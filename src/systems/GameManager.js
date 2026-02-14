@@ -66,13 +66,17 @@ export class GameManager {
     // 3 points earned per level (starting at level 1 = 0 points, level 2 = 3, etc.)
     this.statPointsPerLevel = 3;
     this.stats = {
-      vigor: 0,      // +5 Max HP per point
-      endurance: 0,  // +5 Max Stamina, +5% regen per point
-      strength: 0,   // +5% melee damage per point
-      dexterity: 0,  // +3% attack speed per point
-      mind: 0,       // +5% cooldown reduction per point
+      vigor: 0,        // +5 Max HP per point
+      endurance: 0,    // +5 Max Stamina, +5% regen per point
+      strength: 0,     // +5% melee damage per point
+      dexterity: 0,    // +3% attack speed per point
+      mind: 0,         // +5% cooldown reduction per point
+      intelligence: 0, // +10 Max Mana, +5% mana regen per point (Phase 20)
     };
     this.spentStatPoints = 0;
+    
+    // Mana manager reference (set via main.js)
+    this.manaManager = null;
     
     // === ABILITY SYSTEM ===
     this.abilities = ABILITIES;
@@ -178,6 +182,7 @@ export class GameManager {
             strength: data.stats.strength || 0,
             dexterity: data.stats.dexterity || 0,
             mind: data.stats.mind || 0,
+            intelligence: data.stats.intelligence || 0,
           };
         }
         this.spentStatPoints = data.spentStatPoints || 0;
@@ -268,11 +273,14 @@ export class GameManager {
       attackSpeedMult: 1.0 + (this.stats.dexterity * 0.03),
       // Mind: +5% cooldown reduction per point (0.95^n style, or just multiplier)
       cooldownMult: Math.max(0.5, 1.0 - (this.stats.mind * 0.05)),
+      // Intelligence: +10 Max Mana per point, +5% mana regen per point (Phase 20)
+      bonusMana: this.stats.intelligence * 10,
+      manaRegenMult: 1.0 + (this.stats.intelligence * 0.05),
     };
   }
   
   /**
-   * Apply stat bonuses to derived stats (max HP, stamina, etc.)
+   * Apply stat bonuses to derived stats (max HP, stamina, mana, etc.)
    */
   _applyStatBonuses() {
     const statBonuses = this.getStatBonuses();
@@ -292,6 +300,11 @@ export class GameManager {
     if (!this.isDead) {
       this.health = Math.min(this.health, this.maxHealth);
       this.stamina = Math.min(this.stamina, this.maxStamina);
+    }
+    
+    // Recalculate mana if ManaManager exists (Phase 20)
+    if (this.manaManager) {
+      this.manaManager.recalculateMaxMana();
     }
   }
   
@@ -335,10 +348,15 @@ export class GameManager {
     
     console.log(`[GameManager] LEVEL UP! Now level ${this.currentLevel}`);
     
-    // Full health restore
+    // Full health/stamina/mana restore
     this.health = this.maxHealth;
     this.stamina = this.maxStamina;
     this.posture = 0;
+    
+    // Full mana restore on level up (Phase 20)
+    if (this.manaManager) {
+      this.manaManager.fullRestore();
+    }
     
     // Play level up sound
     if (this.audioManager) {
@@ -875,6 +893,11 @@ export class GameManager {
     this.health = this.maxHealth;
     this.stamina = this.maxStamina;
     this.posture = 0;
+
+    // Restore mana on respawn (Phase 20)
+    if (this.manaManager) {
+      this.manaManager.onRespawn();
+    }
 
     // Reset player position
     if (this.player) {
