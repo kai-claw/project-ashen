@@ -41,6 +41,8 @@ import { createDayNightLighting, getDayNightLighting } from './systems/DayNightL
 import { createWeatherManager, getWeatherManager } from './systems/WeatherManager.js';
 import { createTimeWeatherGameplay, getTimeWeatherGameplay } from './systems/TimeWeatherGameplay.js';
 import { createRareEventManager, getRareEventManager } from './systems/RareEventManager.js';
+import { createQuestManager, getQuestManager } from './systems/QuestManager.js';
+import { createQuestWorldHooks, getQuestWorldHooks } from './systems/QuestWorldHooks.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -179,6 +181,12 @@ gameManager.dayNightLighting = dayNightLighting;
 gameManager.weatherManager = weatherManager;
 gameManager.timeWeatherGameplay = timeWeatherGameplay;
 gameManager.rareEventManager = rareEventManager;
+
+// --- Quest System (Phase 25) ---
+const questManager = createQuestManager();
+const questWorldHooks = createQuestWorldHooks();
+gameManager.questManager = questManager;
+gameManager.questWorldHooks = questWorldHooks;
 
 // Initialize audio on first user interaction
 let audioInitialized = false;
@@ -418,6 +426,46 @@ bossSpawner.initialize(player);
 // --- Dungeon Manager System (Phase 22) ---
 const dungeonManager = createDungeonManager(scene, world, player, gameManager, inputManager, audioManager);
 gameManager.dungeonManager = dungeonManager;
+
+// --- Initialize Quest System (Phase 25) ---
+questManager.init({
+  inventory: lootManager,
+  stats: gameManager,
+  scene: scene,
+});
+questWorldHooks.init({
+  questManager: questManager,
+  scene: scene,
+  enemyManager: enemyManager,
+  itemManager: itemManager,
+  npcManager: world.npcManager,
+  bossManager: bossSpawner,
+  player: player,
+});
+
+// Wire enemy death events to quest system
+enemyManager.onEnemyDeath = (enemyType, enemyData, position) => {
+  questWorldHooks.onEnemyKilled(enemyType, enemyData);
+};
+
+// Wire boss defeat events to quest system
+const originalBossDefeated = bossSpawner.onBossDefeated;
+bossSpawner.onBossDefeated = (bossData, arena) => {
+  questWorldHooks.onBossKilled(bossData.id, bossData);
+  if (originalBossDefeated) originalBossDefeated(bossData, arena);
+};
+
+// Wire item pickup events to quest system
+lootManager.onItemPickup = (itemId, amount) => {
+  questWorldHooks.onItemPickup(itemId, amount);
+};
+
+// Wire NPC interaction to quest system
+const originalDialogueStart = dialogueManager.startDialogue.bind(dialogueManager);
+dialogueManager.startDialogue = (npc) => {
+  questWorldHooks.onNpcInteraction(npc.id || npc.name, npc);
+  originalDialogueStart(npc);
+};
 
 // --- Resize ---
 window.addEventListener('resize', () => {
@@ -672,6 +720,10 @@ function animate() {
   // Get campfire positions from world for warmth checks
   const campfires = world.villages ? world.villages.getCampfires() : [];
   timeWeatherGameplay.update(delta, player.mesh.position, campfires);
+  
+  // Phase 25: Quest system update (exploration markers, location tracking)
+  questWorldHooks.update(delta, player.mesh.position);
+  questManager.updateQuestUI();
   
   audioManager.updateListener();
   floatingText.update(delta);
