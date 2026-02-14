@@ -4,6 +4,7 @@ import { FoliageManager } from './FoliageManager.js';
 import { VillageManager } from './VillageManager.js';
 import { RuinsManager } from './RuinsManager.js';
 import { CaveManager } from './CaveManager.js';
+import { NPCManager } from './NPCManager.js';
 
 /**
  * World - Open World Environment
@@ -39,6 +40,7 @@ export class World {
     this._createStartingCastle();
     this.foliage = new FoliageManager(scene, this.terrain);
     this.villages = new VillageManager(scene, this.terrain);
+    this.npcManager = new NPCManager(scene, this.terrain, this.villages);
     this.ruinsManager = new RuinsManager(scene, this.terrain, this.colliders);
     this.caveManager = new CaveManager(scene, this.terrain);
     this._createLighting();
@@ -241,6 +243,30 @@ export class World {
   getNearestCave(x, z) {
     if (!this.caveManager) return null;
     return this.caveManager.getNearestCave(x, z);
+  }
+  
+  /**
+   * Check if position is near an NPC
+   */
+  isNearNPC(x, z, radius = 2) {
+    if (!this.npcManager) return false;
+    return this.npcManager.isNearNPC(x, z, radius);
+  }
+  
+  /**
+   * Get NPC at position (for interaction)
+   */
+  getNPCAt(x, z, radius = 1.5) {
+    if (!this.npcManager) return null;
+    return this.npcManager.getNPCAt(x, z, radius);
+  }
+  
+  /**
+   * Get all NPCs
+   */
+  getNPCs() {
+    if (!this.npcManager) return [];
+    return this.npcManager.getNPCs();
   }
   
   // ========================================
@@ -570,6 +596,9 @@ export class World {
     }
     if (this.villages) {
       this.villages.dispose();
+    }
+    if (this.npcManager) {
+      this.npcManager.dispose();
     }
     if (this.ruinsManager) {
       this.ruinsManager.dispose();
