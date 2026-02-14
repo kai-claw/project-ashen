@@ -228,6 +228,11 @@ function animate() {
       world.ruinsManager.update(player.mesh.position.x, player.mesh.position.z);
     }
     
+    // Update caves for infinite world
+    if (world.caveManager && world.caveManager.update) {
+      world.caveManager.update(player.mesh.position.x, player.mesh.position.z);
+    }
+    
     // Boss arena update (ritual circle damage pulse in Phase 2)
     if (world.bossArena && world.bossArena.active) {
       const arenaDamage = world.updateBossArena(delta, player.mesh.position);

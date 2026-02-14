@@ -314,27 +314,69 @@ export class EnemyManager {
   updateDynamicSpawns(playerPos) {
     if (!this.world?.terrain) return;
     
+    // Track which regions lost enemies for clearing
+    const regionsToClear = new Set();
+    
     // Despawn distant enemies (performance)
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
       const dist = enemy.mesh.position.distanceTo(playerPos);
       
       if (dist > this.despawnRadius && !enemy.bossActive) {
+        // Track the region this enemy was in for potential respawn
+        if (enemy.spawnPos) {
+          const regionX = Math.floor(enemy.spawnPos.x / 40) * 40;
+          const regionZ = Math.floor(enemy.spawnPos.z / 40) * 40;
+          regionsToClear.add(`${regionX},${regionZ}`);
+        }
+        
         // Remove from scene
         if (enemy.mesh) this.scene.remove(enemy.mesh);
         this.enemies.splice(i, 1);
       }
     }
     
-    // Spawn new enemies around player if below limit
-    if (this.enemies.length < this.maxEnemies) {
-      const regionX = Math.floor(playerPos.x / 40) * 40;
-      const regionZ = Math.floor(playerPos.z / 40) * 40;
-      const regionKey = `${regionX},${regionZ}`;
+    // Clear regions that no longer have enemies so they can respawn
+    for (const regionKey of regionsToClear) {
+      // Check if any remaining enemies are in this region
+      const hasEnemies = this.enemies.some(e => {
+        if (!e.spawnPos) return false;
+        const rx = Math.floor(e.spawnPos.x / 40) * 40;
+        const rz = Math.floor(e.spawnPos.z / 40) * 40;
+        return `${rx},${rz}` === regionKey;
+      });
       
-      if (!this.spawnedRegions.has(regionKey)) {
-        this.spawnedRegions.add(regionKey);
-        this._populateArea(regionX, regionZ, 40);
+      if (!hasEnemies) {
+        this.spawnedRegions.delete(regionKey);
+      }
+    }
+    
+    // Spawn new enemies around player - check multiple nearby regions
+    if (this.enemies.length < this.maxEnemies) {
+      const playerRegionX = Math.floor(playerPos.x / 40);
+      const playerRegionZ = Math.floor(playerPos.z / 40);
+      
+      // Check current region and adjacent regions for spawning
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const regionX = (playerRegionX + dx) * 40;
+          const regionZ = (playerRegionZ + dz) * 40;
+          const regionKey = `${regionX},${regionZ}`;
+          
+          // Skip if already spawned or at max capacity
+          if (this.spawnedRegions.has(regionKey)) continue;
+          if (this.enemies.length >= this.maxEnemies) break;
+          
+          // Only spawn if region center is within reasonable distance
+          const regionCenterDist = Math.sqrt(
+            Math.pow(regionX + 20 - playerPos.x, 2) + 
+            Math.pow(regionZ + 20 - playerPos.z, 2)
+          );
+          if (regionCenterDist > this.spawnCheckRadius) continue;
+          
+          this.spawnedRegions.add(regionKey);
+          this._populateArea(regionX, regionZ, 40);
+        }
       }
     }
   }

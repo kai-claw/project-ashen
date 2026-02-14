@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
 /**
- * CaveManager - Creates cave entrance POIs
- * Phase 13: Villages and Landmarks
+ * CaveManager - Creates cave entrance POIs with dynamic chunk loading
+ * Phase 13/15-HOTFIX: Infinite world cave generation
  * 
- * Places cave entrance landmarks in the frontier zone (200+ units from castle).
+ * Places cave entrance landmarks in frontier zones (200+ units from castle).
+ * Uses region-based generation for infinite world support.
  * Visual only for now - dark openings built into hillsides, marked with
  * glowing crystals or torches. Future: will be mini-dungeons.
  */
@@ -13,23 +14,199 @@ export class CaveManager {
     this.scene = scene;
     this.terrain = terrainGenerator;
     
+    // Region-based generation (larger than terrain chunks)
+    this.regionSize = 150;      // 150x150 units per region
+    this.loadDistance = 2;      // Load regions within 2 of player
+    this.unloadDistance = 4;    // Unload beyond 4
+    
     // Cave placement settings
-    this.minDistFromCastle = 200;  // Frontier zone begins
-    this.maxDistFromCastle = 350;  // Stay within reasonable exploration range
-    this.caveCount = 3;            // Number of cave entrances
-    this.minCaveSpacing = 60;      // Caves shouldn't cluster
-    this.minSlopeForCave = 0.3;    // Need some slope for hillside
+    this.minDistFromCastle = 150;  // Frontier zone begins (caves in medium+ danger)
+    this.cavesPerRegion = 1;       // Max 1 cave per region
+    this.minCaveSpacing = 80;      // Caves shouldn't cluster
+    this.minSlopeForCave = 0.25;   // Need some slope for hillside
     this.maxSlopeForCave = 0.9;    // Not too steep
     
     // Create shared materials
     this.materials = this._createMaterials();
     
-    // Store cave data
-    this.caves = [];
-    this.meshes = [];
+    // Region storage
+    this.regions = new Map();
     
-    // Generate caves
-    this._generateCaves();
+    // Store all cave data (for queries)
+    this.caves = [];
+    
+    // Track player position
+    this.lastPlayerRegionX = null;
+    this.lastPlayerRegionZ = null;
+    
+    // Initial generation around origin
+    this.update(0, 0);
+    
+    console.log('[CaveManager] Initialized with region-based generation');
+  }
+  
+  /**
+   * Seeded random for consistent generation
+   */
+  _seededRandom(seed) {
+    const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  
+  /**
+   * Get region key
+   */
+  _regionKey(rx, rz) {
+    return `${rx},${rz}`;
+  }
+  
+  /**
+   * Convert world position to region coords
+   */
+  _worldToRegion(x, z) {
+    return {
+      rx: Math.floor(x / this.regionSize),
+      rz: Math.floor(z / this.regionSize),
+    };
+  }
+  
+  /**
+   * Update caves based on player position - call every frame
+   */
+  update(playerX, playerZ) {
+    const { rx, rz } = this._worldToRegion(playerX, playerZ);
+    
+    if (rx === this.lastPlayerRegionX && rz === this.lastPlayerRegionZ) {
+      return;
+    }
+    
+    this.lastPlayerRegionX = rx;
+    this.lastPlayerRegionZ = rz;
+    
+    // Load needed regions
+    const neededRegions = new Set();
+    
+    for (let dx = -this.loadDistance; dx <= this.loadDistance; dx++) {
+      for (let dz = -this.loadDistance; dz <= this.loadDistance; dz++) {
+        const regionX = rx + dx;
+        const regionZ = rz + dz;
+        const key = this._regionKey(regionX, regionZ);
+        neededRegions.add(key);
+        
+        if (!this.regions.has(key)) {
+          this._loadRegion(regionX, regionZ);
+        }
+      }
+    }
+    
+    // Unload distant regions
+    const toUnload = [];
+    for (const [key] of this.regions) {
+      const [regionX, regionZ] = key.split(',').map(Number);
+      const dx = Math.abs(regionX - rx);
+      const dz = Math.abs(regionZ - rz);
+      if (dx > this.unloadDistance || dz > this.unloadDistance) {
+        toUnload.push(key);
+      }
+    }
+    
+    for (const key of toUnload) {
+      this._unloadRegion(key);
+    }
+  }
+  
+  /**
+   * Generate cave for a region
+   */
+  _loadRegion(rx, rz) {
+    const key = this._regionKey(rx, rz);
+    if (this.regions.has(key)) return;
+    
+    const regionData = {
+      caves: [],
+      meshes: [],
+    };
+    
+    const worldOffsetX = rx * this.regionSize;
+    const worldOffsetZ = rz * this.regionSize;
+    const regionSeed = rx * 73856093 + rz * 19349663 + 54321; // Different seed than villages
+    
+    // Try to place one cave in this region
+    const attempts = 25;
+    for (let i = 0; i < attempts; i++) {
+      const rand1 = this._seededRandom(regionSeed + i * 3);
+      const rand2 = this._seededRandom(regionSeed + i * 3 + 1);
+      
+      // Random position within region
+      const x = worldOffsetX + rand1 * this.regionSize;
+      const z = worldOffsetZ + rand2 * this.regionSize;
+      
+      // Check distance from castle (caves only in frontier areas)
+      const distFromOrigin = Math.sqrt(x * x + z * z);
+      if (distFromOrigin < this.minDistFromCastle) continue;
+      
+      // Check terrain slope - need hillside (but not too steep)
+      const slope = this.terrain.getTerrainSlope(x, z);
+      if (slope < this.minSlopeForCave || slope > this.maxSlopeForCave) continue;
+      
+      // Check spacing from existing caves
+      let tooClose = false;
+      for (const c of this.caves) {
+        const dx = x - c.x;
+        const dz = z - c.z;
+        if (Math.sqrt(dx * dx + dz * dz) < this.minCaveSpacing) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (tooClose) continue;
+      
+      // Good spot! Calculate cave orientation (face downhill toward origin)
+      const y = this.terrain.getTerrainHeight(x, z);
+      const rotationToOrigin = Math.atan2(-x, -z);
+      
+      // Determine cave type based on seed
+      const caveType = this._seededRandom(regionSeed + i * 7) < 0.5 ? 'crystal' : 'torch';
+      
+      const cave = {
+        x,
+        y,
+        z,
+        rotation: rotationToOrigin,
+        type: caveType,
+        size: 1.5 + this._seededRandom(regionSeed + i * 11) * 0.5,
+        regionKey: key,
+      };
+      
+      this._buildCaveEntrance(cave, regionData);
+      regionData.caves.push(cave);
+      this.caves.push(cave);
+      
+      break; // One cave per region
+    }
+    
+    this.regions.set(key, regionData);
+  }
+  
+  /**
+   * Unload a region
+   */
+  _unloadRegion(key) {
+    const region = this.regions.get(key);
+    if (!region) return;
+    
+    // Remove meshes
+    for (const mesh of region.meshes) {
+      this.scene.remove(mesh);
+      mesh.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+      });
+    }
+    
+    // Remove caves from global list
+    this.caves = this.caves.filter(c => c.regionKey !== key);
+    
+    this.regions.delete(key);
   }
   
   /**
@@ -81,71 +258,9 @@ export class CaveManager {
   }
   
   /**
-   * Find suitable locations and generate cave entrances
-   */
-  _generateCaves() {
-    const caves = [];
-    let attempts = 0;
-    const maxAttempts = 150;
-    
-    while (caves.length < this.caveCount && attempts < maxAttempts) {
-      attempts++;
-      
-      // Random position in frontier zone
-      const angle = Math.random() * Math.PI * 2;
-      const dist = this.minDistFromCastle + Math.random() * (this.maxDistFromCastle - this.minDistFromCastle);
-      const x = Math.cos(angle) * dist;
-      const z = Math.sin(angle) * dist;
-      
-      // Check terrain slope - need hillside (but not too steep)
-      const slope = this.terrain.getTerrainSlope(x, z);
-      if (slope < this.minSlopeForCave || slope > this.maxSlopeForCave) continue;
-      
-      // Check spacing from other caves
-      let tooClose = false;
-      for (const c of caves) {
-        const dx = x - c.x;
-        const dz = z - c.z;
-        if (Math.sqrt(dx * dx + dz * dz) < this.minCaveSpacing) {
-          tooClose = true;
-          break;
-        }
-      }
-      if (tooClose) continue;
-      
-      // Good spot! Calculate cave orientation (face downhill toward origin)
-      const y = this.terrain.getTerrainHeight(x, z);
-      
-      // Face toward origin (castle direction)
-      const rotationToOrigin = Math.atan2(-x, -z);
-      
-      // Determine cave type
-      const caveType = Math.random() < 0.5 ? 'crystal' : 'torch';
-      
-      const cave = {
-        x,
-        y,
-        z,
-        rotation: rotationToOrigin,
-        type: caveType,
-        size: 1.5 + Math.random() * 0.5, // Scale factor
-      };
-      caves.push(cave);
-    }
-    
-    this.caves = caves;
-    console.log(`[CaveManager] Placed ${caves.length} cave entrances in frontier zone`);
-    
-    // Build each cave entrance
-    for (const cave of caves) {
-      this._buildCaveEntrance(cave);
-    }
-  }
-  
-  /**
    * Build a single cave entrance landmark
    */
-  _buildCaveEntrance(cave) {
+  _buildCaveEntrance(cave, regionData) {
     const group = new THREE.Group();
     group.position.set(cave.x, cave.y, cave.z);
     group.rotation.y = cave.rotation;
@@ -172,7 +287,7 @@ export class CaveManager {
     this._createAtmosphere(group, cave);
     
     this.scene.add(group);
-    this.meshes.push(group);
+    regionData.meshes.push(group);
   }
   
   /**
@@ -602,14 +717,19 @@ export class CaveManager {
   }
   
   /**
+   * Get loaded region count (debugging)
+   */
+  getLoadedRegionCount() {
+    return this.regions.size;
+  }
+  
+  /**
    * Cleanup
    */
   dispose() {
-    for (const mesh of this.meshes) {
-      this.scene.remove(mesh);
-      mesh.traverse((child) => {
-        if (child.geometry) child.geometry.dispose();
-      });
+    // Unload all regions
+    for (const [key] of this.regions) {
+      this._unloadRegion(key);
     }
     
     for (const mat of Object.values(this.materials)) {
