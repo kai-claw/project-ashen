@@ -221,6 +221,17 @@ export class ShopManager {
    * Open shop for an NPC
    */
   open(npc) {
+    // Phase 24: Check shop hours if TimeWeatherGameplay is available
+    const timeWeatherGameplay = this.gm?.timeWeatherGameplay;
+    if (timeWeatherGameplay) {
+      const shopType = this._npcTypeToShopType(npc.type);
+      if (!timeWeatherGameplay.isShopOpen(shopType)) {
+        const hours = timeWeatherGameplay.getShopHoursText(shopType);
+        this._showClosedMessage(npc.type, hours);
+        return false;
+      }
+    }
+    
     this.isOpen = true;
     this.currentNPC = npc;
     this.activeTab = 'buy';
@@ -239,6 +250,81 @@ export class ShopManager {
     }
     
     console.log(`[ShopManager] Opened shop for ${npc.type}`);
+    return true;
+  }
+  
+  /**
+   * Convert NPC type to shop type for hours lookup (Phase 24)
+   */
+  _npcTypeToShopType(npcType) {
+    const mapping = {
+      merchant: 'general_store',
+      blacksmith: 'blacksmith',
+      alchemist: 'alchemist',
+      healer: 'alchemist',
+      innkeeper: 'tavern',
+      fence: 'black_market'
+    };
+    return mapping[npcType] || 'general_store';
+  }
+  
+  /**
+   * Show shop closed message (Phase 24)
+   */
+  _showClosedMessage(npcType, hours) {
+    const messages = {
+      merchant: "The merchant is resting.",
+      blacksmith: "The forge is cold. Come back during work hours.",
+      alchemist: "The alchemist's shop is closed.",
+      healer: "The healer is unavailable.",
+      innkeeper: "The tavern is closed.",
+      fence: "The fence only deals at night..."
+    };
+    
+    const existing = document.querySelector('.shop-closed-message');
+    if (existing) existing.remove();
+    
+    const msg = document.createElement('div');
+    msg.className = 'shop-closed-message';
+    msg.innerHTML = `
+      <div class="closed-text">${messages[npcType] || 'Shop is closed.'}</div>
+      <div class="closed-hours">Hours: ${hours}</div>
+    `;
+    msg.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, rgba(40, 30, 20, 0.95), rgba(60, 45, 30, 0.9));
+      border: 2px solid rgba(180, 140, 80, 0.7);
+      border-radius: 8px;
+      padding: 20px 30px;
+      font-family: 'Cinzel', serif;
+      color: #e8d5b0;
+      text-align: center;
+      z-index: 2000;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      animation: shopClosedAppear 0.3s ease-out;
+    `;
+    
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes shopClosedAppear {
+        from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      }
+      .closed-text { font-size: 16px; margin-bottom: 8px; }
+      .closed-hours { font-size: 12px; color: rgba(200, 180, 140, 0.8); }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(msg);
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => msg.remove(), 3000);
+    
+    if (this.audio) {
+      this.audio.play('menuBack', { volume: 0.3 });
+    }
   }
   
   /**

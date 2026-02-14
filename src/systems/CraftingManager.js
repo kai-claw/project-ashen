@@ -257,6 +257,19 @@ export class CraftingManager {
       }
     }
     
+    // Phase 24: Check time-locked recipes
+    const timeWeatherGameplay = this.gm?.timeWeatherGameplay;
+    if (timeWeatherGameplay) {
+      const timeCheck = timeWeatherGameplay.canCraftTimeLocked(recipeId);
+      if (!timeCheck.allowed) {
+        return {
+          canCraft: false,
+          reason: timeCheck.reason || 'Cannot craft at this time.',
+          timeLocked: true
+        };
+      }
+    }
+    
     // Check materials
     const missingMaterials = [];
     for (const mat of recipe.materials) {

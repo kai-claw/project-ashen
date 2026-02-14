@@ -310,10 +310,110 @@ export class EnemyManager {
   }
   
   /**
+   * Phase 24: Try to spawn night-specific enemies (wraiths, shadows, etc.)
+   */
+  _trySpawnNightEnemies(playerPos) {
+    // Check if night gameplay integration is available
+    const timeWeatherGameplay = this.gm?.timeWeatherGameplay;
+    if (!timeWeatherGameplay) return;
+    
+    // Only spawn night enemies at night or dusk
+    const timeManager = this.gm?.timeManager;
+    if (!timeManager) return;
+    
+    const phase = timeManager.dayPhase;
+    if (phase !== 'night' && phase !== 'dusk') return;
+    
+    // Limit total night enemies
+    const nightEnemyCount = this.enemies.filter(e => e.isNightEnemy).length;
+    const maxNightEnemies = phase === 'night' ? 5 : 2;
+    if (nightEnemyCount >= maxNightEnemies) return;
+    
+    // Check spawn chance (once per second-ish)
+    if (!this._nightSpawnTimer) this._nightSpawnTimer = 0;
+    this._nightSpawnTimer++;
+    if (this._nightSpawnTimer < 60) return; // ~1 second at 60fps
+    this._nightSpawnTimer = 0;
+    
+    // Try each night enemy type
+    const nightEnemyTypes = ['WRAITH', 'SHADOW_STALKER', 'NIGHT_HOWLER', 'PHANTOM'];
+    for (const enemyTypeKey of nightEnemyTypes) {
+      if (nightEnemyCount >= maxNightEnemies) break;
+      
+      if (timeWeatherGameplay.shouldSpawnNightEnemy(enemyTypeKey)) {
+        const enemyConfig = timeWeatherGameplay.getNightEnemyConfig(enemyTypeKey);
+        if (!enemyConfig) continue;
+        
+        // Spawn at random position around player (but not too close)
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 25 + Math.random() * 30; // 25-55 units away
+        const x = playerPos.x + Math.cos(angle) * dist;
+        const z = playerPos.z + Math.sin(angle) * dist;
+        const y = this.world?.terrain?.getTerrainHeight(x, z) ?? 0;
+        
+        // Use enemy data to create config
+        const nightConfig = {
+          health: enemyConfig.baseHealth * (1 + (timeManager.currentDay - 1) * 0.1), // Scale with day count
+          maxHealth: enemyConfig.baseHealth * (1 + (timeManager.currentDay - 1) * 0.1),
+          damage: enemyConfig.baseDamage,
+          speed: 3.5,
+          type: enemyConfig.id,
+          name: enemyConfig.name,
+          tint: 0x4422aa, // Purple/shadow tint
+          remnantDrop: 50 + Math.floor(Math.random() * 50),
+          isElite: false,
+          isNightEnemy: true,
+          fadeOnDawn: true // Will fade when dawn comes
+        };
+        
+        const position = new THREE.Vector3(x, y, z);
+        const enemy = new Enemy(this.scene, position, nightConfig, this.gm);
+        enemy.world = this.world;
+        enemy.isNightEnemy = true;
+        enemy.special = enemyConfig.special;
+        enemy.lootTable = enemyConfig.loot;
+        
+        // Make night enemies slightly transparent/ethereal
+        if (enemy.mesh && enemy.mesh.material) {
+          enemy.mesh.material.transparent = true;
+          enemy.mesh.material.opacity = 0.85;
+        }
+        
+        this.enemies.push(enemy);
+        
+        console.log(`[EnemyManager] Spawned night enemy: ${enemyConfig.name} at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+        break; // Only spawn one per check
+      }
+    }
+  }
+  
+  /**
+   * Phase 24: Despawn night enemies at dawn
+   */
+  _despawnNightEnemies() {
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
+      if (enemy.isNightEnemy && enemy.fadeOnDawn) {
+        // Fade out effect
+        if (enemy.mesh) {
+          enemy.mesh.material.opacity *= 0.95;
+          if (enemy.mesh.material.opacity < 0.1) {
+            this.scene.remove(enemy.mesh);
+            this.enemies.splice(i, 1);
+          }
+        }
+      }
+    }
+  }
+  
+  /**
    * Dynamic spawning - call from game loop to spawn/despawn based on player position
    */
   updateDynamicSpawns(playerPos) {
     if (!this.world?.terrain) return;
+    
+    // Phase 24: Try to spawn night enemies
+    this._trySpawnNightEnemies(playerPos);
     
     // Track which regions lost enemies for clearing
     const regionsToClear = new Set();
@@ -408,6 +508,12 @@ export class EnemyManager {
   update(delta, player) {
     // Dynamic spawning based on player position
     this.updateDynamicSpawns(player.mesh.position);
+    
+    // Phase 24: Despawn night enemies at dawn
+    const timeManager = this.gm?.timeManager;
+    if (timeManager && (timeManager.dayPhase === 'dawn' || timeManager.dayPhase === 'day')) {
+      this._despawnNightEnemies();
+    }
     
     // Check for dormant enemy triggers (ambush spawns)
     this._checkDormantTriggers(player);

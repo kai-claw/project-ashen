@@ -820,6 +820,37 @@ export class VillageManager {
   }
   
   /**
+   * Get all campfires/forges for warmth detection (Phase 24)
+   * Returns array of { position: THREE.Vector3, isLit: boolean }
+   */
+  getCampfires() {
+    const fires = [];
+    
+    for (const village of this.villages) {
+      if (!village.craftingStations) continue;
+      
+      const cos = Math.cos(village.rotation);
+      const sin = Math.sin(village.rotation);
+      
+      for (const station of village.craftingStations) {
+        // Forges provide warmth
+        if (station.type === 'forge') {
+          const worldX = village.x + station.localX * cos - station.localZ * sin;
+          const worldZ = village.z + station.localX * sin + station.localZ * cos;
+          const y = this.terrain ? this.terrain.getHeightAt(worldX, worldZ) : 0;
+          
+          fires.push({
+            position: new THREE.Vector3(worldX, y + 0.5, worldZ),
+            isLit: true // Forges are always lit
+          });
+        }
+      }
+    }
+    
+    return fires;
+  }
+  
+  /**
    * Get loaded region count (debugging)
    */
   getLoadedRegionCount() {
