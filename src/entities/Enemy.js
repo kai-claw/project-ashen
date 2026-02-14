@@ -1,6 +1,15 @@
 import * as THREE from 'three';
 import { AssetManager } from '../systems/AssetManager.js';
 import { BOSS_ITEMS } from '../systems/ItemManager.js';
+import { 
+  buildEnemyModel, 
+  buildEliteEnemyModel, 
+  buildBerserkerModel, 
+  buildRevenantModel, 
+  buildSentinelModel, 
+  updateEnemyModel, 
+  flashEnemyModel 
+} from '../models/ModelBuilder.js';
 
 const STATES = {
   IDLE: 'idle',
@@ -126,10 +135,9 @@ export const ENEMY_TYPES = {
       quickJabChance: 0.3,   // 30% jab if player moving
       comboEnabled: false,   // No combos for basic enemy
     },
-    // GLTF settings - use relative path, BASE_URL added at load time
-    modelPath: 'assets/models/robot_expressive.glb',
-    modelScale: 0.5,
-    modelTint: 0x4a5a3a, // Greenish undead tint
+    // Model settings - use procedural enemy model
+    proceduralModel: 'standard', // Uses ModelBuilder.buildEnemyModel
+    modelScale: 1.0,
     animSpeedMult: 1.0,
   },
   BERSERKER: {
@@ -162,10 +170,9 @@ export const ENEMY_TYPES = {
       comboChance: 0.4,      // 40% chance to start combo
       maxComboHits: 3,       // Up to 3-hit combo
     },
-    // GLTF settings - use relative path, BASE_URL added at load time
-    modelPath: 'assets/models/robot_expressive.glb',
-    modelScale: 0.55,
-    modelTint: 0x8a2222, // Red aggressive tint
+    // Model settings - use procedural berserker model
+    proceduralModel: 'berserker',
+    modelScale: 0.95,
     animSpeedMult: 1.5,
   },
   SENTINEL: {
@@ -195,10 +202,9 @@ export const ENEMY_TYPES = {
       quickJabChance: 0.15,  // Rarely jabs (too slow)
       comboEnabled: false,   // No combos for tank
     },
-    // GLTF settings - use relative path, BASE_URL added at load time
-    modelPath: 'assets/models/soldier.glb',
-    modelScale: 0.9,
-    modelTint: 0x3a3a5a, // Blue-gray armored tint
+    // Model settings - use procedural sentinel (tank) model
+    proceduralModel: 'sentinel',
+    modelScale: 1.2,
     animSpeedMult: 0.8,
   },
   
@@ -233,10 +239,9 @@ export const ENEMY_TYPES = {
       comboChance: 0.35,     // 35% combo
       maxComboHits: 2,       // 2-hit combo
     },
-    // GLTF settings
-    modelPath: 'assets/models/soldier.glb',
-    modelScale: 1.2,       // Larger than normal
-    modelTint: 0x2a1a3a,   // Purple-black undead tint
+    // Model settings - use procedural elite model
+    proceduralModel: 'elite',
+    modelScale: 1.3,
     animSpeedMult: 0.9,
   },
   
@@ -274,11 +279,10 @@ export const ENEMY_TYPES = {
       comboChance: 0.3,      // 30% combo
       maxComboHits: 2,       // 2-hit combo
     },
-    // GLTF settings
-    modelPath: 'assets/models/robot_expressive.glb',
-    modelScale: 0.45,      // Slightly smaller
-    modelTint: 0x8a7a5a,   // Bone-colored tint
-    animSpeedMult: 1.4,    // Fast animations
+    // Model settings - use procedural revenant model
+    proceduralModel: 'revenant',
+    modelScale: 0.9,
+    animSpeedMult: 1.4,
   },
   
   // ========== THE CRYPT LORD - SECOND BOSS ==========
@@ -319,11 +323,12 @@ export const ENEMY_TYPES = {
       DARK_PROJECTILE: { damage: 40, windup: 0.6, recovery: 0.8, speed: 8, trackingStrength: 3.0 },
     },
     
-    // GLTF settings - larger armored model
+    // Model settings - bosses still use GLTF for complex animations
+    // But fallback to elite procedural model if GLTF fails
+    proceduralModel: 'elite',
     modelPath: 'assets/models/soldier.glb',
-    modelScale: 1.5,          // Large boss model
-    modelTint: 0x2a1a3a,      // Purple-black undead tint
-    animSpeedMult: 0.85,      // Slower, more deliberate
+    modelScale: 1.8,
+    animSpeedMult: 0.85,
   },
 };
 
@@ -516,39 +521,63 @@ export class Enemy {
   }
 
   _createFallbackMesh() {
-    // Simple placeholder body
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: this.config.bodyColor,
-      roughness: 0.7,
-      metalness: 0.2,
-    });
-
-    const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.5, 8, 16);
-    this.fallbackBody = new THREE.Mesh(bodyGeo, bodyMat);
-    this.fallbackBody.position.y = 1.0;
-    this.fallbackBody.castShadow = true;
-    this.mesh.add(this.fallbackBody);
-
-    // Glowing eyes
-    const eyeMat = new THREE.MeshStandardMaterial({
-      color: this.config.eyeColor,
-      emissive: this.config.eyeColor,
-      emissiveIntensity: 4,
-    });
-    const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
-    this.eye = new THREE.Mesh(eyeGeo, eyeMat);
-    this.eye.position.set(0, 1.5, 0.25);
-    this.mesh.add(this.eye);
-
-    this.body = this.fallbackBody;
+    // Use procedural enemy model based on type
+    const modelType = this.config.proceduralModel || 'standard';
+    const scale = this.config.modelScale || 1.0;
+    
+    // Build the appropriate procedural model
+    let proceduralModel;
+    switch (modelType) {
+      case 'berserker':
+        proceduralModel = buildBerserkerModel({ scale });
+        break;
+      case 'sentinel':
+        proceduralModel = buildSentinelModel({ scale });
+        break;
+      case 'revenant':
+        proceduralModel = buildRevenantModel({ scale });
+        break;
+      case 'elite':
+        proceduralModel = buildEliteEnemyModel({ scale });
+        break;
+      case 'standard':
+      default:
+        proceduralModel = buildEnemyModel({ type: 'standard', scale });
+        break;
+    }
+    
+    // Store reference to procedural model
+    this.proceduralModel = proceduralModel;
+    this.mesh.add(proceduralModel);
+    
+    // Store body reference for effects
+    this.body = proceduralModel;
+    this.fallbackBody = proceduralModel;
+    
+    // Store eye reference from procedural model
+    if (proceduralModel.userData.eyes) {
+      this.eye = proceduralModel.userData.eyes[0];
+    }
+    
+    // Flag for procedural animation
+    this.useProceduralAnimation = true;
   }
 
   async _loadGLTFModel() {
+    // Regular enemies use procedural models - no GLTF needed
+    // Only bosses load GLTF for complex skeletal animations
+    if (!this.config.isBoss) {
+      // Procedural model already loaded in _createFallbackMesh
+      this.modelLoaded = true;
+      return;
+    }
+    
+    // Boss: try to load GLTF, fall back to procedural if it fails
     try {
       const basePath = import.meta.env.BASE_URL || '/';
-      const modelPath = this.config.modelPath || 'assets/models/robot_expressive.glb';
+      const modelPath = this.config.modelPath || 'assets/models/soldier.glb';
       const fullPath = `${basePath}${modelPath}`;
-      const modelScale = this.config.modelScale || 0.5;
+      const modelScale = this.config.modelScale || 1.5;
       
       const { scene: model, animations } = await AssetManager.loadModel(
         fullPath,
@@ -559,10 +588,8 @@ export class Enemy {
       this.gltfModel.position.y = 0;
       this.gltfModel.rotation.y = Math.PI;
 
-      // Apply tint to distinguish enemy types
-      if (this.config.modelTint) {
-        this._applyModelTint(this.config.modelTint);
-      }
+      // Apply dark boss tint
+      this._applyModelTint(0x2a1a3a);
 
       // Set up shadows and store original materials
       this.gltfModel.traverse((child) => {
@@ -573,9 +600,8 @@ export class Enemy {
         }
       });
 
-      // Hide fallback mesh
-      if (this.fallbackBody) this.fallbackBody.visible = false;
-      // Keep glowing eye as indicator
+      // Hide procedural model for boss
+      if (this.proceduralModel) this.proceduralModel.visible = false;
 
       this.mesh.add(this.gltfModel);
 
@@ -587,9 +613,12 @@ export class Enemy {
 
       this.modelLoaded = true;
       this.body = this.gltfModel;
+      this.useProceduralAnimation = false;
 
     } catch (error) {
-      console.error(`[Enemy:${this.config.name}] Failed to load GLTF:`, error);
+      console.error(`[Boss:${this.config.name}] Failed to load GLTF, using procedural model:`, error);
+      // Keep procedural model as fallback
+      this.modelLoaded = true;
     }
   }
 
@@ -646,6 +675,93 @@ export class Enemy {
     }
 
     this.currentAnim = animName;
+  }
+  
+  /**
+   * Update procedural animation for enemies using ModelBuilder models
+   * Handles bobbing, arm swinging, head movement based on state
+   */
+  _updateProceduralAnimation(delta) {
+    if (!this.proceduralModel) return;
+    
+    const time = this.stateTimer;
+    const speedMult = this.config.animSpeedMult || 1.0;
+    
+    // Get model children for animation
+    const model = this.proceduralModel;
+    
+    // Base bobbing animation (subtle idle breathing)
+    let bobAmount = 0.02;
+    let bobSpeed = 2;
+    
+    // Adjust animation based on state
+    switch (this.state) {
+      case STATES.IDLE:
+      case STATES.DORMANT:
+        // Slow idle breathing
+        bobAmount = 0.015;
+        bobSpeed = 1.5;
+        // Slight side-to-side head movement
+        model.rotation.y = Math.sin(time * 0.8) * 0.05;
+        break;
+        
+      case STATES.PATROL:
+      case STATES.CIRCLE:
+        // Walking bob
+        bobAmount = 0.04;
+        bobSpeed = 6 * speedMult;
+        break;
+        
+      case STATES.CHASE:
+      case STATES.FLANK:
+        // Running - more aggressive bob
+        bobAmount = 0.06;
+        bobSpeed = 10 * speedMult;
+        // Forward lean
+        model.rotation.x = 0.15;
+        break;
+        
+      case STATES.RETREAT:
+        // Backing away - backward lean
+        bobAmount = 0.03;
+        bobSpeed = 5 * speedMult;
+        model.rotation.x = -0.1;
+        break;
+        
+      case STATES.ATTACK:
+        // Attack lunge
+        bobAmount = 0.02;
+        bobSpeed = 15 * speedMult;
+        // Forward strike lean
+        const attackProgress = Math.min(time / 0.3, 1);
+        model.rotation.x = 0.3 * Math.sin(attackProgress * Math.PI);
+        break;
+        
+      case STATES.STAGGERED:
+        // Wobble effect
+        model.rotation.z = Math.sin(time * 15) * 0.1 * (1 - time / 1.5);
+        model.rotation.x = Math.cos(time * 12) * 0.05;
+        bobAmount = 0;
+        break;
+        
+      case STATES.RISING:
+        // Rising from ground
+        const riseProgress = Math.min(time / 0.8, 1);
+        model.position.y = THREE.MathUtils.lerp(-0.5, 0, riseProgress);
+        model.rotation.x = (1 - riseProgress) * 0.5;
+        bobAmount = 0;
+        break;
+        
+      default:
+        // Reset rotation for unknown states
+        model.rotation.x = THREE.MathUtils.lerp(model.rotation.x, 0, delta * 3);
+        model.rotation.z = THREE.MathUtils.lerp(model.rotation.z, 0, delta * 3);
+    }
+    
+    // Apply bob (only if not dead/staggered)
+    if (bobAmount > 0 && this.state !== STATES.STAGGERED && this.state !== STATES.DEAD) {
+      model.position.y = Math.sin(time * bobSpeed) * bobAmount;
+    }
   }
   
   _createHealthBar(heightOffset) {
@@ -710,9 +826,15 @@ export class Enemy {
   update(delta, player) {
     if (this.state === STATES.DEAD) return;
 
-    // Update animation mixer
+    // Update animation mixer (GLTF)
     if (this.animSystem) {
       this.animSystem.update(delta);
+    }
+    
+    // Update procedural model (particles, eye glow, etc)
+    if (this.proceduralModel && this.useProceduralAnimation) {
+      updateEnemyModel(this.proceduralModel, delta);
+      this._updateProceduralAnimation(delta);
     }
 
     this.stateTimer += delta;
@@ -2639,6 +2761,13 @@ export class Enemy {
   }
 
   _flashModel(color, duration) {
+    // Use procedural model flash if available
+    if (this.proceduralModel && this.useProceduralAnimation) {
+      flashEnemyModel(this.proceduralModel, color, duration);
+      return;
+    }
+    
+    // GLTF model flash (for bosses)
     if (this.gltfModel) {
       this.gltfModel.traverse((child) => {
         if (child.isMesh && child.material) {
@@ -2665,9 +2794,6 @@ export class Enemy {
           }
         });
       }, duration);
-    } else if (this.fallbackBody && this.fallbackBody.material) {
-      this.fallbackBody.material.emissive.setHex(color);
-      setTimeout(() => this.fallbackBody.material.emissive.setHex(0x000000), duration);
     }
     
     if (this.eye && this.eye.material) {
