@@ -187,6 +187,9 @@ const crucibleUI = new CrucibleUI(gameManager, inputManager, player);
 // --- Stats UI (Character stats / Stat point allocation) ---
 const statsUI = new StatsUI(gameManager, inputManager, player);
 
+// --- Connect StatsUI to HUD for auto-open on level up ---
+hud.setStatsUI(statsUI);
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;

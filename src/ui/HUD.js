@@ -17,12 +17,18 @@ export class HUD {
     // Reference to enemy manager (set via setEnemyManager)
     this.enemyManager = null;
     
+    // StatsUI reference (set via setStatsUI for auto-open on level up)
+    this.statsUI = null;
+    
     // Damage vignette overlay
     this._createDamageVignette();
     this.damageVignetteOpacity = 0;
     
     // Stamina depleted warning
     this.staminaWarningActive = false;
+    
+    // Create level badge near HP bar
+    this._createLevelBadge();
     
     // Create XP bar UI
     this._createXPBar();
@@ -35,6 +41,53 @@ export class HUD {
     
     // Level up flash
     this.levelUpFlashActive = false;
+    
+    // Track last level for auto-open detection
+    this._lastLevel = this.gm.currentLevel || 1;
+  }
+  
+  setStatsUI(statsUI) {
+    this.statsUI = statsUI;
+  }
+  
+  _createLevelBadge() {
+    // Level badge positioned near the HP bar (top-left corner)
+    this.levelBadge = document.createElement('div');
+    this.levelBadge.id = 'level-badge';
+    this.levelBadge.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 100;
+      pointer-events: none;
+    `;
+    
+    // Level icon (sword/shield emblem)
+    const icon = document.createElement('div');
+    icon.style.cssText = `
+      font-size: 16px;
+      filter: drop-shadow(0 0 4px rgba(255, 200, 0, 0.5));
+    `;
+    icon.textContent = '⚔️';
+    this.levelBadge.appendChild(icon);
+    
+    // Level text
+    this.levelBadgeText = document.createElement('div');
+    this.levelBadgeText.style.cssText = `
+      font-family: 'Cinzel', serif;
+      font-size: 16px;
+      font-weight: bold;
+      color: #ffd088;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 12px rgba(255, 180, 0, 0.4);
+      letter-spacing: 1px;
+    `;
+    this.levelBadgeText.textContent = 'LV 1';
+    this.levelBadge.appendChild(this.levelBadgeText);
+    
+    document.body.appendChild(this.levelBadge);
   }
   
   _createXPBar() {
@@ -117,12 +170,16 @@ export class HUD {
       animation: statPointsPulse 2s ease-in-out infinite;
     `;
     
-    // Add pulse animation
+    // Add pulse animations
     const style = document.createElement('style');
     style.textContent = `
       @keyframes statPointsPulse {
         0%, 100% { opacity: 0.8; }
         50% { opacity: 1; text-shadow: 0 0 12px rgba(255, 200, 100, 0.9), 0 0 2px rgba(0, 0, 0, 0.8); }
+      }
+      @keyframes xpBarPulse {
+        0%, 100% { box-shadow: 0 0 12px rgba(255, 255, 100, 0.8); }
+        50% { box-shadow: 0 0 20px rgba(255, 255, 150, 1), 0 0 30px rgba(255, 200, 50, 0.6); }
       }
     `;
     document.head.appendChild(style);
@@ -289,6 +346,14 @@ export class HUD {
     this.levelLabel.style.fontSize = '18px';
     this.levelLabel.style.transition = 'all 0.2s ease-out';
     
+    // Flash the level badge too
+    if (this.levelBadgeText) {
+      this.levelBadgeText.style.color = '#ffffff';
+      this.levelBadgeText.style.textShadow = '0 0 20px rgba(255,220,0,1), 0 0 30px rgba(255,200,0,0.8)';
+      this.levelBadgeText.style.fontSize = '22px';
+      this.levelBadgeText.style.transition = 'all 0.3s ease-out';
+    }
+    
     // Flash the XP bar
     this.xpBar.style.background = 'linear-gradient(90deg, #ffff88, #ffffff)';
     this.xpBar.style.boxShadow = '0 0 20px rgba(255, 255, 200, 1)';
@@ -323,7 +388,22 @@ export class HUD {
       this.levelLabel.style.fontSize = '14px';
       this.xpBar.style.background = 'linear-gradient(90deg, #aa8800, #ffcc44)';
       this.xpBar.style.boxShadow = '0 0 6px rgba(255, 200, 0, 0.5)';
+      
+      // Reset level badge
+      if (this.levelBadgeText) {
+        this.levelBadgeText.style.color = '#ffd088';
+        this.levelBadgeText.style.textShadow = '0 0 6px rgba(0, 0, 0, 0.9), 0 0 12px rgba(255, 180, 0, 0.4)';
+        this.levelBadgeText.style.fontSize = '16px';
+      }
+      
       this.levelUpFlashActive = false;
+      
+      // Auto-open stats UI after the flash settles (feels rewarding!)
+      if (this.statsUI && this.gm.getAvailableStatPoints() > 0) {
+        setTimeout(() => {
+          this.statsUI.open();
+        }, 300);
+      }
     }, 800);
   }
   
@@ -454,13 +534,25 @@ export class HUD {
   }
   
   _updateXPBar() {
+    const level = this.gm.currentLevel || 1;
+    const maxLevel = this.gm.maxLevel || 20;
+    
+    // Update XP bar level label
     if (this.levelLabel) {
-      const level = this.gm.currentLevel || 1;
-      const maxLevel = this.gm.maxLevel || 20;
       if (level >= maxLevel) {
         this.levelLabel.textContent = `LEVEL ${level} (MAX)`;
       } else {
         this.levelLabel.textContent = `LEVEL ${level}`;
+      }
+    }
+    
+    // Update level badge near HP bar
+    if (this.levelBadgeText) {
+      if (level >= maxLevel) {
+        this.levelBadgeText.textContent = `LV ${level} ★`;
+        this.levelBadgeText.style.color = '#ffcc00';
+      } else {
+        this.levelBadgeText.textContent = `LV ${level}`;
       }
     }
     
@@ -471,8 +563,15 @@ export class HUD {
       // Glow effect when close to leveling
       if (progress > 0.8) {
         this.xpBar.style.boxShadow = '0 0 12px rgba(255, 255, 100, 0.8)';
+        // Pulse the XP bar glow
+        if (!this._xpBarPulsing) {
+          this._xpBarPulsing = true;
+          this.xpBar.style.animation = 'xpBarPulse 1.5s ease-in-out infinite';
+        }
       } else {
         this.xpBar.style.boxShadow = '0 0 6px rgba(255, 200, 0, 0.5)';
+        this._xpBarPulsing = false;
+        this.xpBar.style.animation = 'none';
       }
     }
   }
