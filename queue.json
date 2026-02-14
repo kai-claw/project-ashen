@@ -33,30 +33,27 @@
       "id": "quest-ui",
       "name": "QuestUI.js",
       "priority": "P0",
-      "status": "ready-for-review",
+      "status": "in-progress",
       "worker": 2,
-      "description": "Quest Journal panel (J key), HUD tracker, completion popup, notifications, filters/sort",
-      "workerNotes": "Created QuestUI.js (44KB) with: (1) Quest Journal panel opened with J key - 3 tabs: Active, Available, Completed with counts, (2) Filter by quest type (kill/gather/explore/deliver/escort/boss), sort by difficulty/type/name, (3) Quest list shows title, difficulty badge, type icon; ready-to-turn-in quests highlighted green, (4) Quest details panel: title, description, quest giver portrait+name+title, objectives with progress bars (X/Y format), optional bonus objectives in blue, rewards preview (gold/XP/items), (5) Action buttons: Track (add to HUD, max 3 tracked), Abandon (with confirmation modal), Accept (for available quests), (6) HUD Tracker: compact panel top-right showing tracked quest objectives with progress, collapsible, auto-tracks first active quests if none selected, (7) Quest completion popup: centered 'QUEST COMPLETE!' banner with animated rewards display, auto-dismisses, (8) Corner toast notifications for new quests, objective progress, quest available, (9) Completed quests shown grayed in history tab, (10) Full CSS styling with dark fantasy theme, animations for popups/notifications, responsive scrolling"
+      "description": "Quest Journal panel (J key), HUD tracker, completion popup, notifications, filters"
     },
     {
       "id": "npc-quest-givers",
       "name": "NPCQuestGivers.js",
       "priority": "P0",
-      "status": "ready-for-review",
+      "status": "pending",
       "worker": 2,
-      "description": "NPC integration with markers, dialogue, quest offers, turn-ins, progress comments",
-      "workerNotes": "Created NPCQuestGivers.js (33KB) with: (1) NPCQuestGiver class creates 3D NPC meshes (capsule body, sphere head) with colored materials per NPC type, (2) Floating name plates with canvas textures showing name + title, (3) Quest markers above heads: yellow ! for available quests, yellow ? for turn-in ready, gray ? for in-progress, blue ! for dailies, (4) Marker animations: bobbing, rotation, glow pulse, point light, (5) Full dialogue UI: NPC portrait, name/title header, dialogue text, quest info box with objectives/rewards preview, (6) Accept/Decline buttons for quest offers, Complete Quest button for turn-ins, Continue button for idle/progress dialogue, (7) NPCs give contextual progress comments based on completion % ('Almost there!', 'Good progress!'), (8) Quest givers: Elder Marcus (tutorial), Guard Captain Theron (kill quests), Merchant Lydia (delivery), Hunter Jorik (daily hunts), Mage Selene (explore), Blacksmith Greta (gather), Herbalist Mira (herbs), Mysterious Stranger (shadow), (9) Notice Board UI for daily/repeatable quest selection, (10) All markers auto-update when quest states change"
+      "description": "NPC quest markers, quest dialogue integration, accept/decline, quest giver portraits"
     },
     {
       "id": "quest-rewards",
       "name": "QuestRewards.js",
       "priority": "P1",
-      "status": "ready-for-review",
+      "status": "pending",
       "worker": 2,
-      "description": "Reward types, reputation system, factions, milestones, achievements, scaling",
-      "workerNotes": "Created QuestRewards.js (31KB) with: (1) 5 Factions: Ashvale Village, Hunters Guild, Mages Circle, Merchants Union, Shadow Brokers - each with icon/color/description, (2) 8 Reputation tiers: Hated → Hostile → Unfriendly → Neutral → Friendly → Honored → Revered → Exalted, each with merchant discount multiplier, (3) Milestones per faction (4 each): unlock titles, shop tiers, abilities, cosmetics at rep thresholds (500/2000/5000/10000), (4) Quest-to-faction mapping: village quests → village rep, hunt quests → hunters guild, etc., (5) 8 Achievements: Quest Novice/Adept/Master/Legend (1/10/25/50 quests), Boss Slayer (5 bosses), Daily Devotee (20 dailies), Making Friends/Legend Among Legends (rep milestones), (6) Reward calculation with difficulty scaling (trivial 0.5x → legendary 2x), first-time completion 25% bonus, (7) Merchant discount system based on Merchants Union rep, (8) Reputation Panel (U key): faction list with progress bars to next tier, (9) Animated reward chest popup after quest turn-in, (10) Notification popups for rep gains, milestone unlocks, achievement earned, (11) Full localStorage persistence for rep/achievements/stats"
+      "description": "Reward types, reputation system, achievements, scaling rewards"
     }
   ],
-  "lastUpdated": "2026-02-14T22:25:00Z",
-  "workerStatus": "All 6 subtasks ready-for-review. Build verified ✓ Deploy verified ✓ — Worker 1 + Worker 2 complete"
+  "lastUpdated": "2026-02-14T22:35:00Z",
+  "workerStatus": "Worker 1: 3/3 ready-for-review | Worker 2: Starting quest-ui review"
 }
