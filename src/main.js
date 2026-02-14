@@ -26,6 +26,7 @@ import { DialogueManager } from './systems/DialogueManager.js';
 import { WeaponManager } from './systems/WeaponManager.js';
 import { AttackAnimator } from './systems/AttackAnimator.js';
 import { ManaManager } from './systems/ManaManager.js';
+import { SpellManager } from './systems/SpellManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -142,6 +143,8 @@ const clock = new THREE.Clock();
 const gameManager = new GameManager();
 const manaManager = new ManaManager(gameManager);
 gameManager.manaManager = manaManager; // Cross-reference for stat updates
+const spellManager = new SpellManager(gameManager);
+gameManager.spellManager = spellManager; // Cross-reference for spell casting
 const inputManager = new InputManager(renderer.domElement);
 const audioManager = new AudioManager(camera);
 const particleManager = new ParticleManager(scene);
@@ -445,6 +448,7 @@ function animate() {
   statsUI.update();
   gameManager.update(delta);
   manaManager.update(delta); // Phase 20: Mana regeneration
+  spellManager.update(delta); // Phase 20: Spell cooldowns and buffs
   audioManager.updateListener();
   floatingText.update(delta);
 

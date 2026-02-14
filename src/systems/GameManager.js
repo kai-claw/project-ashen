@@ -78,6 +78,9 @@ export class GameManager {
     // Mana manager reference (set via main.js)
     this.manaManager = null;
     
+    // Spell manager reference (set via main.js)
+    this.spellManager = null;
+    
     // === ABILITY SYSTEM ===
     this.abilities = ABILITIES;
     this.abilityCooldowns = {
