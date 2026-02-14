@@ -124,6 +124,11 @@ export class InputManager {
   get useHealthPotion() { return this.consumeBuffer('Digit1'); }
   get useStaminaPotion() { return this.consumeBuffer('Digit2'); }
   
+  // --- Weapon Switching ---
+  get cycleWeapon() { return this.consumeBuffer('Tab'); }
+  get weaponSlot3() { return this.consumeBuffer('Digit3'); }
+  get weaponSlot4() { return this.consumeBuffer('Digit4'); }
+  
   // --- Equipment/Inventory UI ---
   get openEquipment() { return this.consumeBuffer('KeyI'); }
   

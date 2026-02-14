@@ -494,6 +494,11 @@ export class EquipmentManager {
     // Update weapon visual if weapon changed
     if (slot === EQUIPMENT_SLOTS.WEAPON) {
       this.updateWeaponVisual();
+      
+      // Sync with WeaponManager if available
+      if (this.weaponManager) {
+        this.weaponManager.equipFromInventory(equipment, this.weaponManager.activeSlot);
+      }
     }
     
     this.saveEquipment();

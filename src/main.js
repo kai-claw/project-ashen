@@ -23,6 +23,7 @@ import { FloatingText } from './ui/FloatingText.js';
 import { InteractionManager } from './systems/InteractionManager.js';
 import { ShopManager } from './systems/ShopManager.js';
 import { DialogueManager } from './systems/DialogueManager.js';
+import { WeaponManager } from './systems/WeaponManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -170,6 +171,10 @@ const lootManager = new LootManager(scene, gameManager);
 const equipmentManager = new EquipmentManager(scene, gameManager, lootManager);
 lootManager.equipmentManager = equipmentManager; // Link for equipment drops
 
+// --- Weapon System ---
+const weaponManager = new WeaponManager(gameManager, equipmentManager);
+equipmentManager.weaponManager = weaponManager; // Link for weapon sync
+
 // --- Chest System ---
 const chestManager = new ChestManager(
   scene,
@@ -244,6 +249,7 @@ gameManager.itemManager = itemManager;  // For boss reward drops
 gameManager.floatingText = floatingText; // For XP gain text
 gameManager.lootManager = lootManager;  // For inventory/potions
 gameManager.equipmentManager = equipmentManager; // For equipment stats
+gameManager.weaponManager = weaponManager; // For weapon stats/attacks
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -351,6 +357,22 @@ function animate() {
   cameraController.update(delta);
   itemManager.update(player.mesh.position);
   lootManager.update(player.mesh.position);
+  
+  // Weapon system update
+  weaponManager.update(delta);
+  
+  // Weapon switching hotkeys (when not in UI)
+  if (!gameManager.isDead && !shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive()) {
+    if (inputManager.cycleWeapon) {
+      weaponManager.cycleWeapon();
+    }
+    if (inputManager.weaponSlot3) {
+      weaponManager.switchToSlot(2); // Index 2 = slot 3
+    }
+    if (inputManager.weaponSlot4) {
+      weaponManager.switchToSlot(3); // Index 3 = slot 4
+    }
+  }
   equipmentManager.updateEquipmentDrops(player.mesh.position, delta);
   
   // NPC interaction system (prompts, facing, labels)
