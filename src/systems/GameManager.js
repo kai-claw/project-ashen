@@ -804,6 +804,11 @@ export class GameManager {
     this.posture = Math.min(this.maxPosture, this.posture + postureDmg);
     this.postureRegenTimer = 0;
 
+    // Interrupt spell casting if player is hit
+    if (this.spellCaster && this.spellCaster.isCasting) {
+      this.spellCaster.interruptCast();
+    }
+
     // Play damage sound
     if (this.audioManager && this.player) {
       this.audioManager.play('playerDamage', { 

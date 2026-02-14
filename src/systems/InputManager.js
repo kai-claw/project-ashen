@@ -138,6 +138,23 @@ export class InputManager {
   // --- Equipment/Inventory UI ---
   get openEquipment() { return this.consumeBuffer('KeyI'); }
   
+  // --- Spell Casting (F key to cast selected spell, F1-F6 for hotbar slots) ---
+  get castSpell() { return this.consumeBuffer('KeyF'); }
+  get spellSlot1() { return this.consumeBuffer('F1'); }
+  get spellSlot2() { return this.consumeBuffer('F2'); }
+  get spellSlot3() { return this.consumeBuffer('F3'); }
+  get spellSlot4() { return this.consumeBuffer('F4'); }
+  get spellSlot5() { return this.consumeBuffer('F5'); }
+  get spellSlot6() { return this.consumeBuffer('F6'); }
+  
+  // Select spell slot (Shift + 1-6) - selects without casting
+  get selectSpellSlot1() { return (this.keys['ShiftLeft'] || this.keys['ShiftRight']) && this.consumeBuffer('Digit1'); }
+  get selectSpellSlot2() { return (this.keys['ShiftLeft'] || this.keys['ShiftRight']) && this.consumeBuffer('Digit2'); }
+  get selectSpellSlot3() { return (this.keys['ShiftLeft'] || this.keys['ShiftRight']) && this.consumeBuffer('Digit3'); }
+  get selectSpellSlot4() { return (this.keys['ShiftLeft'] || this.keys['ShiftRight']) && this.consumeBuffer('Digit4'); }
+  get selectSpellSlot5() { return (this.keys['ShiftLeft'] || this.keys['ShiftRight']) && this.consumeBuffer('Digit5'); }
+  get selectSpellSlot6() { return (this.keys['ShiftLeft'] || this.keys['ShiftRight']) && this.consumeBuffer('Digit6'); }
+  
   // Check if LMB is being held (for charge indicator)
   get isChargingAttack() { 
     return this.mouseButtons[0] && this.lmbHoldStart > 0; 

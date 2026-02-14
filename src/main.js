@@ -27,6 +27,7 @@ import { WeaponManager } from './systems/WeaponManager.js';
 import { AttackAnimator } from './systems/AttackAnimator.js';
 import { ManaManager } from './systems/ManaManager.js';
 import { SpellManager } from './systems/SpellManager.js';
+import { SpellCaster } from './systems/SpellCaster.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -145,6 +146,8 @@ const manaManager = new ManaManager(gameManager);
 gameManager.manaManager = manaManager; // Cross-reference for stat updates
 const spellManager = new SpellManager(gameManager);
 gameManager.spellManager = spellManager; // Cross-reference for spell casting
+const spellCaster = new SpellCaster(gameManager, spellManager, null, null); // particleManager and audioManager set later
+gameManager.spellCaster = spellCaster; // Cross-reference for spell casting
 const inputManager = new InputManager(renderer.domElement);
 const audioManager = new AudioManager(camera);
 const particleManager = new ParticleManager(scene);
@@ -222,6 +225,13 @@ weaponManager.onAttackEnd = () => {
 gameManager.attackAnimator = attackAnimator;
 
 const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager, lootManager);
+
+// Wire up spell caster with all dependencies
+spellCaster.setScene(scene);
+spellCaster.setPlayer(player);
+spellCaster.setEnemyManager(enemyManager);
+spellCaster.particleManager = particleManager;
+spellCaster.audioManager = audioManager;
 
 // --- NPC Interaction System ---
 const interactionManager = new InteractionManager(
@@ -425,6 +435,30 @@ function animate() {
       weaponManager.switchToSlot(3); // Index 3 = slot 4
       if (audioManager) audioManager.play('itemPickup', { volume: 0.4 });
     }
+    
+    // Spell casting inputs (F1-F6 for direct cast, F to cast selected)
+    // Cannot cast while attacking or rolling
+    if (!gameManager.isAttacking && !gameManager.isRolling) {
+      if (inputManager.spellSlot1) spellCaster.castFromSlot(0);
+      if (inputManager.spellSlot2) spellCaster.castFromSlot(1);
+      if (inputManager.spellSlot3) spellCaster.castFromSlot(2);
+      if (inputManager.spellSlot4) spellCaster.castFromSlot(3);
+      if (inputManager.spellSlot5) spellCaster.castFromSlot(4);
+      if (inputManager.spellSlot6) spellCaster.castFromSlot(5);
+      
+      // Cast currently selected spell with F key
+      if (inputManager.castSpell) {
+        spellCaster.castFromSlot(spellManager.activeSlot);
+      }
+    }
+    
+    // Spell slot selection (Shift + 1-6 to select without casting)
+    if (inputManager.selectSpellSlot1) spellManager.selectSlot(0);
+    if (inputManager.selectSpellSlot2) spellManager.selectSlot(1);
+    if (inputManager.selectSpellSlot3) spellManager.selectSlot(2);
+    if (inputManager.selectSpellSlot4) spellManager.selectSlot(3);
+    if (inputManager.selectSpellSlot5) spellManager.selectSlot(4);
+    if (inputManager.selectSpellSlot6) spellManager.selectSlot(5);
   }
   equipmentManager.updateEquipmentDrops(player.mesh.position, delta);
   
@@ -449,6 +483,7 @@ function animate() {
   gameManager.update(delta);
   manaManager.update(delta); // Phase 20: Mana regeneration
   spellManager.update(delta); // Phase 20: Spell cooldowns and buffs
+  spellCaster.update(delta); // Phase 20: Spell casting, projectiles, effects
   audioManager.updateListener();
   floatingText.update(delta);
 
@@ -574,6 +609,8 @@ window.dialogueManager = dialogueManager;
 window.attackAnimator = attackAnimator;
 window.weaponManager = weaponManager;
 window.manaManager = manaManager;
+window.spellManager = spellManager;
+window.spellCaster = spellCaster;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
