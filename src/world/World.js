@@ -3,6 +3,7 @@ import { TerrainGenerator } from './TerrainGenerator.js';
 import { FoliageManager } from './FoliageManager.js';
 import { VillageManager } from './VillageManager.js';
 import { RuinsManager } from './RuinsManager.js';
+import { CaveManager } from './CaveManager.js';
 
 /**
  * World - Open World Environment
@@ -39,6 +40,7 @@ export class World {
     this.foliage = new FoliageManager(scene, this.terrain);
     this.villages = new VillageManager(scene, this.terrain);
     this.ruinsManager = new RuinsManager(scene, this.terrain, this.colliders);
+    this.caveManager = new CaveManager(scene, this.terrain);
     this._createLighting();
     
     // Update bonfire position to be on terrain
@@ -215,6 +217,30 @@ export class World {
   getNearbyRuin(x, z, radius = 20) {
     if (!this.ruinsManager) return null;
     return this.ruinsManager.getNearbyRuin(x, z, radius);
+  }
+  
+  /**
+   * Check if position is near a cave entrance
+   */
+  isNearCave(x, z, radius = 15) {
+    if (!this.caveManager) return false;
+    return this.caveManager.isNearCave(x, z, radius);
+  }
+  
+  /**
+   * Get all cave entrance data (for future mini-dungeons)
+   */
+  getCaves() {
+    if (!this.caveManager) return [];
+    return this.caveManager.getCaves();
+  }
+  
+  /**
+   * Get nearest cave (for interactions/quests)
+   */
+  getNearestCave(x, z) {
+    if (!this.caveManager) return null;
+    return this.caveManager.getNearestCave(x, z);
   }
   
   // ========================================
@@ -547,6 +573,9 @@ export class World {
     }
     if (this.ruinsManager) {
       this.ruinsManager.dispose();
+    }
+    if (this.caveManager) {
+      this.caveManager.dispose();
     }
   }
 }
