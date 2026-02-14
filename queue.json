@@ -6,29 +6,29 @@
       "id": "time-system",
       "name": "TimeManager.js",
       "priority": "P0",
-      "status": "in-progress",
+      "status": "ready-for-review",
       "worker": 1,
       "description": "Game time system with day/night cycle, sun/moon positioning, events, persistence",
-      "workerNotes": null
+      "workerNotes": "Created TimeManager.js with: (1) Time scale 1 real min = 1 game hour (24 min = full day), (2) Tracks currentHour, currentMinute, currentDay, dayPhase (DAWN 5-7, DAY 7-18, DUSK 18-20, NIGHT 20-5), (3) Sun/moon position calculation with celestial arc (getSunPosition/getMoonPosition), (4) Moon phase cycle (8 game days), (5) Event callbacks: onHourChange, onPhaseChange, onDayChange, onMinuteChange, (6) Pause/resume for menus, (7) Save/load to localStorage, (8) Clock UI in top-right corner with time, phase emoji, day counter, (9) Phase-specific CSS styling, (10) Singleton pattern with createTimeManager/getTimeManager exports"
     },
     {
       "id": "lighting-system",
       "name": "DayNightLighting.js",
       "priority": "P0",
-      "status": "pending",
-      "worker": null,
+      "status": "ready-for-review",
+      "worker": 1,
       "description": "Ambient/directional lighting changes, color shifts, stars, fog based on time",
-      "workerNotes": null
+      "workerNotes": "Created DayNightLighting.js with: (1) Phase color palettes (ambient, sun, moon, sky, fog for each phase), (2) Three lights: ambient, sun directional with shadows, moon directional, (3) Sun/moon meshes with glow spheres, (4) 2000-star particle field with twinkle animation, (5) 30-second smooth color/intensity transitions via lerp, (6) Indoor zone support (areas unaffected by day/night), (7) Torch registration system for night enhancement, (8) Fog density/color changes by phase, (9) Star visibility fades in during dusk, (10) Integration with TimeManager via onPhaseChange callback and setSunLight/setMoonLight"
     },
     {
       "id": "weather-manager",
       "name": "WeatherManager.js",
       "priority": "P1",
-      "status": "pending",
-      "worker": null,
+      "status": "ready-for-review",
+      "worker": 1,
       "description": "Weather system with biome-specific weather, transitions, particle effects",
-      "workerNotes": null
+      "workerNotes": "Created WeatherManager.js with: (1) 9 weather types: CLEAR, CLOUDY, OVERCAST, RAIN, HEAVY_RAIN, STORM, FOG, SNOW, BLIZZARD, (2) Weather config with fog/ambient/sun multipliers and sky tints, (3) Biome-specific probability tables (default, forest, mountain, swamp, desert), (4) Random weather changes every 2-8 game hours, (5) 60-second smooth transitions, (6) Rain/snow/fog_wisp particle systems with wind drift, (7) Lightning flashes during storms with thunder delay, (8) forceWeather() for scripting, (9) Save/load to localStorage, (10) Integration with TimeManager hour change events, (11) Wind strength affects particle movement"
     }
   ],
-  "lastUpdated": "2026-02-14T19:20:00Z"
+  "lastUpdated": "2026-02-14T19:35:00Z"
 }
