@@ -40,11 +40,12 @@ export class EnemyManager {
         triggerRadius: spawn.triggerRadius,
       }, this.gm);
       
+      // Give ALL enemies world reference for collision detection
+      enemy.world = this.world;
+      
       // Special handling for Crypt Lord (second boss)
       if (spawn.type === 'CRYPT_LORD' || spawn.isCryptLord) {
         this.cryptLord = enemy;
-        // Give Crypt Lord world reference for arena activation
-        enemy.world = this.world;
         // Give Crypt Lord enemy manager reference for spawning adds
         enemy.enemyManager = this;
       }
@@ -57,6 +58,9 @@ export class EnemyManager {
     // Get boss position from world or fallback
     const bossPos = this.world?.getBossPosition() || new THREE.Vector3(0, 0, -95);
     this.boss = new Boss(this.scene, bossPos, this.gm);
+    
+    // Give boss world reference for collision detection
+    this.boss.world = this.world;
     
     // Create a boss arena marker (subtle floor glow)
     const arenaGeo = new THREE.RingGeometry(8, 12, 32);

@@ -94,6 +94,10 @@ export class Boss {
     
     this.spawnPos = position.clone();
     
+    // World reference for collision detection (set by EnemyManager)
+    this.world = null;
+    this.collisionRadius = 0.8;
+    
     // Create main mesh container
     this.mesh = new THREE.Group();
     this.mesh.position.copy(position);
@@ -1309,7 +1313,19 @@ export class Boss {
     dir.y = 0;
     if (dir.length() > 0.5) {
       dir.normalize();
-      this.mesh.position.addScaledVector(dir, this.config.moveSpeed * delta);
+      const moveAmount = this.config.moveSpeed * delta;
+      const proposedPos = this.mesh.position.clone().addScaledVector(dir, moveAmount);
+      
+      // Check collision with world structures
+      if (this.world && this.world.checkCollision) {
+        const collision = this.world.checkCollision(proposedPos, this.collisionRadius);
+        if (!collision.collides) {
+          this.mesh.position.copy(proposedPos);
+        }
+        // Boss doesn't slide - just stops at walls (simpler behavior)
+      } else {
+        this.mesh.position.addScaledVector(dir, moveAmount);
+      }
     }
   }
   

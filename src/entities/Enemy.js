@@ -294,6 +294,16 @@ export class Enemy {
     // Load GLTF model asynchronously
     this._loadGLTFModel();
     
+    // ========== COLLISION & STUCK DETECTION ==========
+    this.world = null;               // Set by EnemyManager for collision checks
+    this.collisionRadius = 0.5;      // Enemy collision radius
+    this.lastPosition = position.clone();
+    this.stuckTimer = 0;             // Time spent stuck
+    this.stuckThreshold = 2.0;       // Seconds before considered stuck
+    this.unstuckAttempts = 0;        // Counter for pathfinding retries
+    this.avoidanceDir = null;        // Current avoidance direction
+    this.avoidanceTimer = 0;         // Time spent avoiding
+    
     // ========== BOSS-SPECIFIC INITIALIZATION ==========
     if (this.config.isBoss) {
       this.isBoss = true;
@@ -792,6 +802,14 @@ export class Enemy {
     if (this.isBoss && this.bossAttackCooldown > 0) {
       this.bossAttackCooldown -= delta;
     }
+    
+    // Stuck detection for movement states (not bosses during attacks)
+    if (!this.isBoss || this.state === STATES.CHASE || this.state === STATES.PATROL) {
+      if (this.state === STATES.CHASE || this.state === STATES.PATROL || 
+          this.state === STATES.RETREAT || this.state === STATES.CIRCLE) {
+        this._checkStuck(delta);
+      }
+    }
   }
   
   _circleStrafe(targetPos, delta) {
@@ -805,7 +823,22 @@ export class Enemy {
     const distCorrection = new THREE.Vector3().copy(toTarget).multiplyScalar((dist - idealDist) * 0.5);
     
     const moveDir = perp.add(distCorrection).normalize();
-    this.mesh.position.addScaledVector(moveDir, this.config.moveSpeed * 0.7 * delta);
+    const moveAmount = this.config.moveSpeed * 0.7 * delta;
+    
+    // Check collision before strafing
+    const proposedPos = this.mesh.position.clone().addScaledVector(moveDir, moveAmount);
+    
+    if (this.world && this.world.checkCollision) {
+      const collision = this.world.checkCollision(proposedPos, this.collisionRadius);
+      if (!collision.collides) {
+        this.mesh.position.copy(proposedPos);
+      } else {
+        // Collision - flip strafe direction
+        this.circleDirection *= -1;
+      }
+    } else {
+      this.mesh.position.addScaledVector(moveDir, moveAmount);
+    }
   }
 
   // ========== BOSS ATTACK SELECTION ==========
@@ -2240,7 +2273,33 @@ export class Enemy {
     this.chainAttackCount = 0;
     this.circleTimer = 0;
     this.isBlocking = false;
-    this.mesh.position.copy(this.spawnPos);
+    this.stuckTimer = 0;
+    this.unstuckAttempts = 0;
+    this.avoidanceDir = null;
+    this.avoidanceTimer = 0;
+    
+    // Find valid spawn position (not inside walls)
+    let spawnPosition = this.spawnPos.clone();
+    if (this.world && this.world.checkCollision) {
+      if (this.world.checkCollision(spawnPosition, this.collisionRadius).collides) {
+        // Spawn point is in a wall - try nearby positions
+        const offsets = [
+          new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+          new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+          new THREE.Vector3(1, 0, 1), new THREE.Vector3(-1, 0, 1),
+          new THREE.Vector3(1, 0, -1), new THREE.Vector3(-1, 0, -1),
+        ];
+        for (const offset of offsets) {
+          const testPos = this.spawnPos.clone().add(offset);
+          if (!this.world.checkCollision(testPos, this.collisionRadius).collides) {
+            spawnPosition = testPos;
+            break;
+          }
+        }
+      }
+    }
+    this.mesh.position.copy(spawnPosition);
+    this.lastPosition.copy(spawnPosition);
     
     // Check if this enemy should respawn dormant (ambush behavior)
     const shouldBeDormant = this.config.behavior === 'ambush' || this.config.isAmbush;
@@ -2279,10 +2338,151 @@ export class Enemy {
   _moveToward(target, speed, delta) {
     const dir = new THREE.Vector3().subVectors(target, this.mesh.position);
     dir.y = 0;
-    if (dir.length() > 0.5) {
-      dir.normalize();
-      this.mesh.position.addScaledVector(dir, speed * delta);
+    const distToTarget = dir.length();
+    
+    if (distToTarget < 0.5) return; // Close enough
+    
+    dir.normalize();
+    const moveAmount = speed * delta;
+    
+    // Calculate proposed new position
+    const proposedPos = this.mesh.position.clone().addScaledVector(dir, moveAmount);
+    
+    // Check collision with walls/structures
+    if (this.world && this.world.checkCollision) {
+      const collisionResult = this.world.checkCollision(proposedPos, this.collisionRadius);
+      
+      if (collisionResult.collides) {
+        // Try to slide along the obstacle
+        const slideDir = this._findSlideDirection(dir, collisionResult, delta);
+        
+        if (slideDir) {
+          // Apply sliding movement
+          const slidePos = this.mesh.position.clone().addScaledVector(slideDir, moveAmount * 0.7);
+          const slideCollision = this.world.checkCollision(slidePos, this.collisionRadius);
+          
+          if (!slideCollision.collides) {
+            this.mesh.position.copy(slidePos);
+            this.avoidanceDir = slideDir.clone();
+            this.avoidanceTimer = 0.5; // Keep sliding for half a second
+          } else {
+            // Both direct and slide blocked - try perpendicular
+            this._tryPerpendicularMove(dir, moveAmount, delta);
+          }
+        } else {
+          // No valid slide - try perpendicular movement
+          this._tryPerpendicularMove(dir, moveAmount, delta);
+        }
+      } else {
+        // No collision - move freely
+        this.mesh.position.copy(proposedPos);
+        this.avoidanceDir = null;
+        this.avoidanceTimer = 0;
+      }
+    } else {
+      // No world reference - move without collision (fallback)
+      this.mesh.position.addScaledVector(dir, moveAmount);
     }
+  }
+  
+  // Find a direction to slide along an obstacle
+  _findSlideDirection(moveDir, collisionResult, delta) {
+    // Calculate perpendicular directions
+    const perpRight = new THREE.Vector3(-moveDir.z, 0, moveDir.x);
+    const perpLeft = new THREE.Vector3(moveDir.z, 0, -moveDir.x);
+    
+    // If we have a collision normal, use it to determine better slide direction
+    if (collisionResult.normal) {
+      // Project movement onto the collision surface (slide)
+      const dot = moveDir.dot(collisionResult.normal);
+      const slideDir = moveDir.clone().sub(collisionResult.normal.clone().multiplyScalar(dot));
+      if (slideDir.length() > 0.1) {
+        return slideDir.normalize();
+      }
+    }
+    
+    // If avoidance timer is active, continue previous direction
+    if (this.avoidanceDir && this.avoidanceTimer > 0) {
+      this.avoidanceTimer -= delta;
+      return this.avoidanceDir;
+    }
+    
+    // Pick a perpendicular based on unstuck attempts (alternates)
+    return (this.unstuckAttempts % 2 === 0) ? perpRight : perpLeft;
+  }
+  
+  // Try moving perpendicular when both direct and slide are blocked
+  _tryPerpendicularMove(moveDir, moveAmount, delta) {
+    if (!this.world) return;
+    
+    const perpRight = new THREE.Vector3(-moveDir.z, 0, moveDir.x);
+    const perpLeft = new THREE.Vector3(moveDir.z, 0, -moveDir.x);
+    
+    // Try right
+    const rightPos = this.mesh.position.clone().addScaledVector(perpRight, moveAmount);
+    if (!this.world.checkCollision(rightPos, this.collisionRadius).collides) {
+      this.mesh.position.copy(rightPos);
+      this.avoidanceDir = perpRight;
+      this.avoidanceTimer = 0.3;
+      return;
+    }
+    
+    // Try left
+    const leftPos = this.mesh.position.clone().addScaledVector(perpLeft, moveAmount);
+    if (!this.world.checkCollision(leftPos, this.collisionRadius).collides) {
+      this.mesh.position.copy(leftPos);
+      this.avoidanceDir = perpLeft;
+      this.avoidanceTimer = 0.3;
+      return;
+    }
+    
+    // Both blocked - increment stuck counter (handled in _checkStuck)
+  }
+  
+  // Check if enemy is stuck and needs a new path
+  _checkStuck(delta) {
+    const movedDist = this.mesh.position.distanceTo(this.lastPosition);
+    
+    if (movedDist < 0.05) {
+      // Hasn't moved much
+      this.stuckTimer += delta;
+      
+      if (this.stuckTimer > this.stuckThreshold) {
+        // Enemy is stuck - take action
+        this.unstuckAttempts++;
+        this.stuckTimer = 0;
+        
+        if (this.unstuckAttempts > 3) {
+          // Multiple attempts failed - try teleporting to a valid patrol position
+          this._pickPatrolTarget();
+          
+          // Verify patrol target isn't in a wall
+          if (this.world && this.world.checkCollision) {
+            let attempts = 0;
+            while (this.world.checkCollision(this.patrolTarget, this.collisionRadius).collides && attempts < 5) {
+              this._pickPatrolTarget();
+              attempts++;
+            }
+          }
+          
+          this.unstuckAttempts = 0;
+          this._changeState(STATES.PATROL);
+        } else {
+          // Switch direction or pick new patrol point
+          this.circleDirection *= -1; // Flip circle direction
+          if (this.state === STATES.CHASE || this.state === STATES.CIRCLE) {
+            this._changeState(STATES.CIRCLE); // Circle to find a path
+          }
+        }
+      }
+    } else {
+      // Moving fine - reset stuck timer
+      this.stuckTimer = 0;
+      this.unstuckAttempts = 0;
+    }
+    
+    // Update last position
+    this.lastPosition.copy(this.mesh.position);
   }
 
   _faceTarget(target, delta) {
