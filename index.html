@@ -27,6 +27,7 @@
     .health-fill { background: linear-gradient(90deg, #8b1a1a, #cc3333); }
     .stamina-fill { background: linear-gradient(90deg, #1a5c1a, #33aa33); }
     .posture-fill { background: linear-gradient(90deg, #8b6914, #ccaa33); }
+    .mana-fill { background: linear-gradient(90deg, #1a3a8b, #3366cc); }
     .bar-label {
       position: absolute; top: 0; left: 8px; line-height: 20px;
       font-size: 11px; text-shadow: 1px 1px 2px #000;
@@ -377,6 +378,10 @@
     <div class="bar-container" style="width: 200px; height: 12px;">
       <div class="bar-fill posture-fill" id="posture-bar" style="width: 0%"></div>
       <div class="bar-label" style="line-height:12px; font-size:9px">POSTURE</div>
+    </div>
+    <div class="bar-container" style="width: 220px; height: 14px; margin-top: 8px;">
+      <div class="bar-fill mana-fill" id="mana-bar" style="width: 100%"></div>
+      <div class="bar-label" style="line-height:14px; font-size:10px">MANA</div>
     </div>
     <div id="remnant">Remnant: 0</div>
     <div id="lost-remnant" style="display:none; font-size:12px; color:#aa3333; margin-top:4px;">Lost: 0</div>

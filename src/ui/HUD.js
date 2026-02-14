@@ -39,11 +39,24 @@ export class HUD {
     // Create ability bar UI
     this._createAbilityBar();
     
+    // Create mana bar UI
+    this._createManaBar();
+    
+    // Create spell hotbar UI
+    this._createSpellHotbar();
+    
     // Level up flash
     this.levelUpFlashActive = false;
     
     // Track last level for auto-open detection
     this._lastLevel = this.gm.currentLevel || 1;
+    
+    // Mana/spell manager references (set via setManaManager/setSpellManager)
+    this.manaManager = null;
+    this.spellManager = null;
+    
+    // Mana flash for insufficient mana
+    this.manaWarningActive = false;
   }
   
   setStatsUI(statsUI) {
@@ -297,6 +310,418 @@ export class HUD {
     document.body.appendChild(this.abilityContainer);
   }
   
+  _createManaBar() {
+    // Mana bar container - positioned below health/stamina bars
+    this.manaContainer = document.createElement('div');
+    this.manaContainer.id = 'mana-container';
+    this.manaContainer.style.cssText = `
+      position: fixed;
+      top: 95px;
+      left: 20px;
+      width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      z-index: 100;
+      pointer-events: none;
+    `;
+    
+    // Mana label
+    const manaLabel = document.createElement('div');
+    manaLabel.style.cssText = `
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      color: #6699ff;
+      text-shadow: 0 0 4px rgba(0,0,0,0.8);
+      letter-spacing: 1px;
+    `;
+    manaLabel.textContent = 'MANA';
+    this.manaContainer.appendChild(manaLabel);
+    
+    // Mana bar background
+    this.manaBarBg = document.createElement('div');
+    this.manaBarBg.style.cssText = `
+      width: 100%;
+      height: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(100, 150, 255, 0.3);
+      border-radius: 3px;
+      overflow: hidden;
+    `;
+    
+    // Mana bar fill
+    this.manaBar = document.createElement('div');
+    this.manaBar.id = 'mana-bar';
+    this.manaBar.style.cssText = `
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #3366cc, #6699ff);
+      box-shadow: 0 0 6px rgba(100, 150, 255, 0.5);
+      transition: width 0.15s ease-out;
+    `;
+    
+    this.manaBarBg.appendChild(this.manaBar);
+    this.manaContainer.appendChild(this.manaBarBg);
+    
+    // Mana text (current/max)
+    this.manaText = document.createElement('div');
+    this.manaText.style.cssText = `
+      font-family: 'Cinzel', serif;
+      font-size: 9px;
+      color: #88aaff;
+      text-shadow: 0 0 4px rgba(0,0,0,0.8);
+      text-align: right;
+    `;
+    this.manaText.textContent = '100 / 100';
+    this.manaContainer.appendChild(this.manaText);
+    
+    document.body.appendChild(this.manaContainer);
+  }
+  
+  _createSpellHotbar() {
+    // Spell hotbar - 6 slots at bottom center (above XP bar)
+    this.spellHotbarContainer = document.createElement('div');
+    this.spellHotbarContainer.id = 'spell-hotbar';
+    this.spellHotbarContainer.style.cssText = `
+      position: fixed;
+      bottom: 55px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: row;
+      gap: 6px;
+      z-index: 100;
+      pointer-events: none;
+    `;
+    
+    // Create 6 spell slots
+    this.spellSlots = [];
+    
+    for (let i = 0; i < 6; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'spell-slot';
+      slot.dataset.slotIndex = i;
+      slot.style.cssText = `
+        width: 44px;
+        height: 44px;
+        background: rgba(0, 0, 20, 0.75);
+        border: 2px solid rgba(100, 120, 180, 0.5);
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      `;
+      
+      // Spell icon
+      const icon = document.createElement('div');
+      icon.className = 'spell-icon';
+      icon.style.cssText = `
+        font-size: 20px;
+        line-height: 1;
+        color: #aaccff;
+      `;
+      icon.textContent = ''; // Empty by default
+      slot.appendChild(icon);
+      
+      // Hotkey label (F1-F6)
+      const hotkey = document.createElement('div');
+      hotkey.className = 'spell-hotkey';
+      hotkey.textContent = `F${i + 1}`;
+      hotkey.style.cssText = `
+        position: absolute;
+        bottom: 2px;
+        right: 3px;
+        font-family: 'Cinzel', serif;
+        font-size: 8px;
+        color: #888;
+      `;
+      slot.appendChild(hotkey);
+      
+      // Cooldown overlay (fills from bottom)
+      const cooldownOverlay = document.createElement('div');
+      cooldownOverlay.className = 'spell-cooldown-overlay';
+      cooldownOverlay.style.cssText = `
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 0%;
+        background: rgba(0, 0, 0, 0.75);
+        border-radius: 4px;
+        pointer-events: none;
+        transition: height 0.1s linear;
+      `;
+      slot.appendChild(cooldownOverlay);
+      
+      // Cooldown timer text
+      const cooldownText = document.createElement('div');
+      cooldownText.className = 'spell-cooldown-text';
+      cooldownText.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-family: 'Cinzel', serif;
+        font-size: 12px;
+        font-weight: bold;
+        color: #fff;
+        text-shadow: 0 0 4px rgba(0,0,0,0.9);
+        display: none;
+      `;
+      slot.appendChild(cooldownText);
+      
+      // Mana cost indicator
+      const manaCost = document.createElement('div');
+      manaCost.className = 'spell-mana-cost';
+      manaCost.style.cssText = `
+        position: absolute;
+        top: 2px;
+        left: 3px;
+        font-family: 'Cinzel', serif;
+        font-size: 8px;
+        color: #6699ff;
+        text-shadow: 0 0 2px rgba(0,0,0,0.8);
+      `;
+      slot.appendChild(manaCost);
+      
+      // Selected indicator (border highlight)
+      const selectedIndicator = document.createElement('div');
+      selectedIndicator.className = 'spell-selected';
+      selectedIndicator.style.cssText = `
+        position: absolute;
+        top: -3px;
+        left: -3px;
+        right: -3px;
+        bottom: -3px;
+        border: 2px solid #ffcc44;
+        border-radius: 8px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s;
+      `;
+      slot.appendChild(selectedIndicator);
+      
+      this.spellSlots.push({
+        element: slot,
+        icon,
+        hotkey,
+        cooldownOverlay,
+        cooldownText,
+        manaCost,
+        selectedIndicator,
+        spellId: null
+      });
+      
+      this.spellHotbarContainer.appendChild(slot);
+    }
+    
+    document.body.appendChild(this.spellHotbarContainer);
+    
+    // Add CSS keyframes for spell effects
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spellCastGlow {
+        0% { box-shadow: 0 0 10px rgba(100, 150, 255, 0.8); }
+        100% { box-shadow: none; }
+      }
+      @keyframes manaWarningFlash {
+        0%, 100% { background: linear-gradient(90deg, #3366cc, #6699ff); }
+        50% { background: linear-gradient(90deg, #cc3366, #ff6699); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  setManaManager(manaManager) {
+    this.manaManager = manaManager;
+    
+    // Subscribe to mana changes
+    if (manaManager) {
+      manaManager.setOnManaChanged((current, max) => {
+        this._updateManaBar(current, max);
+      });
+      
+      manaManager.setOnManaInsufficient(() => {
+        this.flashManaInsufficient();
+      });
+    }
+  }
+  
+  setSpellManager(spellManager) {
+    this.spellManager = spellManager;
+    
+    // Subscribe to hotbar changes
+    if (spellManager) {
+      spellManager.onHotbarChanged = (slots) => {
+        this._updateSpellHotbarSlots(slots);
+      };
+      
+      spellManager.onCooldownUpdate = (slotIndex, remaining, total) => {
+        this._updateSpellSlotCooldown(slotIndex, remaining, total);
+      };
+      
+      // Initial update
+      this._updateSpellHotbarSlots(spellManager.hotbarSlots);
+    }
+  }
+  
+  _updateManaBar(current, max) {
+    if (!this.manaBar) return;
+    
+    const percent = (current / max) * 100;
+    this.manaBar.style.width = `${percent}%`;
+    
+    if (this.manaText) {
+      this.manaText.textContent = `${Math.floor(current)} / ${Math.floor(max)}`;
+    }
+    
+    // Low mana warning (below 20%)
+    if (percent < 20) {
+      this.manaBar.style.background = 'linear-gradient(90deg, #6633cc, #9966ff)';
+    } else {
+      this.manaBar.style.background = 'linear-gradient(90deg, #3366cc, #6699ff)';
+    }
+  }
+  
+  flashManaInsufficient() {
+    if (this.manaWarningActive) return;
+    this.manaWarningActive = true;
+    
+    if (this.manaBar) {
+      this.manaBar.style.animation = 'manaWarningFlash 0.3s ease-in-out 2';
+      
+      setTimeout(() => {
+        this.manaBar.style.animation = '';
+        this.manaWarningActive = false;
+      }, 600);
+    }
+  }
+  
+  _updateSpellHotbarSlots(slots) {
+    if (!this.spellSlots || !this.spellManager) return;
+    
+    // Import spell data dynamically
+    import('../data/SpellData.js').then(module => {
+      const SPELL_DATA = module.default;
+      
+      for (let i = 0; i < this.spellSlots.length; i++) {
+        const slot = this.spellSlots[i];
+        const spellId = slots[i];
+        slot.spellId = spellId;
+        
+        if (spellId && SPELL_DATA[spellId]) {
+          const spell = SPELL_DATA[spellId];
+          
+          // Set icon based on spell type
+          slot.icon.textContent = this._getSpellIcon(spell);
+          slot.icon.style.color = this._getSpellColor(spell);
+          slot.manaCost.textContent = spell.manaCost;
+          slot.element.style.opacity = '1';
+          slot.element.title = `${spell.name} (${spell.manaCost} mana)`;
+        } else {
+          // Empty slot
+          slot.icon.textContent = '';
+          slot.manaCost.textContent = '';
+          slot.element.style.opacity = '0.5';
+          slot.element.title = 'Empty slot';
+        }
+      }
+    }).catch(() => {
+      // Fallback if import fails
+      console.warn('[HUD] Could not load SpellData for hotbar');
+    });
+  }
+  
+  _getSpellIcon(spell) {
+    // Return emoji based on spell type
+    switch (spell.id) {
+      case 'fireball': return '🔥';
+      case 'iceShard': return '❄️';
+      case 'lightningBolt': return '⚡';
+      case 'arcaneMissile': return '✨';
+      case 'darkOrb': return '🌑';
+      case 'spark': return '💫';
+      case 'minorHeal': return '💚';
+      case 'heal': return '💖';
+      case 'regeneration': return '🌿';
+      case 'lifeSteal': return '🩸';
+      case 'magicShield': return '🛡️';
+      case 'ward': return '🔰';
+      case 'barrier': return '⭕';
+      case 'haste': return '💨';
+      case 'strengthBoost': return '💪';
+      case 'magicPower': return '🔮';
+      case 'ironSkin': return '🪨';
+      case 'frostNova': return '❄️';
+      case 'chainLightning': return '⚡';
+      default:
+        // Fallback by category
+        switch (spell.category) {
+          case 'offensive': return '⚔️';
+          case 'healing': return '💚';
+          case 'defensive': return '🛡️';
+          case 'buff': return '⬆️';
+          default: return '✨';
+        }
+    }
+  }
+  
+  _getSpellColor(spell) {
+    switch (spell.damageType) {
+      case 'fire': return '#ff6600';
+      case 'ice': return '#66ccff';
+      case 'lightning': return '#ffff66';
+      case 'arcane': return '#aa66ff';
+      case 'dark': return '#884488';
+      default:
+        if (spell.category === 'healing') return '#66ff88';
+        if (spell.category === 'defensive') return '#66aaff';
+        if (spell.category === 'buff') return '#ffcc44';
+        return '#aaccff';
+    }
+  }
+  
+  _updateSpellSlotCooldown(slotIndex, remaining, total) {
+    if (!this.spellSlots || slotIndex < 0 || slotIndex >= this.spellSlots.length) return;
+    
+    const slot = this.spellSlots[slotIndex];
+    
+    if (remaining > 0 && total > 0) {
+      const percent = (remaining / total) * 100;
+      slot.cooldownOverlay.style.height = `${percent}%`;
+      slot.cooldownText.textContent = remaining.toFixed(1);
+      slot.cooldownText.style.display = 'block';
+      slot.element.style.borderColor = 'rgba(60, 60, 80, 0.5)';
+    } else {
+      slot.cooldownOverlay.style.height = '0%';
+      slot.cooldownText.style.display = 'none';
+      slot.element.style.borderColor = 'rgba(100, 120, 180, 0.5)';
+    }
+  }
+  
+  updateSpellHotbarSelection(selectedIndex) {
+    if (!this.spellSlots) return;
+    
+    for (let i = 0; i < this.spellSlots.length; i++) {
+      const slot = this.spellSlots[i];
+      slot.selectedIndicator.style.opacity = (i === selectedIndex) ? '1' : '0';
+    }
+  }
+  
+  flashSpellCast(slotIndex) {
+    if (!this.spellSlots || slotIndex < 0 || slotIndex >= this.spellSlots.length) return;
+    
+    const slot = this.spellSlots[slotIndex];
+    slot.element.style.animation = 'spellCastGlow 0.3s ease-out';
+    
+    setTimeout(() => {
+      slot.element.style.animation = '';
+    }, 300);
+  }
+  
   _updateAbilityBar() {
     if (!this.abilitySlots || !this.gm.abilities) return;
     
@@ -516,8 +941,53 @@ export class HUD {
     // Update stat points indicator
     this._updateStatPointsIndicator();
     
+    // Update mana bar from manager
+    if (this.manaManager) {
+      this._updateManaBar(this.manaManager.currentMana, this.manaManager.maxMana);
+    }
+    
+    // Update spell cooldowns from manager
+    this._updateSpellCooldowns();
+    
     // Boss health bar
     this._updateBossUI();
+  }
+  
+  _updateSpellCooldowns() {
+    if (!this.spellSlots || !this.spellManager) return;
+    
+    // Cache spell data for cooldown calculations
+    import('../data/SpellData.js').then(module => {
+      const SPELL_DATA = module.default;
+      
+      for (let i = 0; i < this.spellSlots.length; i++) {
+        const slot = this.spellSlots[i];
+        const spellId = slot.spellId;
+        
+        if (spellId && SPELL_DATA[spellId]) {
+          const remaining = this.spellManager.getCooldownRemaining(spellId);
+          const spell = SPELL_DATA[spellId];
+          const total = spell.cooldown || 0;
+          
+          if (remaining > 0 && total > 0) {
+            const percent = (remaining / total) * 100;
+            slot.cooldownOverlay.style.height = `${percent}%`;
+            slot.cooldownText.textContent = remaining.toFixed(1);
+            slot.cooldownText.style.display = 'block';
+            slot.element.style.borderColor = 'rgba(60, 60, 80, 0.5)';
+          } else {
+            slot.cooldownOverlay.style.height = '0%';
+            slot.cooldownText.style.display = 'none';
+            slot.element.style.borderColor = 'rgba(100, 120, 180, 0.5)';
+          }
+        }
+      }
+    }).catch(() => {});
+    
+    // Update selected slot indicator
+    if (this.spellManager.activeSlot !== undefined) {
+      this.updateSpellHotbarSelection(this.spellManager.activeSlot);
+    }
   }
   
   _updateStatPointsIndicator() {

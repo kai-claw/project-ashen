@@ -28,6 +28,7 @@ import { AttackAnimator } from './systems/AttackAnimator.js';
 import { ManaManager } from './systems/ManaManager.js';
 import { SpellManager } from './systems/SpellManager.js';
 import { SpellCaster } from './systems/SpellCaster.js';
+import { SpellEffects } from './systems/SpellEffects.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -233,6 +234,12 @@ spellCaster.setEnemyManager(enemyManager);
 spellCaster.particleManager = particleManager;
 spellCaster.audioManager = audioManager;
 
+// --- Spell Visual Effects Manager ---
+const spellEffects = new SpellEffects(scene, particleManager);
+spellEffects.setPlayer(player);
+gameManager.spellEffects = spellEffects;
+spellCaster.spellEffects = spellEffects; // For enhanced projectile visuals
+
 // --- NPC Interaction System ---
 const interactionManager = new InteractionManager(
   scene,
@@ -299,6 +306,10 @@ const statsUI = new StatsUI(gameManager, inputManager, player);
 
 // --- Connect StatsUI to HUD for auto-open on level up ---
 hud.setStatsUI(statsUI);
+
+// --- Connect Mana and Spell systems to HUD ---
+hud.setManaManager(manaManager);
+hud.setSpellManager(spellManager);
 
 // --- Resize ---
 window.addEventListener('resize', () => {
@@ -484,6 +495,7 @@ function animate() {
   manaManager.update(delta); // Phase 20: Mana regeneration
   spellManager.update(delta); // Phase 20: Spell cooldowns and buffs
   spellCaster.update(delta); // Phase 20: Spell casting, projectiles, effects
+  spellEffects.update(delta); // Phase 20: Visual spell effects (auras, trails)
   audioManager.updateListener();
   floatingText.update(delta);
 
