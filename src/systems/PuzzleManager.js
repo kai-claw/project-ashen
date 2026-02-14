@@ -52,7 +52,55 @@ export class PuzzleManager {
     // Load saved puzzle states
     this._loadPuzzleState();
     
+    // Active tweens for smooth animations
+    this.tweens = [];
+    
     console.log('[PuzzleManager] Initialized');
+  }
+  
+  /**
+   * Create a smooth tween animation
+   */
+  _createTween(target, property, endValue, duration, easing = 'easeOutQuad') {
+    const startValue = target[property];
+    const tween = {
+      target,
+      property,
+      startValue,
+      endValue,
+      duration,
+      elapsed: 0,
+      easing,
+    };
+    this.tweens.push(tween);
+    return tween;
+  }
+  
+  /**
+   * Update active tweens
+   */
+  _updateTweens(deltaTime) {
+    for (let i = this.tweens.length - 1; i >= 0; i--) {
+      const tween = this.tweens[i];
+      tween.elapsed += deltaTime;
+      
+      const progress = Math.min(tween.elapsed / tween.duration, 1);
+      const easedProgress = this._easeOutQuad(progress);
+      
+      tween.target[tween.property] = tween.startValue + 
+        (tween.endValue - tween.startValue) * easedProgress;
+      
+      if (progress >= 1) {
+        this.tweens.splice(i, 1);
+      }
+    }
+  }
+  
+  /**
+   * Easing function for smooth animations
+   */
+  _easeOutQuad(t) {
+    return t * (2 - t);
   }
   
   /**
@@ -795,6 +843,9 @@ export class PuzzleManager {
     
     this.playerPosition.copy(this.player.position);
     
+    // Auto-detect pressure plates (stepped on without pressing E)
+    this._checkPressurePlates();
+    
     // Check for nearby puzzle components
     this._checkProximity();
     
@@ -803,6 +854,93 @@ export class PuzzleManager {
     
     // Update puzzle animations
     this._updateAnimations(deltaTime);
+    
+    // Update smooth animations
+    this._updateTweens(deltaTime);
+  }
+  
+  /**
+   * Auto-detect when player steps on pressure plates
+   */
+  _checkPressurePlates() {
+    for (const [puzzleId, puzzle] of this.puzzles) {
+      if (!puzzle.isActive || puzzle.visualType !== 'floor_plates') continue;
+      
+      const puzzleGroup = this.puzzleObjects.get(puzzleId);
+      if (!puzzleGroup) continue;
+      
+      for (const component of puzzle.components) {
+        if (component.userData.interactType !== 'step') continue;
+        
+        const worldPos = new THREE.Vector3();
+        component.getWorldPosition(worldPos);
+        
+        // Check if player is standing on this plate
+        const dx = Math.abs(this.playerPosition.x - worldPos.x);
+        const dz = Math.abs(this.playerPosition.z - worldPos.z);
+        const onPlate = dx < 0.9 && dz < 0.9 && Math.abs(this.playerPosition.y - worldPos.y) < 1;
+        
+        const wasOnPlate = component.userData.playerOnPlate || false;
+        component.userData.playerOnPlate = onPlate;
+        
+        // Trigger when player first steps on
+        if (onPlate && !wasOnPlate) {
+          this._handlePressurePlate(puzzle, component.userData.componentIndex);
+        }
+      }
+    }
+  }
+  
+  /**
+   * Create puzzle from DungeonGenerator room data
+   * Factory method for easy integration
+   */
+  createPuzzleFromRoom(roomData) {
+    if (!roomData.puzzle) return null;
+    
+    const puzzleConfig = roomData.puzzle;
+    const roomPosition = new THREE.Vector3(
+      roomData.worldPosition?.x || roomData.gridX * 20,
+      0,
+      roomData.worldPosition?.z || roomData.gridZ * 20
+    );
+    
+    // Build puzzle data for registration
+    const puzzleData = {
+      id: puzzleConfig.id || `puzzle_${roomData.id}`,
+      name: puzzleConfig.name || 'Ancient Puzzle',
+      description: puzzleConfig.description || '',
+      visualType: puzzleConfig.visualType,
+      componentCount: puzzleConfig.componentCount,
+      solution: puzzleConfig.solution,
+      hint: puzzleConfig.hint,
+      failurePenalty: puzzleConfig.failurePenalty || 'none',
+      reward: puzzleConfig.reward || {
+        remnants: 100 + Math.floor(Math.random() * 200),
+        items: [],
+      },
+    };
+    
+    return this.registerPuzzle(puzzleData, roomPosition);
+  }
+  
+  /**
+   * Create all puzzles for a dungeon instance
+   */
+  createPuzzlesForDungeon(dungeonInstance) {
+    const createdPuzzles = [];
+    
+    for (const room of dungeonInstance.rooms) {
+      if (room.puzzle) {
+        const puzzle = this.createPuzzleFromRoom(room);
+        if (puzzle) {
+          createdPuzzles.push(puzzle);
+        }
+      }
+    }
+    
+    console.log(`[PuzzleManager] Created ${createdPuzzles.length} puzzles for dungeon`);
+    return createdPuzzles;
   }
   
   /**
@@ -959,11 +1097,17 @@ export class PuzzleManager {
     const isPulled = component.userData.isPulled;
     component.userData.isPulled = !isPulled;
     
-    // Animate lever
+    // Play lever sound
+    if (this.audio) {
+      this.audio.playSound('lever_pull');
+    }
+    
+    // Animate lever with smooth tween
     const armGroup = component.userData.armGroup;
     if (armGroup) {
+      const arm = armGroup.children[0];
       const targetRotation = isPulled ? -Math.PI / 4 : Math.PI / 4;
-      armGroup.children[0].rotation.x = targetRotation;
+      this._createTween(arm.rotation, 'x', targetRotation, 0.3);
     }
     
     // Update material
@@ -1002,10 +1146,16 @@ export class PuzzleManager {
     rotation = (rotation + 90) % 360;
     component.userData.rotation = rotation;
     
-    // Rotate the crystal visually
+    // Play crystal sound
+    if (this.audio) {
+      this.audio.playSound('crystal_rotate');
+    }
+    
+    // Rotate the crystal visually with smooth tween
     const crystal = component.children.find(c => c.userData.crystal);
     if (crystal) {
-      crystal.rotation.y = (rotation * Math.PI) / 180;
+      const targetY = (rotation * Math.PI) / 180;
+      this._createTween(crystal.rotation, 'y', targetY, 0.4);
     }
     
     // Update state
@@ -1043,12 +1193,28 @@ export class PuzzleManager {
   _handleLock(puzzle, component) {
     if (!puzzle.requiredKey) return;
     
-    // Check if player has key
-    const hasKey = this.gm?.inventory?.hasItem(puzzle.requiredKey);
+    // Check if player has key (multiple methods for compatibility)
+    let hasKey = false;
+    if (this.gm?.inventory?.hasItem) {
+      hasKey = this.gm.inventory.hasItem(puzzle.requiredKey);
+    } else if (this.gm?.inventoryManager?.hasItem) {
+      hasKey = this.gm.inventoryManager.hasItem(puzzle.requiredKey);
+    } else if (this.gm?.player?.inventory) {
+      hasKey = this.gm.player.inventory.some(item => item.id === puzzle.requiredKey);
+    }
     
     if (hasKey) {
       // Consume key
-      this.gm.inventory.removeItem(puzzle.requiredKey, 1);
+      if (this.gm?.inventory?.removeItem) {
+        this.gm.inventory.removeItem(puzzle.requiredKey, 1);
+      } else if (this.gm?.inventoryManager?.removeItem) {
+        this.gm.inventoryManager.removeItem(puzzle.requiredKey, 1);
+      }
+      
+      // Play unlock sound
+      if (this.audio) {
+        this.audio.playSound('door_unlock');
+      }
       
       // Unlock door
       component.userData.isLocked = false;
@@ -1059,21 +1225,36 @@ export class PuzzleManager {
         lock.material = this.materials.lockUnlocked;
       }
       
-      // Animate doors opening
+      // Animate doors opening with smooth tweens
       const doors = component.children.filter(c => c.userData.door);
       doors.forEach((door, i) => {
         const direction = i === 0 ? -1 : 1;
-        door.position.x += direction * 1.8;
+        const targetX = door.position.x + direction * 1.8;
+        this._createTween(door.position, 'x', targetX, 0.8);
       });
       
       this._solvePuzzle(puzzle);
     } else {
-      // Show "need key" message
-      this._showStatus('🔒 This door is locked. Find the key to proceed.');
+      // Show "need key" message with key name
+      const keyName = this._getKeyName(puzzle.requiredKey);
+      this._showStatus(`🔒 This door is locked. You need: ${keyName}`);
       if (this.audio) {
         this.audio.playSound('locked');
       }
     }
+  }
+  
+  /**
+   * Get display name for a key
+   */
+  _getKeyName(keyId) {
+    const keyNames = {
+      'key_forgotten_catacombs': 'Crypt Key',
+      'key_crystal_caverns': 'Crystal Key',
+      'key_bandit_hideout': 'Hideout Key',
+      'key_corrupted_temple': 'Temple Key',
+    };
+    return keyNames[keyId] || keyId.replace(/_/g, ' ').replace('key ', '');
   }
   
   /**
@@ -1085,13 +1266,27 @@ export class PuzzleManager {
     symbolIndex = (symbolIndex + 1) % symbols.length;
     component.userData.symbolIndex = symbolIndex;
     
+    // Play pillar sound
+    if (this.audio) {
+      this.audio.playSound('pillar_spin');
+    }
+    
     // Update state
     puzzle.currentState[index] = symbols[symbolIndex];
     
-    // Visual rotation
+    // Visual rotation with smooth tween
     const rotatable = component.children.find(c => c.userData.rotatable);
     if (rotatable) {
-      rotatable.rotation.y += Math.PI / 4;
+      const targetY = rotatable.rotation.y + Math.PI / 4;
+      this._createTween(rotatable.rotation, 'y', targetY, 0.35);
+    }
+    
+    // Update symbol display
+    const symbolMesh = component.children.find(c => c.userData.symbol);
+    if (symbolMesh) {
+      // Color shift based on whether correct
+      const isCorrect = puzzle.solution[index] === symbols[symbolIndex];
+      symbolMesh.material.color.setHex(isCorrect ? 0xffdd44 : 0xaabbcc);
     }
     
     // Check if all symbols match
@@ -1115,15 +1310,35 @@ export class PuzzleManager {
     const isLit = component.userData.isLit;
     component.userData.isLit = !isLit;
     
+    // Play torch sound
+    if (this.audio) {
+      this.audio.playSound(!isLit ? 'torch_light' : 'torch_extinguish');
+    }
+    
     // Update visuals
     const flame = component.children.find(c => c.userData.flame);
     const light = component.userData.light;
     
     if (flame) {
       flame.material = !isLit ? this.materials.torchLit : this.materials.torchUnlit;
+      // Scale animation for ignition
+      if (!isLit) {
+        flame.scale.set(0.5, 0.5, 0.5);
+        this._createTween(flame.scale, 'x', 1, 0.3);
+        this._createTween(flame.scale, 'y', 1, 0.3);
+        this._createTween(flame.scale, 'z', 1, 0.3);
+      }
     }
     if (light) {
-      light.intensity = !isLit ? 1 : 0;
+      // Smooth light intensity change
+      this._createTween(light, 'intensity', !isLit ? 1 : 0, 0.25);
+    }
+    
+    // Spawn flame particles
+    if (!isLit && this.gm?.particles) {
+      const worldPos = new THREE.Vector3();
+      component.getWorldPosition(worldPos);
+      this.gm.particles.createBurst(worldPos, 0xff6622, 10, 1.5);
     }
     
     // Add to sequence
