@@ -2,6 +2,70 @@ import * as THREE from 'three';
 import { Enemy, ENEMY_TYPES } from './Enemy.js';
 import { Boss } from './Boss.js';
 
+/**
+ * Distance-based difficulty scaling configuration
+ * Enemies scale based on distance from castle (origin)
+ */
+const DIFFICULTY_ZONES = {
+  SAFE: {
+    maxDistance: 50,
+    hpMultiplier: 0.8,
+    damageMultiplier: 0.7,
+    remnantMultiplier: 0.8,
+    spawnDensity: 0.3,         // Low enemy density near castle
+    enemyTypes: ['HOLLOW_SOLDIER'],
+    eliteChance: 0,
+    label: 'Safe Zone',
+  },
+  MEDIUM: {
+    maxDistance: 150,
+    hpMultiplier: 1.0,
+    damageMultiplier: 1.0,
+    remnantMultiplier: 1.0,
+    spawnDensity: 0.5,
+    enemyTypes: ['HOLLOW_SOLDIER', 'BERSERKER'],
+    eliteChance: 0.05,
+    label: 'Medium Zone',
+  },
+  HARD: {
+    maxDistance: 300,
+    hpMultiplier: 1.3,
+    damageMultiplier: 1.2,
+    remnantMultiplier: 1.5,
+    spawnDensity: 0.7,
+    enemyTypes: ['HOLLOW_SOLDIER', 'BERSERKER', 'SENTINEL'],
+    eliteChance: 0.15,
+    label: 'Hard Zone',
+  },
+  FRONTIER: {
+    maxDistance: Infinity,
+    hpMultiplier: 1.6,
+    damageMultiplier: 1.4,
+    remnantMultiplier: 2.0,
+    spawnDensity: 0.9,
+    enemyTypes: ['BERSERKER', 'SENTINEL', 'CRYPT_GUARDIAN'],
+    eliteChance: 0.25,
+    label: 'Dark Frontier',
+  },
+};
+
+/**
+ * Get difficulty zone for a given distance from origin
+ */
+function getDifficultyZone(distance) {
+  if (distance < DIFFICULTY_ZONES.SAFE.maxDistance) return DIFFICULTY_ZONES.SAFE;
+  if (distance < DIFFICULTY_ZONES.MEDIUM.maxDistance) return DIFFICULTY_ZONES.MEDIUM;
+  if (distance < DIFFICULTY_ZONES.HARD.maxDistance) return DIFFICULTY_ZONES.HARD;
+  return DIFFICULTY_ZONES.FRONTIER;
+}
+
+/**
+ * Calculate distance from origin (castle)
+ */
+function distanceFromCastle(x, z) {
+  return Math.sqrt(x * x + z * z);
+}
+
 export class EnemyManager {
   constructor(scene, gameManager, player, world = null, particleManager = null) {
     this.scene = scene;
@@ -15,43 +79,255 @@ export class EnemyManager {
     
     // Track permanently defeated bosses (do not respawn)
     this.defeatedBosses = new Set();
+    
+    // Procedural spawn tracking
+    this.spawnedRegions = new Set();  // Track which chunks have been populated
+    this.maxEnemies = 30;              // Performance limit
+    this.spawnCheckRadius = 60;        // How far to check for spawning
+    this.despawnRadius = 100;          // Despawn enemies far from player
 
-    // Spawn enemies from world data or fallback
+    // Spawn enemies using terrain-based system
     this._spawnEnemies();
     
-    // Spawn the boss
-    this._spawnBoss();
+    // Skip old boss spawning - use terrain-based encounters instead
+    // this._spawnBoss();
+    
+    console.log('[EnemyManager] Initialized with distance-based scaling');
   }
 
+  /**
+   * Spawn enemies using terrain-based procedural placement
+   */
   _spawnEnemies() {
-    // Get spawns from world if available, otherwise use defaults
-    const enemySpawns = this.world?.getEnemySpawns() || [
-      { pos: new THREE.Vector3(0, 0, -6), type: 'HOLLOW_SOLDIER' },
-      { pos: new THREE.Vector3(-4, 0, -15), type: 'BERSERKER' },
-      { pos: new THREE.Vector3(5, 0, -22), type: 'SENTINEL' },
+    if (!this.world?.terrain) {
+      console.warn('[EnemyManager] No terrain available, using fallback spawns');
+      this._spawnFallbackEnemies();
+      return;
+    }
+    
+    const terrain = this.world.terrain;
+    
+    // Spawn initial enemies in visible range (around origin)
+    this._populateArea(0, 0, 80);
+    
+    console.log(`[EnemyManager] Spawned ${this.enemies.length} enemies with distance scaling`);
+  }
+  
+  /**
+   * Populate an area with enemies based on distance from castle
+   */
+  _populateArea(centerX, centerZ, radius) {
+    if (!this.world?.terrain) return;
+    
+    const terrain = this.world.terrain;
+    const numSpawns = Math.floor(radius / 10);  // ~1 spawn attempt per 10 units
+    
+    for (let i = 0; i < numSpawns; i++) {
+      // Random position within area
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * radius;
+      const x = centerX + Math.cos(angle) * dist;
+      const z = centerZ + Math.sin(angle) * dist;
+      
+      // Get distance from castle
+      const castleDist = distanceFromCastle(x, z);
+      
+      // Skip castle interior (safe haven)
+      if (castleDist < 35) continue;
+      
+      // Get difficulty zone
+      const zone = getDifficultyZone(castleDist);
+      
+      // Check spawn probability based on density
+      if (Math.random() > zone.spawnDensity) continue;
+      
+      // Check terrain suitability
+      const slope = terrain.getTerrainSlope(x, z);
+      if (slope > 0.5) continue;  // Too steep
+      
+      // Check not too close to trees
+      if (this.world.isNearTree && this.world.isNearTree(x, z, 3)) continue;
+      
+      // Check not too close to existing enemies
+      const tooClose = this.enemies.some(e => {
+        const dx = e.spawnPos.x - x;
+        const dz = e.spawnPos.z - z;
+        return Math.sqrt(dx * dx + dz * dz) < 8;  // Minimum spacing
+      });
+      if (tooClose) continue;
+      
+      // Performance limit
+      if (this.enemies.length >= this.maxEnemies) break;
+      
+      // Spawn enemy
+      const y = terrain.getTerrainHeight(x, z);
+      this._spawnEnemyAtPosition(x, y, z, zone, castleDist);
+    }
+  }
+  
+  /**
+   * Spawn a single enemy at position with zone-appropriate stats
+   */
+  _spawnEnemyAtPosition(x, y, z, zone, castleDist) {
+    // Select enemy type from zone's available types
+    const typeKey = zone.enemyTypes[Math.floor(Math.random() * zone.enemyTypes.length)];
+    const typeConfig = ENEMY_TYPES[typeKey];
+    
+    if (!typeConfig) {
+      console.warn(`[EnemyManager] Unknown enemy type: ${typeKey}`);
+      return;
+    }
+    
+    // Check for elite upgrade
+    const isElite = Math.random() < zone.eliteChance;
+    
+    // Calculate scaled stats
+    const scaledConfig = this._applyDistanceScaling(typeConfig, zone, castleDist, isElite);
+    
+    const position = new THREE.Vector3(x, y, z);
+    const enemy = new Enemy(this.scene, position, {
+      type: typeKey,
+      ...scaledConfig,
+    }, this.gm);
+    
+    // Store distance for respawn scaling
+    enemy.spawnDistance = castleDist;
+    enemy.difficultyZone = zone.label;
+    
+    // Give world reference for collision
+    enemy.world = this.world;
+    
+    this.enemies.push(enemy);
+    
+    return enemy;
+  }
+  
+  /**
+   * Apply distance-based scaling to enemy stats
+   */
+  _applyDistanceScaling(baseConfig, zone, distance, isElite = false) {
+    // Base multipliers from zone
+    let hpMult = zone.hpMultiplier;
+    let dmgMult = zone.damageMultiplier;
+    let remnantMult = zone.remnantMultiplier;
+    
+    // Gradual scaling within zone (smoother difficulty curve)
+    // Each 50 units adds ~5% to stats
+    const distanceBonus = 1 + (distance / 1000);
+    hpMult *= distanceBonus;
+    dmgMult *= distanceBonus;
+    remnantMult *= distanceBonus;
+    
+    // Elite bonus
+    if (isElite) {
+      hpMult *= 1.5;
+      dmgMult *= 1.3;
+      remnantMult *= 2.0;
+    }
+    
+    const scaled = {
+      name: isElite ? `Elite ${baseConfig.name}` : baseConfig.name,
+      health: Math.round(baseConfig.health * hpMult),
+      damage: Math.round(baseConfig.damage * dmgMult),
+      postureDmg: Math.round((baseConfig.postureDmg || 15) * dmgMult),
+      remnantDrop: Math.round(baseConfig.remnantDrop * remnantMult),
+      maxPosture: Math.round((baseConfig.maxPosture || 60) * hpMult),
+      
+      // Keep base movement/timing
+      moveSpeed: baseConfig.moveSpeed,
+      detectionRange: baseConfig.detectionRange + (isElite ? 3 : 0),
+      attackRange: baseConfig.attackRange,
+      attackCooldown: baseConfig.attackCooldown,
+      attackWindup: baseConfig.attackWindup,
+      attackDuration: baseConfig.attackDuration,
+      
+      // Visual distinction for scaled enemies
+      bodyColor: isElite ? 0x660022 : baseConfig.bodyColor,
+      eyeColor: isElite ? 0xff0000 : baseConfig.eyeColor,
+      modelTint: isElite ? this._eliteTint(baseConfig.modelTint) : baseConfig.modelTint,
+      modelScale: (baseConfig.modelScale || 0.5) * (isElite ? 1.15 : 1.0),
+      
+      // Copy remaining properties
+      canChainAttacks: baseConfig.canChainAttacks,
+      maxChainAttacks: baseConfig.maxChainAttacks,
+      hasShield: baseConfig.hasShield,
+      shieldBlockChance: baseConfig.shieldBlockChance,
+      modelPath: baseConfig.modelPath,
+      animSpeedMult: baseConfig.animSpeedMult,
+      patrolRadius: baseConfig.patrolRadius,
+      
+      // Mark elite status
+      isElite: isElite,
+    };
+    
+    return scaled;
+  }
+  
+  /**
+   * Generate elite tint (darker, more menacing)
+   */
+  _eliteTint(baseTint) {
+    if (!baseTint) return 0x440022;
+    const color = new THREE.Color(baseTint);
+    color.lerp(new THREE.Color(0x660000), 0.4);  // Shift toward red/black
+    return color.getHex();
+  }
+  
+  /**
+   * Fallback spawns when terrain not available
+   */
+  _spawnFallbackEnemies() {
+    const fallbackSpawns = [
+      { pos: new THREE.Vector3(40, 0, 0), type: 'HOLLOW_SOLDIER' },
+      { pos: new THREE.Vector3(60, 0, 20), type: 'HOLLOW_SOLDIER' },
+      { pos: new THREE.Vector3(80, 0, -10), type: 'BERSERKER' },
+      { pos: new THREE.Vector3(100, 0, 30), type: 'SENTINEL' },
     ];
-
-    enemySpawns.forEach((spawn, i) => {
-      const typeConfig = ENEMY_TYPES[spawn.type] || ENEMY_TYPES.HOLLOW_SOLDIER;
+    
+    fallbackSpawns.forEach(spawn => {
+      const zone = getDifficultyZone(distanceFromCastle(spawn.pos.x, spawn.pos.z));
+      const config = ENEMY_TYPES[spawn.type];
+      const scaledConfig = this._applyDistanceScaling(config, zone, distanceFromCastle(spawn.pos.x, spawn.pos.z));
+      
       const enemy = new Enemy(this.scene, spawn.pos, {
         type: spawn.type,
-        name: typeConfig.name,
-        behavior: spawn.behavior,
-        triggerRadius: spawn.triggerRadius,
+        ...scaledConfig,
       }, this.gm);
       
-      // Give ALL enemies world reference for collision detection
       enemy.world = this.world;
-      
-      // Special handling for Crypt Lord (second boss)
-      if (spawn.type === 'CRYPT_LORD' || spawn.isCryptLord) {
-        this.cryptLord = enemy;
-        // Give Crypt Lord enemy manager reference for spawning adds
-        enemy.enemyManager = this;
-      }
-      
       this.enemies.push(enemy);
     });
+  }
+  
+  /**
+   * Dynamic spawning - call from game loop to spawn/despawn based on player position
+   */
+  updateDynamicSpawns(playerPos) {
+    if (!this.world?.terrain) return;
+    
+    // Despawn distant enemies (performance)
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
+      const dist = enemy.mesh.position.distanceTo(playerPos);
+      
+      if (dist > this.despawnRadius && !enemy.bossActive) {
+        // Remove from scene
+        if (enemy.mesh) this.scene.remove(enemy.mesh);
+        this.enemies.splice(i, 1);
+      }
+    }
+    
+    // Spawn new enemies around player if below limit
+    if (this.enemies.length < this.maxEnemies) {
+      const regionX = Math.floor(playerPos.x / 40) * 40;
+      const regionZ = Math.floor(playerPos.z / 40) * 40;
+      const regionKey = `${regionX},${regionZ}`;
+      
+      if (!this.spawnedRegions.has(regionKey)) {
+        this.spawnedRegions.add(regionKey);
+        this._populateArea(regionX, regionZ, 40);
+      }
+    }
   }
   
   _spawnBoss() {
@@ -78,6 +354,9 @@ export class EnemyManager {
   }
 
   update(delta, player) {
+    // Dynamic spawning based on player position
+    this.updateDynamicSpawns(player.mesh.position);
+    
     // Check for dormant enemy triggers (ambush spawns)
     this._checkDormantTriggers(player);
     
@@ -134,7 +413,7 @@ export class EnemyManager {
             if (this.particleManager) {
               this.particleManager.spawnDeathBurst(enemy.mesh.position.clone());
             }
-            // Respawn after delay
+            // Respawn after delay with same scaling
             setTimeout(() => {
               enemy.respawn();
             }, 8000);
@@ -318,6 +597,14 @@ export class EnemyManager {
     }
   }
   
+  /**
+   * Get the current difficulty zone for player position (for UI display)
+   */
+  getPlayerZone(playerPos) {
+    const dist = distanceFromCastle(playerPos.x, playerPos.z);
+    return getDifficultyZone(dist);
+  }
+  
   // Reset all enemies to starting state (called on player respawn)
   resetAll() {
     this.enemies.forEach(enemy => {
@@ -365,3 +652,6 @@ export class EnemyManager {
     return null;
   }
 }
+
+// Export zone utilities for other systems
+export { getDifficultyZone, distanceFromCastle, DIFFICULTY_ZONES };
