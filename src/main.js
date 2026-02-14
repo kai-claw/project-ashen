@@ -40,6 +40,7 @@ import { createTimeManager, getTimeManager } from './systems/TimeManager.js';
 import { createDayNightLighting, getDayNightLighting } from './systems/DayNightLighting.js';
 import { createWeatherManager, getWeatherManager } from './systems/WeatherManager.js';
 import { createTimeWeatherGameplay, getTimeWeatherGameplay } from './systems/TimeWeatherGameplay.js';
+import { createRareEventManager, getRareEventManager } from './systems/RareEventManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -171,10 +172,13 @@ const weatherManager = createWeatherManager(scene, particleManager, audioManager
 weatherManager.initialize(timeManager);
 const timeWeatherGameplay = createTimeWeatherGameplay(gameManager);
 timeWeatherGameplay.initialize();
+const rareEventManager = createRareEventManager(scene);
+rareEventManager.initialize();
 gameManager.timeManager = timeManager;
 gameManager.dayNightLighting = dayNightLighting;
 gameManager.weatherManager = weatherManager;
 gameManager.timeWeatherGameplay = timeWeatherGameplay;
+gameManager.rareEventManager = rareEventManager;
 
 // Initialize audio on first user interaction
 let audioInitialized = false;
@@ -662,6 +666,7 @@ function animate() {
   timeManager.update(delta);
   dayNightLighting.update(delta, player.mesh.position);
   weatherManager.update(delta, player.mesh.position);
+  rareEventManager.update(delta, player.mesh.position);
   
   // Phase 24: Gameplay integration (debuffs, detection modifiers, etc.)
   // Get campfire positions from world for warmth checks
@@ -798,6 +803,7 @@ window.spellCaster = spellCaster;
 window.bossUI = bossUI;
 window.dungeonManager = dungeonManager;
 window.timeManager = timeManager;
+window.rareEventManager = rareEventManager;
 window.dayNightLighting = dayNightLighting;
 window.weatherManager = weatherManager;
 
