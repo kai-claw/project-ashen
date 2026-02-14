@@ -584,7 +584,41 @@ export class LootManager {
    */
   addGold(amount) {
     this.inventory.gold += amount;
+    if (this.inventory.gold < 0) this.inventory.gold = 0;
     this._saveInventory();
+  }
+  
+  /**
+   * Add item to inventory
+   * @param {string} itemId - Item identifier
+   * @param {number} quantity - Amount to add
+   */
+  addItem(itemId, quantity = 1) {
+    if (!this.inventory.items[itemId]) {
+      this.inventory.items[itemId] = 0;
+    }
+    this.inventory.items[itemId] += quantity;
+    this._saveInventory();
+    console.log(`[LootManager] Added ${quantity}x ${itemId}`);
+  }
+  
+  /**
+   * Remove item from inventory
+   * @param {string} itemId - Item identifier
+   * @param {number} quantity - Amount to remove
+   * @returns {boolean} - Success
+   */
+  removeItem(itemId, quantity = 1) {
+    const current = this.inventory.items[itemId] || 0;
+    if (current < quantity) return false;
+    
+    this.inventory.items[itemId] -= quantity;
+    if (this.inventory.items[itemId] <= 0) {
+      delete this.inventory.items[itemId];
+    }
+    this._saveInventory();
+    console.log(`[LootManager] Removed ${quantity}x ${itemId}`);
+    return true;
   }
   
   /**

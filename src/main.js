@@ -21,6 +21,7 @@ import { AudioManager } from './systems/AudioManager.js';
 import { ParticleManager } from './systems/ParticleManager.js';
 import { FloatingText } from './ui/FloatingText.js';
 import { InteractionManager } from './systems/InteractionManager.js';
+import { ShopManager } from './systems/ShopManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -200,6 +201,14 @@ const interactionManager = new InteractionManager(
   audioManager
 );
 
+// --- Shop/Trading System ---
+const shopManager = new ShopManager(gameManager, lootManager, equipmentManager, audioManager);
+
+// Hook shop to interaction manager
+interactionManager.setShopCallback((npc) => {
+  shopManager.open(npc);
+});
+
 // --- Floating Text (XP gains, level ups) ---
 const floatingText = new FloatingText(camera);
 
@@ -261,7 +270,10 @@ function animate() {
   
   if (!inHitstop) {
     // Normal game update when not in hitstop
-    player.update(delta);
+    // Don't update player movement when any UI is open
+    if (!shopManager.isShopOpen() && !inventoryUI.isOpen) {
+      player.update(delta);
+    }
     enemyManager.update(delta, player);
     particleManager.update(delta);
     
@@ -322,8 +334,14 @@ function animate() {
   equipmentManager.updateEquipmentDrops(player.mesh.position, delta);
   
   // NPC interaction system (prompts, facing, labels)
-  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen) {
+  // Don't show interaction prompts if any UI is open
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !shopManager.isShopOpen()) {
     interactionManager.update(player.mesh.position, delta);
+  }
+  
+  // Close interaction mode when shop closes
+  if (!shopManager.isShopOpen() && interactionManager.interactionMode === 'shop') {
+    interactionManager.closeInteraction();
   }
   
   inventoryUI.update();
@@ -451,6 +469,7 @@ window.inventoryUI = inventoryUI;
 window.audioManager = audioManager;
 window.particleManager = particleManager;
 window.interactionManager = interactionManager;
+window.shopManager = shopManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
