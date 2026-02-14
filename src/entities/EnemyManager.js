@@ -487,6 +487,24 @@ export class EnemyManager {
         const edz = player.mesh.position.z - enemy.activeAttack.position.z;
         const dist = Math.sqrt(edx * edx + edz * edz);
         if (dist < enemy.activeAttack.range && !player.isInvincible) {
+          // Check for parry (perfect timed block)
+          if (player.isParrying) {
+            // Parry success! Deflect the attack
+            enemy.hitThisSwing = true;
+            player.onParrySuccess();
+            
+            // Stagger the enemy
+            enemy.state = 'staggered';
+            enemy.stateTimer = 0;
+            
+            // Spawn parry sparks
+            if (this.particleManager) {
+              this.particleManager.spawnParryEffect(player.mesh.position.clone());
+            }
+            
+            continue; // Skip damage, attack parried
+          }
+          
           const result = this.gm.takeDamage(
             enemy.activeAttack.damage,
             'physical',
@@ -585,47 +603,73 @@ export class EnemyManager {
         const bdz = player.mesh.position.z - this.boss.activeAttack.position.z;
         const dist = Math.sqrt(bdx * bdx + bdz * bdz);
         if (dist < this.boss.activeAttack.range && !player.isInvincible) {
-          const result = this.gm.takeDamage(
-            this.boss.activeAttack.damage,
-            'physical',
-            this.boss.activeAttack.postureDmg,
-            player.isBlocking
-          );
-          this.boss.hitThisSwing = true;
-          player.flashDamage();
-          
-          // HUD DAMAGE VIGNETTE - boss hits feel brutal
-          if (this.gm.hud) {
-            const intensity = this.boss.activeAttack.damage / 25; // Boss hits are more intense
-            this.gm.hud.flashDamage(Math.min(1.0, intensity));
-          }
-          
-          // CAMERA SHAKE - brutal boss impact
-          if (this.gm.cameraController) {
-            this.gm.cameraController.shake(0.7, 0.25); // Extra intense shake
-          }
-          
-          // Spawn hit particles (boss hits are more dramatic)
-          if (this.particleManager) {
-            const hitPos = player.mesh.position.clone();
-            const hitDir = player.mesh.position.clone().sub(this.boss.mesh.position).normalize();
-            if (player.isBlocking && result !== 'guard_broken') {
-              this.particleManager.spawnBlockSparks(hitPos);
-              this.particleManager.spawnBlockSparks(hitPos); // Extra sparks for boss block
-            } else {
-              this.particleManager.spawnHitSparks(hitPos, 10, true);
-              this.particleManager.spawnBlood(hitPos, hitDir, Math.ceil(this.boss.activeAttack.damage / 4));
+          // Check for parry (perfect timed block) - boss attacks can be parried!
+          if (player.isParrying) {
+            // Parry success! Deflect the boss attack
+            this.boss.hitThisSwing = true;
+            player.onParrySuccess();
+            
+            // Brief stagger on boss (shorter than regular enemies)
+            if (this.boss.state !== 'staggered') {
+              this.boss.state = 'staggered';
+              this.boss.stateTimer = 0;
             }
-            if (result === 'guard_broken' || result === 'posture_broken') {
-              this.particleManager.spawnPostureBreak(hitPos);
+            
+            // Spawn dramatic parry sparks
+            if (this.particleManager) {
+              this.particleManager.spawnParryEffect(player.mesh.position.clone());
+              this.particleManager.spawnBlockSparks(player.mesh.position.clone());
             }
-          }
+            
+            // Boss parry is more satisfying - extra effects
+            if (this.gm.cameraController) {
+              this.gm.cameraController.shakeMedium();
+            }
+            
+            // Continue instead of taking damage
+          } else {
+            const result = this.gm.takeDamage(
+              this.boss.activeAttack.damage,
+              'physical',
+              this.boss.activeAttack.postureDmg,
+              player.isBlocking
+            );
+            this.boss.hitThisSwing = true;
+            player.flashDamage();
           
-          if (result === 'died') {
-            // Player death handled by GameManager
-          } else if (result === 'guard_broken' || result === 'posture_broken') {
-            player.state = 'staggered';
-            player.stateTimer = 0;
+            // HUD DAMAGE VIGNETTE - boss hits feel brutal
+            if (this.gm.hud) {
+              const intensity = this.boss.activeAttack.damage / 25; // Boss hits are more intense
+              this.gm.hud.flashDamage(Math.min(1.0, intensity));
+            }
+            
+            // CAMERA SHAKE - brutal boss impact
+            if (this.gm.cameraController) {
+              this.gm.cameraController.shake(0.7, 0.25); // Extra intense shake
+            }
+            
+            // Spawn hit particles (boss hits are more dramatic)
+            if (this.particleManager) {
+              const hitPos = player.mesh.position.clone();
+              const hitDir = player.mesh.position.clone().sub(this.boss.mesh.position).normalize();
+              if (player.isBlocking && result !== 'guard_broken') {
+                this.particleManager.spawnBlockSparks(hitPos);
+                this.particleManager.spawnBlockSparks(hitPos); // Extra sparks for boss block
+              } else {
+                this.particleManager.spawnHitSparks(hitPos, 10, true);
+                this.particleManager.spawnBlood(hitPos, hitDir, Math.ceil(this.boss.activeAttack.damage / 4));
+              }
+              if (result === 'guard_broken' || result === 'posture_broken') {
+                this.particleManager.spawnPostureBreak(hitPos);
+              }
+            }
+            
+            if (result === 'died') {
+              // Player death handled by GameManager
+            } else if (result === 'guard_broken' || result === 'posture_broken') {
+              player.state = 'staggered';
+              player.stateTimer = 0;
+            }
           }
         }
       }
