@@ -11,6 +11,7 @@ import { InputManager } from './systems/InputManager.js';
 import { ItemManager } from './systems/ItemManager.js';
 import { HUD } from './ui/HUD.js';
 import { CrucibleUI } from './ui/CrucibleUI.js';
+import { StatsUI } from './ui/StatsUI.js';
 import { CameraController } from './systems/CameraController.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { ParticleManager } from './systems/ParticleManager.js';
@@ -183,6 +184,9 @@ hud.setEnemyManager(enemyManager);
 // --- Crucible UI (Infusion menu) ---
 const crucibleUI = new CrucibleUI(gameManager, inputManager, player);
 
+// --- Stats UI (Character stats / Stat point allocation) ---
+const statsUI = new StatsUI(gameManager, inputManager, player);
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -258,6 +262,7 @@ function animate() {
   itemManager.update(player.mesh.position);
   hud.update();
   crucibleUI.update();
+  statsUI.update();
   gameManager.update(delta);
   audioManager.updateListener();
   floatingText.update(delta);

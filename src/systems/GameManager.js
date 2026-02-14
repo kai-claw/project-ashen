@@ -62,6 +62,18 @@ export class GameManager {
     this.maxLevel = 20;
     this.xpThresholds = XP_THRESHOLDS;
     
+    // === STAT POINT SYSTEM ===
+    // 3 points earned per level (starting at level 1 = 0 points, level 2 = 3, etc.)
+    this.statPointsPerLevel = 3;
+    this.stats = {
+      vigor: 0,      // +5 Max HP per point
+      endurance: 0,  // +5 Max Stamina, +5% regen per point
+      strength: 0,   // +5% melee damage per point
+      dexterity: 0,  // +3% attack speed per point
+      mind: 0,       // +5% cooldown reduction per point
+    };
+    this.spentStatPoints = 0;
+    
     // === ABILITY SYSTEM ===
     this.abilities = ABILITIES;
     this.abilityCooldowns = {
@@ -148,7 +160,7 @@ export class GameManager {
   // === XP & LEVELING METHODS ===
   
   /**
-   * Load saved XP/Level from localStorage
+   * Load saved XP/Level/Stats from localStorage
    */
   _loadProgression() {
     try {
@@ -157,7 +169,23 @@ export class GameManager {
         const data = JSON.parse(saved);
         this.currentXP = data.currentXP || 0;
         this.currentLevel = data.currentLevel || 1;
-        console.log(`[GameManager] Loaded progression: Level ${this.currentLevel}, XP ${this.currentXP}`);
+        
+        // Load stats
+        if (data.stats) {
+          this.stats = {
+            vigor: data.stats.vigor || 0,
+            endurance: data.stats.endurance || 0,
+            strength: data.stats.strength || 0,
+            dexterity: data.stats.dexterity || 0,
+            mind: data.stats.mind || 0,
+          };
+        }
+        this.spentStatPoints = data.spentStatPoints || 0;
+        
+        // Apply stat bonuses to max health/stamina
+        this._applyStatBonuses();
+        
+        console.log(`[GameManager] Loaded progression: Level ${this.currentLevel}, XP ${this.currentXP}, Stats: ${JSON.stringify(this.stats)}`);
       }
     } catch (e) {
       console.warn('[GameManager] Failed to load progression:', e);
@@ -165,17 +193,102 @@ export class GameManager {
   }
   
   /**
-   * Save XP/Level to localStorage
+   * Save XP/Level/Stats to localStorage
    */
   _saveProgression() {
     try {
       const data = {
         currentXP: this.currentXP,
         currentLevel: this.currentLevel,
+        stats: this.stats,
+        spentStatPoints: this.spentStatPoints,
       };
       localStorage.setItem('ashen_progression', JSON.stringify(data));
     } catch (e) {
       console.warn('[GameManager] Failed to save progression:', e);
+    }
+  }
+  
+  // === STAT POINT METHODS ===
+  
+  /**
+   * Get total stat points earned (3 per level after level 1)
+   */
+  getTotalStatPoints() {
+    return Math.max(0, (this.currentLevel - 1) * this.statPointsPerLevel);
+  }
+  
+  /**
+   * Get available (unspent) stat points
+   */
+  getAvailableStatPoints() {
+    return this.getTotalStatPoints() - this.spentStatPoints;
+  }
+  
+  /**
+   * Spend a stat point on a specific stat
+   */
+  spendStatPoint(statId) {
+    if (this.getAvailableStatPoints() <= 0) {
+      console.warn('[GameManager] No stat points available');
+      return false;
+    }
+    
+    if (!this.stats.hasOwnProperty(statId)) {
+      console.warn(`[GameManager] Invalid stat: ${statId}`);
+      return false;
+    }
+    
+    this.stats[statId]++;
+    this.spentStatPoints++;
+    
+    // Apply new bonuses
+    this._applyStatBonuses();
+    
+    // Save progression
+    this._saveProgression();
+    
+    console.log(`[GameManager] Spent point on ${statId}: now ${this.stats[statId]}`);
+    return true;
+  }
+  
+  /**
+   * Get all stat bonuses calculated from current stats
+   */
+  getStatBonuses() {
+    return {
+      // Vigor: +5 Max HP per point
+      bonusHealth: this.stats.vigor * 5,
+      // Endurance: +5 Max Stamina per point, +5% regen per point
+      bonusStamina: this.stats.endurance * 5,
+      staminaRegenMult: 1.0 + (this.stats.endurance * 0.05),
+      // Strength: +5% damage per point (stacks with infusions)
+      damageMult: 1.0 + (this.stats.strength * 0.05),
+      // Dexterity: +3% attack speed per point
+      attackSpeedMult: 1.0 + (this.stats.dexterity * 0.03),
+      // Mind: +5% cooldown reduction per point (0.95^n style, or just multiplier)
+      cooldownMult: Math.max(0.5, 1.0 - (this.stats.mind * 0.05)),
+    };
+  }
+  
+  /**
+   * Apply stat bonuses to derived stats (max HP, stamina, etc.)
+   */
+  _applyStatBonuses() {
+    const statBonuses = this.getStatBonuses();
+    const infusionBonuses = this.getInfusionBonuses();
+    
+    // Combine stat + infusion bonuses for max health/stamina
+    this.maxHealth = 100 + statBonuses.bonusHealth + infusionBonuses.bonusHealth;
+    this.maxStamina = 100 + statBonuses.bonusStamina + infusionBonuses.bonusStamina;
+    
+    // Update mind stat for cooldown modifier
+    this.mindStat = this.stats.mind;
+    
+    // Keep current values capped
+    if (!this.isDead) {
+      this.health = Math.min(this.health, this.maxHealth);
+      this.stamina = Math.min(this.stamina, this.maxStamina);
     }
   }
   
@@ -232,6 +345,23 @@ export class GameManager {
       this._spawnFloatingText(`LEVEL ${this.currentLevel}!`, 
         this.player.mesh.position.clone().add(new THREE.Vector3(0, 2.5, 0)), 
         0xffdd00, true);
+      
+      // Show stat points earned notification
+      setTimeout(() => {
+        this._spawnFloatingText(`+${this.statPointsPerLevel} Stat Points!`, 
+          this.player.mesh.position.clone().add(new THREE.Vector3(0, 2.2, 0)), 
+          0x88ccff, false);
+      }, 600);
+    }
+    
+    // Show notification for stat points
+    if (this.itemManager && this.itemManager.showNotification) {
+      setTimeout(() => {
+        this.itemManager.showNotification(
+          `+${this.statPointsPerLevel} Stat Points! Press TAB to allocate`,
+          'levelup'
+        );
+      }, 800);
     }
     
     // Flash HUD
@@ -312,8 +442,8 @@ export class GameManager {
    * Get cooldown modifier based on Mind stat (reduces cooldowns)
    */
   getCooldownModifier() {
-    // Each point of Mind reduces cooldowns by 5% (max 50% at 10 Mind)
-    return Math.max(0.5, 1.0 - (this.mindStat * 0.05));
+    // Use stats system - each point of Mind reduces cooldowns by 5% (max 50%)
+    return this.getStatBonuses().cooldownMult;
   }
   
   /**
@@ -387,14 +517,26 @@ export class GameManager {
   }
   
   /**
-   * Get current damage multiplier (includes infusions and War Cry)
+   * Get current damage multiplier (includes stats, infusions, and War Cry)
    */
   getDamageMultiplier() {
+    // Base from infusions
     let mult = this.getInfusionBonuses().damageMult;
+    // Add stat bonus (strength)
+    const statBonus = this.getStatBonuses();
+    mult += (statBonus.damageMult - 1.0); // Add the bonus portion
+    // War Cry buff
     if (this.warCryActive) {
       mult += this.warCryDamageBonus;
     }
     return mult;
+  }
+  
+  /**
+   * Get attack speed multiplier from dexterity stat
+   */
+  getAttackSpeedMultiplier() {
+    return this.getStatBonuses().attackSpeedMult;
   }
   
   /**
@@ -501,10 +643,13 @@ export class GameManager {
   update(delta) {
     if (this.isDead) return;
 
-    // Stamina regen
+    // Stamina regen (affected by endurance stat + infusions)
     this.staminaRegenTimer += delta;
     if (this.staminaRegenTimer >= this.staminaRegenDelay && this.stamina < this.maxStamina) {
-      this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRegenRate * delta);
+      const statBonus = this.getStatBonuses();
+      const infusionBonus = this.getInfusionBonuses();
+      const regenMult = statBonus.staminaRegenMult * infusionBonus.staminaRegenMult;
+      this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRegenRate * regenMult * delta);
     }
 
     // Posture regen

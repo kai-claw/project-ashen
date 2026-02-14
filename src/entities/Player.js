@@ -774,15 +774,24 @@ export class Player {
 
   _processAttack(delta) {
     const isHeavy = this.state === STATES.HEAVY_ATTACKING;
-    const duration = isHeavy ? TIMINGS.heavyAttackDuration : TIMINGS.lightAttackDuration;
-    const hitStart = isHeavy ? TIMINGS.heavyHitStart : TIMINGS.lightHitStart;
-    const hitEnd = isHeavy ? TIMINGS.heavyHitEnd : TIMINGS.lightHitEnd;
+    
+    // Apply dexterity attack speed bonus (higher = shorter durations)
+    const speedMult = this.gm.getAttackSpeedMultiplier ? this.gm.getAttackSpeedMultiplier() : 1.0;
+    
+    // Scale durations down by speed multiplier (1.3 speed = 77% duration)
+    const baseDuration = isHeavy ? TIMINGS.heavyAttackDuration : TIMINGS.lightAttackDuration;
+    const baseHitStart = isHeavy ? TIMINGS.heavyHitStart : TIMINGS.lightHitStart;
+    const baseHitEnd = isHeavy ? TIMINGS.heavyHitEnd : TIMINGS.lightHitEnd;
+    
+    const duration = baseDuration / speedMult;
+    const hitStart = baseHitStart / speedMult;
+    const hitEnd = baseHitEnd / speedMult;
 
     if (this.stateTimer >= hitStart && this.stateTimer < hitEnd && !this.hitThisSwing) {
       this._checkHit(isHeavy);
     }
 
-    if (!isHeavy && this.stateTimer > duration - TIMINGS.comboWindow && this.stateTimer < duration) {
+    if (!isHeavy && this.stateTimer > duration - (TIMINGS.comboWindow / speedMult) && this.stateTimer < duration) {
       if (this.input.lightAttack && this.gm.canUseStamina(COSTS.lightAttack)) {
         this.attackCombo = (this.attackCombo + 1) % 3;
         this._startAttack(false);
@@ -820,12 +829,16 @@ export class Player {
   }
 
   _checkHit(isHeavy) {
+    // Apply damage multiplier from stats + infusions + war cry
+    const damageMultiplier = this.gm.getDamageMultiplier();
+    const baseDamage = isHeavy ? this.heavyDamage : this.lightDamage;
+    
     this.activeAttack = {
       position: this.mesh.position.clone().add(
         new THREE.Vector3(Math.sin(this.facingAngle), 1, Math.cos(this.facingAngle)).multiplyScalar(1.2)
       ),
       range: this.attackRange,
-      damage: isHeavy ? this.heavyDamage : this.lightDamage,
+      damage: Math.floor(baseDamage * damageMultiplier),
       postureDmg: isHeavy ? this.heavyPostureDmg : this.lightPostureDmg,
       isHeavy,
     };

@@ -27,6 +27,9 @@ export class HUD {
     // Create XP bar UI
     this._createXPBar();
     
+    // Create stat points indicator
+    this._createStatPointsIndicator();
+    
     // Create ability bar UI
     this._createAbilityBar();
     
@@ -91,6 +94,40 @@ export class HUD {
     this.xpContainer.appendChild(this.xpBarBg);
     
     document.body.appendChild(this.xpContainer);
+  }
+  
+  _createStatPointsIndicator() {
+    // Stat points indicator (shows when points available)
+    this.statPointsIndicator = document.createElement('div');
+    this.statPointsIndicator.id = 'stat-points-indicator';
+    this.statPointsIndicator.style.cssText = `
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Cinzel', serif;
+      font-size: 13px;
+      color: #ffd088;
+      text-shadow: 0 0 8px rgba(255, 180, 80, 0.6), 0 0 2px rgba(0, 0, 0, 0.8);
+      letter-spacing: 1px;
+      z-index: 100;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+      animation: statPointsPulse 2s ease-in-out infinite;
+    `;
+    
+    // Add pulse animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes statPointsPulse {
+        0%, 100% { opacity: 0.8; }
+        50% { opacity: 1; text-shadow: 0 0 12px rgba(255, 200, 100, 0.9), 0 0 2px rgba(0, 0, 0, 0.8); }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(this.statPointsIndicator);
   }
   
   _createAbilityBar() {
@@ -396,8 +433,24 @@ export class HUD {
     // Update ability bar
     this._updateAbilityBar();
     
+    // Update stat points indicator
+    this._updateStatPointsIndicator();
+    
     // Boss health bar
     this._updateBossUI();
+  }
+  
+  _updateStatPointsIndicator() {
+    if (!this.statPointsIndicator) return;
+    
+    const available = this.gm.getAvailableStatPoints ? this.gm.getAvailableStatPoints() : 0;
+    
+    if (available > 0) {
+      this.statPointsIndicator.textContent = `⬆ ${available} Stat Point${available > 1 ? 's' : ''} - Press TAB`;
+      this.statPointsIndicator.style.opacity = '1';
+    } else {
+      this.statPointsIndicator.style.opacity = '0';
+    }
   }
   
   _updateXPBar() {
