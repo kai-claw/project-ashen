@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TerrainGenerator } from './TerrainGenerator.js';
 import { FoliageManager } from './FoliageManager.js';
 import { VillageManager } from './VillageManager.js';
+import { RuinsManager } from './RuinsManager.js';
 
 /**
  * World - Open World Environment
@@ -37,6 +38,7 @@ export class World {
     this._createStartingCastle();
     this.foliage = new FoliageManager(scene, this.terrain);
     this.villages = new VillageManager(scene, this.terrain);
+    this.ruinsManager = new RuinsManager(scene, this.terrain, this.colliders);
     this._createLighting();
     
     // Update bonfire position to be on terrain
@@ -189,6 +191,30 @@ export class World {
   getVillages() {
     if (!this.villages) return [];
     return this.villages.getVillages();
+  }
+  
+  /**
+   * Check if position is near ancient ruins (for spawn validation)
+   */
+  isNearRuin(x, z, radius = 15) {
+    if (!this.ruinsManager) return false;
+    return this.ruinsManager.isNearRuin(x, z, radius);
+  }
+  
+  /**
+   * Get ruins data (for enemy camps, quests)
+   */
+  getRuins() {
+    if (!this.ruinsManager) return [];
+    return this.ruinsManager.getRuins();
+  }
+  
+  /**
+   * Get nearby ruin for enemy camp spawning
+   */
+  getNearbyRuin(x, z, radius = 20) {
+    if (!this.ruinsManager) return null;
+    return this.ruinsManager.getNearbyRuin(x, z, radius);
   }
   
   // ========================================
@@ -518,6 +544,9 @@ export class World {
     }
     if (this.villages) {
       this.villages.dispose();
+    }
+    if (this.ruinsManager) {
+      this.ruinsManager.dispose();
     }
   }
 }
