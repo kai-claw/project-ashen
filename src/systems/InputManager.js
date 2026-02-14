@@ -120,14 +120,19 @@ export class InputManager {
   get warCryAbility() { return this.consumeBuffer('KeyG'); }
   get chargedAttack() { return this.consumeBuffer('chargedAttack'); }
   
-  // --- Potion Hotkeys ---
-  get useHealthPotion() { return this.consumeBuffer('Digit1'); }
-  get useStaminaPotion() { return this.consumeBuffer('Digit2'); }
+  // --- Potion Hotkeys (hold Ctrl + 1/2 for potions, plain 1-4 for weapons) ---
+  get useHealthPotion() { return (this.keys['ControlLeft'] || this.keys['ControlRight']) && this.consumeBuffer('Digit1'); }
+  get useStaminaPotion() { return (this.keys['ControlLeft'] || this.keys['ControlRight']) && this.consumeBuffer('Digit2'); }
   
   // --- Weapon Switching ---
-  get cycleWeapon() { return this.consumeBuffer('Tab'); }
+  get cycleWeapon() { return this.consumeBuffer('KeyQ') || this.consumeBuffer('Tab'); }
+  get weaponSlot1() { return this.consumeBuffer('Digit1'); }
+  get weaponSlot2() { return this.consumeBuffer('Digit2'); }
   get weaponSlot3() { return this.consumeBuffer('Digit3'); }
   get weaponSlot4() { return this.consumeBuffer('Digit4'); }
+  
+  // Check if weapon slot keys should be consumed (not in inventory)
+  get weaponSlotsActive() { return true; }
   
   // --- Equipment/Inventory UI ---
   get openEquipment() { return this.consumeBuffer('KeyI'); }

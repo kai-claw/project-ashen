@@ -3,11 +3,14 @@ import { RARITY, EQUIPMENT_SLOTS } from '../systems/EquipmentManager.js';
 
 /**
  * InventoryUI - Unified inventory interface for items and equipment
+ * Phase 19 Update: Weapon Equipping & Switching
+ * 
  * Features:
  * - Tab-based navigation (Items / Equipment)
  * - Grid-based item display with hover tooltips
  * - Gold counter
- * - Potion hotbar (shows quick-use slots)
+ * - Weapon quick-slots hotbar (1-4) + potion hotbar (Ctrl+1/2)
+ * - Weapon stat comparison (green=better, red=worse)
  * - Equip/Use/Drop actions
  * - Dark souls-inspired aesthetic
  */
@@ -21,6 +24,7 @@ export class InventoryUI {
     this.isOpen = false;
     this.activeTab = 'items'; // 'items' or 'equipment'
     this.hoveredItem = null;
+    this.hoveredEquipment = null;
     
     this.container = null;
     this.tooltipEl = null;
@@ -29,6 +33,13 @@ export class InventoryUI {
     this.createHotbar();
     
     console.log('[InventoryUI] Initialized');
+  }
+  
+  /**
+   * Get WeaponManager reference
+   */
+  get weaponManager() {
+    return this.equipmentManager?.weaponManager || this.gm?.weaponManager;
   }
   
   /**
@@ -43,7 +54,7 @@ export class InventoryUI {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 750px;
+      width: 800px;
       max-height: 85vh;
       background: linear-gradient(145deg, rgba(15, 15, 20, 0.97), rgba(8, 8, 12, 0.99));
       border: 2px solid rgba(200, 170, 100, 0.4);
@@ -71,7 +82,7 @@ export class InventoryUI {
       color: #ccc;
       font-family: 'Cinzel', 'Georgia', serif;
       font-size: 13px;
-      max-width: 280px;
+      max-width: 320px;
       z-index: 3000;
       pointer-events: none;
       display: none;
@@ -163,6 +174,10 @@ export class InventoryUI {
           border-style: dashed;
           opacity: 0.6;
         }
+        #inventory-ui .equip-slot.equipped-highlight {
+          border-color: rgba(255, 200, 100, 0.6);
+          box-shadow: 0 0 10px rgba(255, 200, 100, 0.2);
+        }
         #inventory-ui .action-btn {
           padding: 6px 14px;
           border: 1px solid rgba(100, 100, 100, 0.4);
@@ -204,23 +219,43 @@ export class InventoryUI {
           background: rgba(80, 40, 40, 0.6);
           border-color: rgba(255, 100, 100, 0.5);
         }
+        #inventory-ui .stat-better { color: #4ade80; }
+        #inventory-ui .stat-worse { color: #f87171; }
+        #inventory-ui .stat-same { color: #888; }
+        #inventory-ui .weapon-slot-badge {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          width: 18px;
+          height: 18px;
+          background: #ffc864;
+          color: #000;
+          border-radius: 50%;
+          font-size: 10px;
+          font-weight: bold;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 0 5px rgba(255, 200, 100, 0.5);
+        }
       `;
       document.head.appendChild(style);
     }
   }
   
   /**
-   * Create the always-visible potion hotbar
+   * Create the always-visible hotbar (weapon slots + potions)
    */
   createHotbar() {
     this.hotbarEl = document.createElement('div');
-    this.hotbarEl.id = 'potion-hotbar';
+    this.hotbarEl.id = 'combat-hotbar';
     this.hotbarEl.style.cssText = `
       position: fixed;
-      bottom: 120px;
+      bottom: 100px;
       right: 20px;
       display: flex;
-      gap: 8px;
+      flex-direction: column;
+      gap: 10px;
       z-index: 500;
       pointer-events: none;
     `;
@@ -230,41 +265,89 @@ export class InventoryUI {
   }
   
   /**
-   * Update hotbar display
+   * Update hotbar display (weapon slots + potions)
    */
   updateHotbar() {
     const inv = this.lootManager.getInventory();
     const healthCount = inv.items['health-potion'] || 0;
     const staminaCount = inv.items['stamina-potion'] || 0;
     
+    // Get weapon quick slots if available
+    const weaponSlots = this.weaponManager?.getQuickSlotsInfo?.() || [];
+    const activeSlot = this.weaponManager?.activeSlot ?? 0;
+    
     this.hotbarEl.innerHTML = `
+      <!-- Weapon Quick Slots -->
       <div style="
         display: flex;
-        flex-direction: column;
-        align-items: center;
-        background: rgba(0,0,0,0.6);
-        border: 1px solid rgba(255,80,80,0.4);
-        border-radius: 6px;
-        padding: 6px 10px;
-        min-width: 50px;
+        gap: 4px;
+        justify-content: flex-end;
       ">
-        <div style="font-size: 10px; color: #ff6666; margin-bottom: 2px;">[1]</div>
-        <div style="font-size: 18px; color: #ff4444;">❤</div>
-        <div style="font-size: 12px; color: ${healthCount > 0 ? '#fff' : '#666'}; font-family: 'Cinzel', serif;">${healthCount}</div>
+        ${[0, 1, 2, 3].map(i => {
+          const slot = weaponSlots[i];
+          const isActive = i === activeSlot;
+          const isEmpty = !slot || slot.empty;
+          const borderColor = isActive ? 'rgba(255, 200, 100, 0.8)' : 'rgba(100, 100, 100, 0.4)';
+          const bgColor = isActive ? 'rgba(60, 50, 30, 0.8)' : 'rgba(0, 0, 0, 0.6)';
+          
+          return `
+            <div style="
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              background: ${bgColor};
+              border: 2px solid ${borderColor};
+              border-radius: 6px;
+              padding: 4px 8px;
+              min-width: 40px;
+              ${isActive ? 'box-shadow: 0 0 10px rgba(255, 200, 100, 0.4);' : ''}
+            ">
+              <div style="font-size: 9px; color: ${isActive ? '#ffc864' : '#666'}; margin-bottom: 2px;">[${i + 1}]</div>
+              <div style="font-size: 14px; color: ${isEmpty ? '#444' : (slot?.rarity?.color || '#888')};">
+                ${isEmpty ? '—' : (slot?.category || '⚔️')}
+              </div>
+              <div style="font-size: 8px; color: ${isEmpty ? '#444' : '#aaa'}; max-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${isEmpty ? 'Empty' : (slot?.name?.split(' ').pop() || '')}
+              </div>
+            </div>
+          `;
+        }).join('')}
       </div>
+      
+      <!-- Potions -->
       <div style="
         display: flex;
-        flex-direction: column;
-        align-items: center;
-        background: rgba(0,0,0,0.6);
-        border: 1px solid rgba(80,255,80,0.4);
-        border-radius: 6px;
-        padding: 6px 10px;
-        min-width: 50px;
+        gap: 6px;
+        justify-content: flex-end;
       ">
-        <div style="font-size: 10px; color: #66ff66; margin-bottom: 2px;">[2]</div>
-        <div style="font-size: 18px; color: #44ff44;">⚡</div>
-        <div style="font-size: 12px; color: ${staminaCount > 0 ? '#fff' : '#666'}; font-family: 'Cinzel', serif;">${staminaCount}</div>
+        <div style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: rgba(0,0,0,0.6);
+          border: 1px solid rgba(255,80,80,0.4);
+          border-radius: 6px;
+          padding: 4px 8px;
+          min-width: 45px;
+        ">
+          <div style="font-size: 8px; color: #ff6666; margin-bottom: 1px;">Ctrl+1</div>
+          <div style="font-size: 14px; color: #ff4444;">❤</div>
+          <div style="font-size: 11px; color: ${healthCount > 0 ? '#fff' : '#666'}; font-family: 'Cinzel', serif;">${healthCount}</div>
+        </div>
+        <div style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: rgba(0,0,0,0.6);
+          border: 1px solid rgba(80,255,80,0.4);
+          border-radius: 6px;
+          padding: 4px 8px;
+          min-width: 45px;
+        ">
+          <div style="font-size: 8px; color: #66ff66; margin-bottom: 1px;">Ctrl+2</div>
+          <div style="font-size: 14px; color: #44ff44;">⚡</div>
+          <div style="font-size: 11px; color: ${staminaCount > 0 ? '#fff' : '#666'}; font-family: 'Cinzel', serif;">${staminaCount}</div>
+        </div>
       </div>
     `;
   }
@@ -349,7 +432,11 @@ export class InventoryUI {
         color: #666;
         font-size: 12px;
       ">
-        Press <span style="color: #ffc864;">I</span> to close • <span style="color: #ff6666;">[1]</span> Health Potion • <span style="color: #66ff66;">[2]</span> Stamina Potion
+        <span style="color: #ffc864;">[I]</span> Close • 
+        <span style="color: #ffc864;">[1-4]</span> Switch Weapons • 
+        <span style="color: #ffc864;">[Q]</span> Cycle Weapons • 
+        <span style="color: #ff6666;">Ctrl+[1]</span> HP Potion • 
+        <span style="color: #66ff66;">Ctrl+[2]</span> Stamina Potion
       </div>
     `;
     
@@ -405,7 +492,8 @@ export class InventoryUI {
    */
   renderItemSlot(item) {
     const colorHex = '#' + item.color.toString(16).padStart(6, '0');
-    const hotkey = item.hotkey ? `<span class="hotkey-badge">${item.hotkey}</span>` : '';
+    const hotkey = item.id === 'health-potion' ? 'Ctrl+1' : (item.id === 'stamina-potion' ? 'Ctrl+2' : '');
+    const hotkeyBadge = hotkey ? `<span class="hotkey-badge">${hotkey}</span>` : '';
     
     return `
       <div class="item-slot" data-item-id="${item.id}" data-item-type="consumable"
@@ -414,7 +502,7 @@ export class InventoryUI {
           background: radial-gradient(circle at 30% 30%, ${colorHex}, ${colorHex}66);
           box-shadow: 0 0 10px ${colorHex}44;
         "></div>
-        ${hotkey}
+        ${hotkeyBadge}
         <span class="item-qty">${item.quantity}</span>
       </div>
     `;
@@ -424,6 +512,9 @@ export class InventoryUI {
    * Render the Equipment tab content
    */
   renderEquipmentTab(equipped, inventory, bonuses) {
+    // Get weapon quick slots info
+    const weaponSlots = this.weaponManager?.getQuickSlotsInfo?.() || [];
+    
     return `
       <div style="display: flex; gap: 25px;">
         <!-- Equipped Section -->
@@ -431,13 +522,47 @@ export class InventoryUI {
           <h3 style="color: #aaa; font-size: 14px; margin: 0 0 12px 0; padding-bottom: 6px; border-bottom: 1px solid rgba(100, 100, 100, 0.2);">
             Equipped
           </h3>
-          ${this.renderEquipSlot(equipped[EQUIPMENT_SLOTS.WEAPON], '⚔️ Weapon', EQUIPMENT_SLOTS.WEAPON)}
+          ${this.renderWeaponSlot(equipped[EQUIPMENT_SLOTS.WEAPON], '⚔️ Weapon', EQUIPMENT_SLOTS.WEAPON)}
           ${this.renderEquipSlot(equipped[EQUIPMENT_SLOTS.ARMOR], '🛡️ Armor', EQUIPMENT_SLOTS.ARMOR)}
           ${this.renderEquipSlot(equipped[EQUIPMENT_SLOTS.ACCESSORY], '💍 Accessory', EQUIPMENT_SLOTS.ACCESSORY)}
           
+          <!-- Weapon Quick Slots -->
+          <div style="
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(200, 170, 100, 0.2);
+            border-radius: 4px;
+          ">
+            <h4 style="color: #ffc864; font-size: 12px; margin: 0 0 10px 0;">⚔️ Weapon Quick Slots</h4>
+            <div style="display: flex; gap: 8px;">
+              ${weaponSlots.map((slot, i) => `
+                <div style="
+                  flex: 1;
+                  padding: 8px;
+                  background: ${slot?.isActive ? 'rgba(60, 50, 30, 0.6)' : 'rgba(0, 0, 0, 0.3)'};
+                  border: 1px solid ${slot?.isActive ? 'rgba(255, 200, 100, 0.5)' : 'rgba(80, 80, 80, 0.3)'};
+                  border-radius: 4px;
+                  text-align: center;
+                ">
+                  <div style="font-size: 10px; color: ${slot?.isActive ? '#ffc864' : '#666'};">[${i + 1}]</div>
+                  <div style="font-size: 12px; color: ${slot?.empty ? '#444' : (slot?.rarity?.color || '#888')}; margin-top: 4px;">
+                    ${slot?.empty ? '—' : (slot?.category || '⚔️')}
+                  </div>
+                  <div style="font-size: 10px; color: ${slot?.empty ? '#444' : '#aaa'}; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${slot?.empty ? 'Empty' : slot?.name || ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+            <div style="font-size: 10px; color: #666; margin-top: 8px; text-align: center;">
+              Press [1-4] to switch • [Q] to cycle
+            </div>
+          </div>
+          
           <!-- Total Bonuses -->
           <div style="
-            margin-top: 20px;
+            margin-top: 15px;
             padding: 12px;
             background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(100, 200, 100, 0.2);
@@ -464,10 +589,52 @@ export class InventoryUI {
           <h3 style="color: #aaa; font-size: 14px; margin: 0 0 12px 0; padding-bottom: 6px; border-bottom: 1px solid rgba(100, 100, 100, 0.2);">
             Equipment Inventory (${inventory.length})
           </h3>
-          <div style="max-height: 350px; overflow-y: auto;">
+          <div style="max-height: 400px; overflow-y: auto;">
             ${inventory.length === 0 ? '<span style="color: #555; font-size: 13px;">No equipment in inventory</span>' : ''}
-            ${inventory.map(eq => this.renderEquipmentItem(eq)).join('')}
+            ${inventory.map(eq => this.renderEquipmentItem(eq, equipped)).join('')}
           </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  /**
+   * Render weapon slot with enhanced stats display
+   */
+  renderWeaponSlot(item, label, slot) {
+    if (!item) {
+      return `
+        <div class="equip-slot empty" data-slot="${slot}">
+          <span style="color: #555; font-size: 13px;">${label}: Empty</span>
+        </div>
+      `;
+    }
+    
+    // Get weapon info from WeaponManager for detailed stats
+    const weaponInfo = this.weaponManager?.getActiveWeaponInfo?.() || {};
+    
+    const statsStr = Object.entries(item.stats)
+      .map(([s, v]) => `${v > 0 ? '+' : ''}${v} ${this.formatStatName(s)}`)
+      .join(' • ');
+    
+    return `
+      <div class="equip-slot equipped-highlight" data-slot="${slot}" style="border-color: ${item.rarity.color}40;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div style="flex: 1;">
+            <div style="color: #888; font-size: 11px; margin-bottom: 2px;">${label}</div>
+            <div style="color: ${item.rarity.color}; font-weight: bold;">${item.name}</div>
+            <div style="color: #777; font-size: 11px; margin-top: 4px;">${statsStr}</div>
+            ${weaponInfo.category ? `
+              <div style="font-size: 10px; color: #aaa; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(100,100,100,0.2);">
+                <span style="color: #ffc864;">${weaponInfo.categoryIcon || '⚔️'} ${weaponInfo.category}</span>
+                ${weaponInfo.damage ? ` • ${weaponInfo.damage} DMG` : ''}
+                ${weaponInfo.speed ? ` • ${(weaponInfo.speed * 100).toFixed(0)}% SPD` : ''}
+                ${weaponInfo.range ? ` • ${(weaponInfo.range * 100).toFixed(0)}% RNG` : ''}
+                ${weaponInfo.critChance ? ` • ${weaponInfo.critChance.toFixed(0)}% CRIT` : ''}
+              </div>
+            ` : ''}
+          </div>
+          <button class="action-btn drop unequip-btn" data-slot="${slot}">Unequip</button>
         </div>
       </div>
     `;
@@ -504,22 +671,40 @@ export class InventoryUI {
   }
   
   /**
-   * Render an equipment item in inventory
+   * Render an equipment item in inventory with comparison
    */
-  renderEquipmentItem(eq) {
+  renderEquipmentItem(eq, equipped) {
     const statsStr = Object.entries(eq.stats)
       .map(([s, v]) => `${v > 0 ? '+' : ''}${v} ${this.formatStatName(s)}`)
       .join(' • ');
     
+    // Check if this item's slot matches equipped item for comparison
+    const equippedItem = equipped[eq.slot];
+    const comparison = this.compareStats(eq, equippedItem);
+    
+    // Check if item is a weapon and get weapon-specific info
+    const isWeapon = eq.slot === EQUIPMENT_SLOTS.WEAPON;
+    
     return `
-      <div class="equip-slot" data-equip-id="${eq.id}" style="border-color: ${eq.rarity.color}30;">
+      <div class="equip-slot" 
+           data-equip-id="${eq.id}" 
+           data-slot="${eq.slot}"
+           style="border-color: ${eq.rarity.color}30; position: relative;"
+           onmouseenter="window.inventoryUI?.showEquipmentTooltip(event, '${eq.id}')"
+           onmouseleave="window.inventoryUI?.hideTooltip()">
         <div style="display: flex; justify-content: space-between; align-items: start;">
           <div style="flex: 1;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="color: ${eq.rarity.color}; font-weight: bold;">${eq.name}</span>
               <span style="color: #666; font-size: 11px; text-transform: capitalize;">${eq.slot}</span>
+              ${isWeapon && eq.weaponModel ? `<span style="color: #888; font-size: 10px;">(${eq.weaponModel})</span>` : ''}
             </div>
             <div style="color: #777; font-size: 11px; margin-top: 4px;">${statsStr}</div>
+            ${comparison ? `
+              <div style="font-size: 10px; margin-top: 4px;">
+                ${comparison}
+              </div>
+            ` : ''}
           </div>
           <div style="display: flex; flex-direction: column; gap: 4px;">
             <button class="action-btn equip equip-btn" data-equip-id="${eq.id}">Equip</button>
@@ -528,6 +713,109 @@ export class InventoryUI {
         </div>
       </div>
     `;
+  }
+  
+  /**
+   * Compare stats between new item and equipped item
+   * Returns HTML string with colored comparison
+   */
+  compareStats(newItem, equippedItem) {
+    if (!equippedItem) {
+      return '<span class="stat-better">↑ No item equipped</span>';
+    }
+    
+    const comparisons = [];
+    const allStats = new Set([...Object.keys(newItem.stats), ...Object.keys(equippedItem.stats)]);
+    
+    for (const stat of allStats) {
+      const newVal = newItem.stats[stat] || 0;
+      const oldVal = equippedItem.stats[stat] || 0;
+      const diff = newVal - oldVal;
+      
+      if (diff !== 0) {
+        const arrow = diff > 0 ? '↑' : '↓';
+        const colorClass = diff > 0 ? 'stat-better' : 'stat-worse';
+        comparisons.push(`<span class="${colorClass}">${arrow}${Math.abs(diff)} ${this.formatStatName(stat)}</span>`);
+      }
+    }
+    
+    if (comparisons.length === 0) {
+      return '<span class="stat-same">= Same stats</span>';
+    }
+    
+    return comparisons.join(' ');
+  }
+  
+  /**
+   * Show tooltip for equipment with detailed weapon stats
+   */
+  showEquipmentTooltip(event, equipId) {
+    const eq = this.equipmentManager.inventory.find(e => e.id === equipId);
+    if (!eq) return;
+    
+    const isWeapon = eq.slot === EQUIPMENT_SLOTS.WEAPON;
+    const equippedItem = this.equipmentManager.equipped[eq.slot];
+    
+    let weaponDetails = '';
+    if (isWeapon && eq.weaponModel) {
+      // Show weapon-specific details
+      weaponDetails = `
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(100, 100, 100, 0.3);">
+          <div style="color: #ffc864; font-size: 11px; margin-bottom: 4px;">Weapon Type: ${eq.weaponModel}</div>
+          <div style="color: #888; font-size: 10px;">
+            ${eq.stats.damage ? `Base Damage: ${eq.stats.damage}` : ''}
+            ${eq.stats.critChance ? `<br>Crit Chance: +${eq.stats.critChance}%` : ''}
+            ${eq.stats.attackSpeed ? `<br>Attack Speed: +${eq.stats.attackSpeed}%` : ''}
+          </div>
+        </div>
+      `;
+    }
+    
+    // Stat comparison
+    let comparisonHtml = '';
+    if (equippedItem) {
+      const comparisons = [];
+      const allStats = new Set([...Object.keys(eq.stats), ...Object.keys(equippedItem.stats)]);
+      
+      for (const stat of allStats) {
+        const newVal = eq.stats[stat] || 0;
+        const oldVal = equippedItem.stats[stat] || 0;
+        const diff = newVal - oldVal;
+        
+        if (diff !== 0) {
+          const color = diff > 0 ? '#4ade80' : '#f87171';
+          const sign = diff > 0 ? '+' : '';
+          comparisons.push(`<div style="color: ${color};">${sign}${diff} ${this.formatStatName(stat)}</div>`);
+        }
+      }
+      
+      if (comparisons.length > 0) {
+        comparisonHtml = `
+          <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(100, 100, 100, 0.3);">
+            <div style="color: #888; font-size: 10px; margin-bottom: 4px;">vs Equipped:</div>
+            ${comparisons.join('')}
+          </div>
+        `;
+      }
+    }
+    
+    this.tooltipEl.innerHTML = `
+      <div style="color: ${eq.rarity.color}; font-weight: bold; margin-bottom: 4px;">${eq.name}</div>
+      <div style="color: #888; font-size: 11px;">${eq.rarity.name} ${eq.slot}</div>
+      <div style="margin-top: 8px; line-height: 1.5;">
+        ${Object.entries(eq.stats).map(([s, v]) => 
+          `<div style="color: #afa;">${v > 0 ? '+' : ''}${v} ${this.formatStatName(s)}</div>`
+        ).join('')}
+      </div>
+      ${weaponDetails}
+      ${comparisonHtml}
+      <div style="color: #ffc864; font-size: 10px; margin-top: 10px;">Click Equip to use</div>
+    `;
+    
+    this.tooltipEl.style.display = 'block';
+    this.positionTooltip(event);
+    
+    this.hoveredEquipment = equipId;
   }
   
   /**
@@ -552,6 +840,9 @@ export class InventoryUI {
    * Attach event listeners to UI elements
    */
   attachEventListeners() {
+    // Expose for inline event handlers
+    window.inventoryUI = this;
+    
     // Tab buttons
     this.container.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -614,12 +905,22 @@ export class InventoryUI {
       if (itemDef.effect.staminaAmount) effectText = `<div style="color: #66ff66; margin-top: 6px;">Restores ${itemDef.effect.staminaAmount} Stamina</div>`;
     }
     
+    // Hotkey info
+    let hotkeyText = '';
+    if (itemId === 'health-potion') {
+      hotkeyText = '<div style="color: #ffc864; font-size: 11px; margin-top: 10px;">Press Ctrl+1 to use</div>';
+    } else if (itemId === 'stamina-potion') {
+      hotkeyText = '<div style="color: #ffc864; font-size: 11px; margin-top: 10px;">Press Ctrl+2 to use</div>';
+    } else if (itemDef.type === 'consumable') {
+      hotkeyText = '<div style="color: #ffc864; font-size: 11px; margin-top: 10px;">Click to use</div>';
+    }
+    
     this.tooltipEl.innerHTML = `
       <div style="color: ${colorHex}; font-weight: bold; margin-bottom: 6px;">${itemDef.name}</div>
       <div style="color: #888; font-size: 11px; text-transform: capitalize;">${itemDef.type}</div>
       <div style="margin-top: 8px; line-height: 1.4;">${itemDef.description}</div>
       ${effectText}
-      ${itemDef.type === 'consumable' ? '<div style="color: #ffc864; font-size: 11px; margin-top: 10px;">Click to use</div>' : ''}
+      ${hotkeyText}
     `;
     
     this.tooltipEl.style.display = 'block';
@@ -634,9 +935,8 @@ export class InventoryUI {
     const y = event.clientY + 10;
     
     // Keep tooltip on screen
-    const rect = this.tooltipEl.getBoundingClientRect();
-    const maxX = window.innerWidth - 300;
-    const maxY = window.innerHeight - 200;
+    const maxX = window.innerWidth - 340;
+    const maxY = window.innerHeight - 250;
     
     this.tooltipEl.style.left = Math.min(x, maxX) + 'px';
     this.tooltipEl.style.top = Math.min(y, maxY) + 'px';
@@ -647,6 +947,7 @@ export class InventoryUI {
    */
   hideTooltip() {
     this.tooltipEl.style.display = 'none';
+    this.hoveredEquipment = null;
   }
   
   /**
@@ -674,7 +975,7 @@ export class InventoryUI {
    * Update method (called from game loop)
    */
   update() {
-    // Update hotbar counts
+    // Update hotbar counts (weapon slots + potions)
     if (this.hotbarEl) {
       this.updateHotbar();
     }

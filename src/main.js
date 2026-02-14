@@ -300,13 +300,15 @@ function animate() {
 
   inputManager.update(delta);
   
-  // Potion hotkeys (1 = Health, 2 = Stamina)
+  // Potion hotkeys (Ctrl+1 = Health, Ctrl+2 = Stamina)
   if (!gameManager.isDead) {
     if (inputManager.useHealthPotion) {
       lootManager.useItem('health-potion');
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.5 });
     }
     if (inputManager.useStaminaPotion) {
       lootManager.useItem('stamina-potion');
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.5 });
     }
   }
   
@@ -391,16 +393,27 @@ function animate() {
   const elapsedTime = clock.elapsedTime;
   equipmentManager.updateWeaponGlow(delta, elapsedTime);
   
-  // Weapon switching hotkeys (when not in UI)
+  // Weapon switching hotkeys (when not in UI) - 1-4 keys or Q to cycle
   if (!gameManager.isDead && !shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive()) {
     if (inputManager.cycleWeapon) {
       weaponManager.cycleWeapon();
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.4 });
+    }
+    if (inputManager.weaponSlot1) {
+      weaponManager.switchToSlot(0); // Index 0 = slot 1
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.4 });
+    }
+    if (inputManager.weaponSlot2) {
+      weaponManager.switchToSlot(1); // Index 1 = slot 2
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.4 });
     }
     if (inputManager.weaponSlot3) {
       weaponManager.switchToSlot(2); // Index 2 = slot 3
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.4 });
     }
     if (inputManager.weaponSlot4) {
       weaponManager.switchToSlot(3); // Index 3 = slot 4
+      if (audioManager) audioManager.play('itemPickup', { volume: 0.4 });
     }
   }
   equipmentManager.updateEquipmentDrops(player.mesh.position, delta);
