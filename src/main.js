@@ -36,6 +36,9 @@ import { createDungeonManager, getDungeonManager } from './systems/DungeonManage
 import { GatheringManager } from './systems/GatheringManager.js';
 import { CraftingManager } from './systems/CraftingManager.js';
 import { CraftingUI } from './ui/CraftingUI.js';
+import { createTimeManager, getTimeManager } from './systems/TimeManager.js';
+import { createDayNightLighting, getDayNightLighting } from './systems/DayNightLighting.js';
+import { createWeatherManager, getWeatherManager } from './systems/WeatherManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -107,10 +110,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-// No fog - clean visibility
-scene.fog = null;
-// Bright sky background for daytime visibility
-scene.background = new THREE.Color(0x87CEEB);  // Sky blue
+// Sky background will be managed by DayNightLighting system
+scene.background = new THREE.Color(0x87CEEB);  // Initial sky blue (will be overridden)
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, 5, 15);
@@ -160,6 +161,16 @@ const inputManager = new InputManager(renderer.domElement);
 const audioManager = new AudioManager(camera);
 const particleManager = new ParticleManager(scene);
 const hud = new HUD(gameManager);
+
+// --- Day/Night & Weather Systems (Phase 24) ---
+const timeManager = createTimeManager(scene);
+const dayNightLighting = createDayNightLighting(scene, renderer);
+dayNightLighting.initialize(timeManager);
+const weatherManager = createWeatherManager(scene, particleManager, audioManager);
+weatherManager.initialize(timeManager);
+gameManager.timeManager = timeManager;
+gameManager.dayNightLighting = dayNightLighting;
+gameManager.weatherManager = weatherManager;
 
 // Initialize audio on first user interaction
 let audioInitialized = false;
@@ -635,6 +646,19 @@ function animate() {
   spellCaster.update(delta); // Phase 20: Spell casting, projectiles, effects
   spellEffects.update(delta); // Phase 20: Visual spell effects (auras, trails)
   bossUI.update(delta); // Phase 21: Boss health bar and phase indicators
+  
+  // Phase 24: Day/Night & Weather System updates
+  // Pause time during menus/dialogue
+  const timeIsPaused = shopManager.isShopOpen() || inventoryUI.isOpen || dialogueManager.isDialogueActive() || crucibleUI.isOpen || statsUI.isOpen || craftingUI.isOpen;
+  if (timeIsPaused) {
+    timeManager.pause();
+  } else {
+    timeManager.resume();
+  }
+  timeManager.update(delta);
+  dayNightLighting.update(delta, player.mesh.position);
+  weatherManager.update(delta, player.mesh.position);
+  
   audioManager.updateListener();
   floatingText.update(delta);
 
@@ -764,6 +788,9 @@ window.spellManager = spellManager;
 window.spellCaster = spellCaster;
 window.bossUI = bossUI;
 window.dungeonManager = dungeonManager;
+window.timeManager = timeManager;
+window.dayNightLighting = dayNightLighting;
+window.weatherManager = weatherManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
