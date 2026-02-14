@@ -28,7 +28,16 @@
       "worker": 1,
       "description": "Weather system with biome-specific weather, transitions, particle effects",
       "workerNotes": "Created WeatherManager.js with: (1) 9 weather types: CLEAR, CLOUDY, OVERCAST, RAIN, HEAVY_RAIN, STORM, FOG, SNOW, BLIZZARD, (2) Weather config with fog/ambient/sun multipliers and sky tints, (3) Biome-specific probability tables (default, forest, mountain, swamp, desert), (4) Random weather changes every 2-8 game hours, (5) 60-second smooth transitions, (6) Rain/snow/fog_wisp particle systems with wind drift, (7) Lightning flashes during storms with thunder delay, (8) forceWeather() for scripting, (9) Save/load to localStorage, (10) Integration with TimeManager hour change events, (11) Wind strength affects particle movement"
+    },
+    {
+      "id": "gameplay-integration",
+      "name": "TimeWeatherGameplay.js",
+      "priority": "P1",
+      "status": "ready-for-review",
+      "worker": 2,
+      "description": "Gameplay integration for time/weather: night enemies, NPC schedules, visibility, crafting, debuffs, campfires",
+      "workerNotes": "Created TimeWeatherGameplay.js with comprehensive gameplay integration: (1) NIGHT_ENEMIES: wraith, shadow_stalker, night_howler, phantom with spawn hours, moon phase bonuses, stats, special abilities, loot tables, (2) SHOP_HOURS: 6 shop types with open/close times (black_market night-only), (3) NPC_SCHEDULES: VILLAGER/GUARD/MERCHANT daily routines, (4) TIME_LOCKED_RECIPES: moonlit_blade, sun_essence, dawn_elixir, dusk_potion, starlight_crystal, shadow_cloak with phase/hour/moon requirements, (5) WEATHER_EFFECTS: movement/stamina/torch/fire/detection modifiers per weather type, debuffs (wet, soaked, chilled, frostbite), cold damage, lightning chance, (6) REST_CONFIG: campfire rest system advancing 6 hours, health/stamina regen, warmth buff for 30 game hours with cold immunity, (7) DETECTION_MODIFIERS: reduced visibility at night/fog, (8) SPAWN_RATE_MODIFIERS: 1.8x hostile spawns at night. Also added: Weather HUD indicator with debuff icons, tutorial hints for night danger and weather hazards, shop closed messages when trying to shop after hours, time-locked recipe checks in CraftingManager, night enemy spawning in EnemyManager with dawn fade-out, getCampfires() in VillageManager for warmth proximity. Built, deployed, and committed."
     }
   ],
-  "lastUpdated": "2026-02-14T19:35:00Z"
+  "lastUpdated": "2026-02-14T19:45:00Z"
 }
