@@ -374,7 +374,7 @@ export class BossSpawner {
 
       const length = 2 + Math.random() * 3;
       const crackGeo = new THREE.PlaneGeometry(0.3, length);
-      const crack = new THREE.Mesh(crackMat, crackGeo);
+      const crack = new THREE.Mesh(crackGeo, crackMat);
       crack.position.set(x, 0.05, z);
       crack.rotation.x = -Math.PI / 2;
       crack.rotation.z = Math.random() * Math.PI;
