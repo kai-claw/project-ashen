@@ -298,6 +298,108 @@ export class EquipmentManager {
   }
   
   /**
+   * Generate equipment specifically for chest drops with forced rarity
+   */
+  generateChestEquipment(rarity) {
+    // Select random equipment base
+    const allBases = Object.values(EQUIPMENT_BASES);
+    const selectedBase = allBases[Math.floor(Math.random() * allBases.length)];
+    
+    // Create equipment with specified rarity
+    return this.createEquipmentInstance(selectedBase, rarity);
+  }
+  
+  /**
+   * Spawn equipment as a world drop (for chest loot)
+   */
+  spawnEquipmentDrop(equipment, position) {
+    if (!equipment || !this.lootManager) return;
+    
+    // Create visual drop in world
+    const dropGroup = new THREE.Group();
+    dropGroup.position.copy(position);
+    
+    // Equipment orb visual
+    const orbGeo = new THREE.SphereGeometry(0.25, 12, 8);
+    const orbMat = new THREE.MeshStandardMaterial({
+      color: equipment.rarity.hexColor,
+      emissive: equipment.rarity.hexColor,
+      emissiveIntensity: 0.6,
+      metalness: 0.8,
+      roughness: 0.2,
+    });
+    const orb = new THREE.Mesh(orbGeo, orbMat);
+    dropGroup.add(orb);
+    
+    // Glow light
+    const glow = new THREE.PointLight(equipment.rarity.hexColor, 1.0, 5);
+    dropGroup.add(glow);
+    
+    // Add to scene
+    this.scene.add(dropGroup);
+    
+    // Create drop data for auto-pickup
+    const dropData = {
+      type: 'equipment',
+      equipment: equipment,
+      mesh: dropGroup,
+      position: position.clone(),
+      spawnTime: Date.now(),
+      bobOffset: Math.random() * Math.PI * 2,
+    };
+    
+    // Store for pickup tracking (use lootManager's drop system)
+    if (!this.equipmentDrops) this.equipmentDrops = [];
+    this.equipmentDrops.push(dropData);
+  }
+  
+  /**
+   * Update equipment drops (call from main loop)
+   */
+  updateEquipmentDrops(playerPosition, delta) {
+    if (!this.equipmentDrops) return;
+    
+    const pickupRadius = 2.0;
+    const toRemove = [];
+    
+    for (const drop of this.equipmentDrops) {
+      // Bob animation
+      const elapsed = (Date.now() - drop.spawnTime) / 1000;
+      drop.mesh.position.y = drop.position.y + 0.5 + Math.sin(elapsed * 2 + drop.bobOffset) * 0.15;
+      drop.mesh.rotation.y += delta * 1.5;
+      
+      // Check pickup
+      const dx = playerPosition.x - drop.position.x;
+      const dz = playerPosition.z - drop.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      
+      if (dist < pickupRadius) {
+        this.addToInventory(drop.equipment);
+        
+        // Play pickup sound
+        if (this.gameManager.audioManager) {
+          this.gameManager.audioManager.playSound('itemPickup', { position: drop.position });
+        }
+        
+        // Remove mesh
+        this.scene.remove(drop.mesh);
+        drop.mesh.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+        
+        toRemove.push(drop);
+      }
+    }
+    
+    // Remove collected drops
+    for (const drop of toRemove) {
+      const idx = this.equipmentDrops.indexOf(drop);
+      if (idx >= 0) this.equipmentDrops.splice(idx, 1);
+    }
+  }
+  
+  /**
    * Roll for rarity tier
    */
   rollRarity(enemyType) {

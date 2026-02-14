@@ -11,6 +11,7 @@ import { InputManager } from './systems/InputManager.js';
 import { ItemManager } from './systems/ItemManager.js';
 import { LootManager } from './systems/LootManager.js';
 import { EquipmentManager } from './systems/EquipmentManager.js';
+import { ChestManager } from './world/ChestManager.js';
 import { HUD } from './ui/HUD.js';
 import { CrucibleUI } from './ui/CrucibleUI.js';
 import { StatsUI } from './ui/StatsUI.js';
@@ -165,6 +166,17 @@ const lootManager = new LootManager(scene, gameManager);
 const equipmentManager = new EquipmentManager(scene, gameManager, lootManager);
 lootManager.equipmentManager = equipmentManager; // Link for equipment drops
 
+// --- Chest System ---
+const chestManager = new ChestManager(
+  scene,
+  world.terrain,
+  world.ruinsManager,
+  world.caveManager,
+  lootManager,
+  equipmentManager,
+  inputManager
+);
+
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
 player.setWorld(world); // Enable collision detection
@@ -266,6 +278,11 @@ function animate() {
       world.caveManager.update(player.mesh.position.x, player.mesh.position.z);
     }
     
+    // Update chests for infinite world (placement + interaction)
+    if (chestManager && chestManager.update) {
+      chestManager.update(player.mesh.position.x, player.mesh.position.z, delta);
+    }
+    
     // Boss arena update (ritual circle damage pulse in Phase 2)
     if (world.bossArena && world.bossArena.active) {
       const arenaDamage = world.updateBossArena(delta, player.mesh.position);
@@ -290,6 +307,7 @@ function animate() {
   cameraController.update(delta);
   itemManager.update(player.mesh.position);
   lootManager.update(player.mesh.position);
+  equipmentManager.updateEquipmentDrops(player.mesh.position, delta);
   hud.update();
   crucibleUI.update();
   statsUI.update();

@@ -603,4 +603,41 @@ export class LootManager {
     }
     this.drops = [];
   }
+  
+  /**
+   * Spawn a single loot drop at a position (for chest drops)
+   * @param {Object} dropData - { itemId, quantity }
+   * @param {THREE.Vector3} position - World position
+   */
+  spawnLootDrop(dropData, position) {
+    const itemDef = Object.values(ITEM_TYPES).find(t => t.id === dropData.itemId);
+    if (!itemDef) {
+      console.warn(`[LootManager] Unknown item: ${dropData.itemId}`);
+      return;
+    }
+    
+    this._createDropVisual(itemDef, dropData.quantity, position.clone());
+  }
+  
+  /**
+   * Show notification (public method for external use)
+   * @param {string} text - Notification text
+   * @param {string} tier - Chest tier (wooden/silver/gold) for styling
+   */
+  showNotification(text, tier = 'wooden') {
+    const colors = {
+      wooden: 0x8B4513,
+      silver: 0xC0C0C0,
+      gold: 0xFFD700,
+    };
+    const color = colors[tier] || 0xffffff;
+    this._showNotification(text, color);
+  }
+  
+  /**
+   * Get reference to gameManager (for ChestManager access)
+   */
+  get gameManager() {
+    return this.gm;
+  }
 }

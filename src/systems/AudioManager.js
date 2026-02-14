@@ -129,6 +129,48 @@ export class AudioManager {
     this.soundBuffers.riposte = this.createImpactBuffer(0.2, 180, 0.8);
     this.soundBuffers.warCry = this.createRoarBuffer(0.4);
     this.soundBuffers.abilityUnlock = this.createChimeBuffer(0.5, [523, 659, 784, 1047]); // Full chord
+    
+    // Chest open (creak + unlock chime)
+    this.soundBuffers.chestOpen = this.createChestOpenBuffer(0.5);
+  }
+  
+  /**
+   * Create chest opening sound (creak + reward chime)
+   */
+  createChestOpenBuffer(duration) {
+    const sampleRate = this.context.sampleRate;
+    const length = sampleRate * duration;
+    const buffer = this.context.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    // Creaky hinge noise (first 0.2s)
+    const creakLength = Math.floor(sampleRate * 0.2);
+    for (let i = 0; i < creakLength; i++) {
+      const t = i / sampleRate;
+      // Descending creaky noise
+      const creak = Math.sin(2 * Math.PI * (200 - t * 150) * t) * 0.3;
+      const noise = (Math.random() * 2 - 1) * 0.15;
+      const env = Math.sin((i / creakLength) * Math.PI) * 0.5;
+      data[i] = (creak + noise) * env;
+    }
+    
+    // Reward chime (last 0.3s) - ascending
+    const chimeStart = creakLength;
+    const chimeLength = length - chimeStart;
+    const notes = [392, 494, 587, 784]; // G4, B4, D5, G5
+    const noteLength = Math.floor(chimeLength / notes.length);
+    
+    for (let n = 0; n < notes.length; n++) {
+      const freq = notes[n];
+      const start = chimeStart + n * noteLength;
+      for (let i = 0; i < noteLength; i++) {
+        const t = i / sampleRate;
+        const env = Math.exp(-t * 4) * 0.5;
+        data[start + i] = Math.sin(2 * Math.PI * freq * t) * env;
+      }
+    }
+    
+    return buffer;
   }
   
   /**
