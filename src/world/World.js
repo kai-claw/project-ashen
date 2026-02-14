@@ -361,13 +361,18 @@ export class World {
     sunLight.shadow.bias = -0.001;
     this.scene.add(sunLight);
     
-    // Ambient light for shadows
-    const ambientLight = new THREE.AmbientLight(0x6688aa, 0.6);
+    // Ambient light for shadows - increased for better visibility
+    const ambientLight = new THREE.AmbientLight(0x8899bb, 0.9);
     this.scene.add(ambientLight);
     
-    // Hemisphere light for natural sky/ground bounce
-    const hemiLight = new THREE.HemisphereLight(0x88aacc, 0x445533, 0.5);
+    // Hemisphere light for natural sky/ground bounce - increased
+    const hemiLight = new THREE.HemisphereLight(0x99bbdd, 0x556644, 0.7);
     this.scene.add(hemiLight);
+    
+    // Additional fill light from front for player visibility
+    const fillLight = new THREE.DirectionalLight(0xaabbcc, 0.6);
+    fillLight.position.set(-30, 40, 50);
+    this.scene.add(fillLight);
   }
   
   // ========================================
@@ -452,6 +457,11 @@ export class World {
         radius: TOWER_SIZE / 2,
         height: TOWER_HEIGHT,
       });
+      
+      // Add torch to tower (facing inward toward courtyard)
+      const torchX = x > 0 ? x - TOWER_SIZE / 2 - 0.5 : x + TOWER_SIZE / 2 + 0.5;
+      const torchZ = z > 0 ? z - TOWER_SIZE / 2 - 0.5 : z + TOWER_SIZE / 2 + 0.5;
+      this._createTorch(torchX, WALL_HEIGHT - 1, torchZ);
     };
     
     const halfW = CASTLE_WIDTH / 2;
@@ -480,6 +490,25 @@ export class World {
     
     // BONFIRE in center of courtyard
     this._createBonfire(0, 0, -5);
+    
+    // Wall torches for better courtyard lighting
+    // South wall torches (back wall)
+    this._createTorch(-12, 5, -halfD + WALL_THICKNESS + 0.5);
+    this._createTorch(12, 5, -halfD + WALL_THICKNESS + 0.5);
+    
+    // West wall torches
+    this._createTorch(-halfW + WALL_THICKNESS + 0.5, 5, -10);
+    this._createTorch(-halfW + WALL_THICKNESS + 0.5, 5, 10);
+    
+    // East wall torches
+    this._createTorch(halfW - WALL_THICKNESS - 0.5, 5, -10);
+    this._createTorch(halfW - WALL_THICKNESS - 0.5, 5, 10);
+    
+    // Near gate torches (flanking the entrance)
+    this._createTorch(-GATE_WIDTH/2 - 1, 5, halfD - WALL_THICKNESS - 0.5);
+    this._createTorch(GATE_WIDTH/2 + 1, 5, halfD - WALL_THICKNESS - 0.5);
+    
+    console.log('[World] Castle torches added for starting area visibility');
     
     // Gate visual (open archway)
     const gateArchGeo = new THREE.BoxGeometry(GATE_WIDTH + 1, 1.5, WALL_THICKNESS + 0.5);
@@ -547,6 +576,64 @@ export class World {
     
     // Update bonfire position
     this.bonfirePosition.set(x, y, z);
+  }
+  
+  _createTorch(x, y, z) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    
+    // Torch bracket (metal holder on wall)
+    const bracketMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8, metalness: 0.5 });
+    const bracketGeo = new THREE.BoxGeometry(0.15, 0.4, 0.15);
+    const bracket = new THREE.Mesh(bracketGeo, bracketMat);
+    bracket.position.y = -0.1;
+    group.add(bracket);
+    
+    // Torch handle (wooden)
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x4a3020, roughness: 0.9 });
+    const handleGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.6, 6);
+    const handle = new THREE.Mesh(handleGeo, handleMat);
+    handle.position.y = 0.2;
+    group.add(handle);
+    
+    // Torch head (burning part)
+    const headMat = new THREE.MeshStandardMaterial({ 
+      color: 0x331100, 
+      emissive: 0xff4400, 
+      emissiveIntensity: 0.5 
+    });
+    const headGeo = new THREE.SphereGeometry(0.12, 8, 8);
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 0.55;
+    head.scale.y = 1.3;
+    group.add(head);
+    
+    // Torch light (warm flickering glow)
+    const torchLight = new THREE.PointLight(0xff7733, 2.5, 18);
+    torchLight.position.y = 0.6;
+    group.add(torchLight);
+    
+    // Store light reference for flickering
+    this.torchLights = this.torchLights || [];
+    this.torchLights.push(torchLight);
+    
+    // Start flicker animation if not already running
+    if (!this._torchFlickerStarted) {
+      this._torchFlickerStarted = true;
+      const flickerTorches = () => {
+        requestAnimationFrame(flickerTorches);
+        const time = Date.now() * 0.001;
+        for (let i = 0; i < this.torchLights.length; i++) {
+          const light = this.torchLights[i];
+          // Each torch flickers slightly differently
+          light.intensity = 2.0 + Math.sin(time * 8 + i * 1.7) * 0.4 + Math.random() * 0.3;
+        }
+      };
+      flickerTorches();
+    }
+    
+    this.scene.add(group);
+    return group;
   }
   
   // ========================================
