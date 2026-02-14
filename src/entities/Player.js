@@ -137,14 +137,21 @@ export class Player {
   }
 
   _createFallbackMesh() {
-    // Simple placeholder while model loads
+    // Complete humanoid placeholder while model loads
     const armorMat = new THREE.MeshStandardMaterial({
       color: 0x5a5a68,
       roughness: 0.35,
       metalness: 0.85,
     });
+    
+    // Darker material for joints/extremities
+    const jointMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3a45,
+      roughness: 0.4,
+      metalness: 0.8,
+    });
 
-    // Body capsule
+    // Body capsule (torso)
     const bodyGeo = new THREE.CapsuleGeometry(0.35, 0.6, 8, 16);
     this.fallbackBody = new THREE.Mesh(bodyGeo, armorMat);
     this.fallbackBody.position.y = 1.1;
@@ -155,6 +162,7 @@ export class Player {
     const headGeo = new THREE.SphereGeometry(0.22, 16, 12);
     this.fallbackHead = new THREE.Mesh(headGeo, armorMat);
     this.fallbackHead.position.y = 1.7;
+    this.fallbackHead.castShadow = true;
     this.mesh.add(this.fallbackHead);
 
     // Glowing visor
@@ -167,6 +175,124 @@ export class Player {
     this.visor = new THREE.Mesh(visorGeo, visorMat);
     this.visor.position.set(0, 1.68, 0.25);
     this.mesh.add(this.visor);
+    
+    // === ARMS ===
+    const upperArmGeo = new THREE.CapsuleGeometry(0.08, 0.28, 6, 10);
+    const lowerArmGeo = new THREE.CapsuleGeometry(0.07, 0.26, 6, 10);
+    
+    // Left upper arm
+    const leftUpperArm = new THREE.Mesh(upperArmGeo, armorMat);
+    leftUpperArm.position.set(-0.42, 1.25, 0);
+    leftUpperArm.rotation.z = 0.2;
+    leftUpperArm.castShadow = true;
+    this.mesh.add(leftUpperArm);
+    
+    // Right upper arm
+    const rightUpperArm = new THREE.Mesh(upperArmGeo, armorMat);
+    rightUpperArm.position.set(0.42, 1.25, 0);
+    rightUpperArm.rotation.z = -0.2;
+    rightUpperArm.castShadow = true;
+    this.mesh.add(rightUpperArm);
+    
+    // Left forearm
+    const leftForearm = new THREE.Mesh(lowerArmGeo, armorMat);
+    leftForearm.position.set(-0.52, 0.9, 0.05);
+    leftForearm.rotation.z = 0.1;
+    leftForearm.rotation.x = -0.15;
+    leftForearm.castShadow = true;
+    this.mesh.add(leftForearm);
+    
+    // Right forearm
+    const rightForearm = new THREE.Mesh(lowerArmGeo, armorMat);
+    rightForearm.position.set(0.52, 0.9, 0.05);
+    rightForearm.rotation.z = -0.1;
+    rightForearm.rotation.x = -0.15;
+    rightForearm.castShadow = true;
+    this.mesh.add(rightForearm);
+    
+    // === HANDS ===
+    // Left hand - slightly stylized gauntlet shape
+    const handGeo = new THREE.BoxGeometry(0.1, 0.08, 0.14);
+    const leftHand = new THREE.Mesh(handGeo, jointMat);
+    leftHand.position.set(-0.56, 0.6, 0.08);
+    leftHand.castShadow = true;
+    this.mesh.add(leftHand);
+    
+    // Left fingers (simplified as a plate)
+    const fingerGeo = new THREE.BoxGeometry(0.08, 0.04, 0.1);
+    const leftFingers = new THREE.Mesh(fingerGeo, jointMat);
+    leftFingers.position.set(-0.56, 0.55, 0.14);
+    leftFingers.castShadow = true;
+    this.mesh.add(leftFingers);
+    
+    // Right hand
+    const rightHand = new THREE.Mesh(handGeo, jointMat);
+    rightHand.position.set(0.56, 0.6, 0.08);
+    rightHand.castShadow = true;
+    this.mesh.add(rightHand);
+    
+    // Right fingers
+    const rightFingers = new THREE.Mesh(fingerGeo, jointMat);
+    rightFingers.position.set(0.56, 0.55, 0.14);
+    rightFingers.castShadow = true;
+    this.mesh.add(rightFingers);
+    
+    // Store hand references for weapon positioning
+    this.fallbackRightHand = rightHand;
+    this.fallbackLeftHand = leftHand;
+    
+    // === LEGS ===
+    const upperLegGeo = new THREE.CapsuleGeometry(0.1, 0.32, 6, 10);
+    const lowerLegGeo = new THREE.CapsuleGeometry(0.08, 0.3, 6, 10);
+    
+    // Left upper leg
+    const leftUpperLeg = new THREE.Mesh(upperLegGeo, armorMat);
+    leftUpperLeg.position.set(-0.15, 0.55, 0);
+    leftUpperLeg.castShadow = true;
+    this.mesh.add(leftUpperLeg);
+    
+    // Right upper leg
+    const rightUpperLeg = new THREE.Mesh(upperLegGeo, armorMat);
+    rightUpperLeg.position.set(0.15, 0.55, 0);
+    rightUpperLeg.castShadow = true;
+    this.mesh.add(rightUpperLeg);
+    
+    // Left lower leg
+    const leftLowerLeg = new THREE.Mesh(lowerLegGeo, armorMat);
+    leftLowerLeg.position.set(-0.15, 0.18, 0);
+    leftLowerLeg.castShadow = true;
+    this.mesh.add(leftLowerLeg);
+    
+    // Right lower leg
+    const rightLowerLeg = new THREE.Mesh(lowerLegGeo, armorMat);
+    rightLowerLeg.position.set(0.15, 0.18, 0);
+    rightLowerLeg.castShadow = true;
+    this.mesh.add(rightLowerLeg);
+    
+    // === FEET ===
+    // Armored boot shapes
+    const footGeo = new THREE.BoxGeometry(0.12, 0.08, 0.22);
+    
+    // Left foot
+    const leftFoot = new THREE.Mesh(footGeo, jointMat);
+    leftFoot.position.set(-0.15, 0.04, 0.04);
+    leftFoot.castShadow = true;
+    this.mesh.add(leftFoot);
+    
+    // Right foot
+    const rightFoot = new THREE.Mesh(footGeo, jointMat);
+    rightFoot.position.set(0.15, 0.04, 0.04);
+    rightFoot.castShadow = true;
+    this.mesh.add(rightFoot);
+    
+    // Store all fallback parts for visibility toggling
+    this.fallbackParts = [
+      this.fallbackBody, this.fallbackHead, this.visor,
+      leftUpperArm, rightUpperArm, leftForearm, rightForearm,
+      leftHand, leftFingers, rightHand, rightFingers,
+      leftUpperLeg, rightUpperLeg, leftLowerLeg, rightLowerLeg,
+      leftFoot, rightFoot
+    ];
 
     // Reference for damage flash
     this.body = this.fallbackBody;
@@ -208,9 +334,11 @@ export class Player {
       });
 
       // Hide all fallback meshes when GLTF loads
-      if (this.fallbackBody) this.fallbackBody.visible = false;
-      if (this.fallbackHead) this.fallbackHead.visible = false;
-      if (this.visor) this.visor.visible = false;
+      if (this.fallbackParts) {
+        this.fallbackParts.forEach(part => {
+          if (part) part.visible = false;
+        });
+      }
 
       // Add GLTF model to mesh group
       this.mesh.add(this.gltfModel);
