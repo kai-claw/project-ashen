@@ -1,24 +1,43 @@
 import * as THREE from 'three';
 
 /**
- * ParticleManager - Handles combat visual effects
- * - Slash trails on sword swings
- * - Hit sparks on impact
- * - Blood effects on damage
- * - Ember particles for atmosphere
+ * ParticleManager - Handles combat visual effects with OBJECT POOLING
+ * - Uses pre-allocated pools to avoid GC pauses
+ * - Shared materials (no cloning)
+ * - Particles are hidden/shown, not added/removed from scene
  */
 export class ParticleManager {
   constructor(scene) {
     this.scene = scene;
+    
+    // Active particle tracking
     this.particles = [];
     this.slashTrails = [];
     this.embers = [];
     this.dustMotes = [];
     
+    // ========== OBJECT POOLS ==========
+    // Pre-allocated pools to avoid runtime allocation
+    this.sparkPool = [];
+    this.bloodPool = [];
+    this.wispPool = [];
+    this.ringPool = [];
+    
+    // Pool configuration
+    this.POOL_SIZES = {
+      spark: 60,      // Hit sparks + death effects
+      blood: 40,      // Blood droplets
+      wisp: 20,       // Soul wisps
+      ring: 5,        // Shockwave rings
+    };
+
     // Shared geometries and materials for performance
     this._initSharedAssets();
     
-    // Start ember system
+    // Pre-allocate object pools
+    this._initPools();
+    
+    // Start ember system (recycled, not pooled)
     this._initEmbers();
     
     // Add floating dust motes for atmospheric lighting
@@ -45,8 +64,19 @@ export class ParticleManager {
 
     // Ember geometry (small sphere)
     this.emberGeo = new THREE.SphereGeometry(0.02, 4, 4);
+    
+    // Soul wisp geometry (pre-created, shared)
+    this.wispGeo = new THREE.SphereGeometry(0.1, 8, 8);
+    
+    // Larger wisp for player death
+    this.playerWispGeo = new THREE.SphereGeometry(0.15, 8, 8);
+    
+    // Death mist geometry
+    this.mistGeo = new THREE.SphereGeometry(0.2, 6, 6);
 
-    // Materials
+    // ========== SHARED MATERIALS (not cloned) ==========
+    // We'll use userData per-mesh for opacity tracking
+    
     this.sparkMat = new THREE.MeshBasicMaterial({
       color: 0xffaa44,
       transparent: true,
@@ -72,6 +102,26 @@ export class ParticleManager {
       transparent: true,
       opacity: 0.7,
     });
+    
+    this.wispMat = new THREE.MeshBasicMaterial({
+      color: 0x88aaff,
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending,
+    });
+    
+    this.playerSoulMat = new THREE.MeshBasicMaterial({
+      color: 0x88ccff,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+    
+    this.deathMistMat = new THREE.MeshBasicMaterial({
+      color: 0x440011,
+      transparent: true,
+      opacity: 0.7,
+    });
 
     // Slash trail material (additive for glow effect)
     this.slashMat = new THREE.MeshBasicMaterial({
@@ -93,6 +143,87 @@ export class ParticleManager {
     });
   }
 
+  /**
+   * Pre-allocate object pools - avoids runtime allocations
+   */
+  _initPools() {
+    // Spark pool
+    for (let i = 0; i < this.POOL_SIZES.spark; i++) {
+      const mesh = new THREE.Mesh(this.sparkGeo, this.sparkMat);
+      mesh.visible = false;
+      mesh.userData.inPool = true;
+      this.scene.add(mesh);
+      this.sparkPool.push(mesh);
+    }
+    
+    // Blood pool
+    for (let i = 0; i < this.POOL_SIZES.blood; i++) {
+      const mesh = new THREE.Mesh(this.bloodGeo, this.bloodMat);
+      mesh.visible = false;
+      mesh.userData.inPool = true;
+      this.scene.add(mesh);
+      this.bloodPool.push(mesh);
+    }
+    
+    // Wisp pool
+    for (let i = 0; i < this.POOL_SIZES.wisp; i++) {
+      const mesh = new THREE.Mesh(this.wispGeo, this.wispMat);
+      mesh.visible = false;
+      mesh.userData.inPool = true;
+      this.scene.add(mesh);
+      this.wispPool.push(mesh);
+    }
+    
+    // Ring pool (shockwaves)
+    for (let i = 0; i < this.POOL_SIZES.ring; i++) {
+      const geo = new THREE.RingGeometry(0.1, 0.3, 32);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffcc44,
+        transparent: true,
+        opacity: 0.8,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.visible = false;
+      mesh.userData.inPool = true;
+      this.scene.add(mesh);
+      this.ringPool.push(mesh);
+    }
+    
+    console.log('[ParticleManager] Pools initialized:', {
+      sparks: this.sparkPool.length,
+      blood: this.bloodPool.length,
+      wisps: this.wispPool.length,
+      rings: this.ringPool.length,
+    });
+  }
+
+  /**
+   * Get particle from pool (or null if exhausted)
+   */
+  _getFromPool(pool) {
+    for (const mesh of pool) {
+      if (mesh.userData.inPool) {
+        mesh.userData.inPool = false;
+        mesh.visible = true;
+        mesh.scale.set(1, 1, 1);
+        mesh.rotation.set(0, 0, 0);
+        return mesh;
+      }
+    }
+    return null; // Pool exhausted - skip this particle
+  }
+
+  /**
+   * Return particle to pool
+   */
+  _returnToPool(mesh) {
+    mesh.visible = false;
+    mesh.userData.inPool = true;
+  }
+
   _initEmbers() {
     // Spawn ambient embers floating up from the ground
     const emberCount = 30;
@@ -102,7 +233,8 @@ export class ParticleManager {
   }
 
   _spawnEmber() {
-    const mesh = new THREE.Mesh(this.emberGeo, this.emberMat.clone());
+    // Embers use shared material (single instance)
+    const mesh = new THREE.Mesh(this.emberGeo, this.emberMat);
     mesh.position.set(
       (Math.random() - 0.5) * 60,
       Math.random() * 0.5,
@@ -124,13 +256,12 @@ export class ParticleManager {
 
   _initDustMotes() {
     // Floating dust particles visible in light shafts
-    // These make light feel tangible and add atmosphere
     const dustCount = 80;
     
     // Dust mote geometry - tiny plane that always faces camera
     this.dustGeo = new THREE.PlaneGeometry(0.03, 0.03);
     
-    // Subtle white/gold dust material
+    // Single shared dust material
     this.dustMat = new THREE.MeshBasicMaterial({
       color: 0xffffee,
       transparent: true,
@@ -141,12 +272,11 @@ export class ParticleManager {
     });
     
     for (let i = 0; i < dustCount; i++) {
-      const mesh = new THREE.Mesh(this.dustGeo, this.dustMat.clone());
+      const mesh = new THREE.Mesh(this.dustGeo, this.dustMat);
       
-      // Spread throughout playable area
       mesh.position.set(
         (Math.random() - 0.5) * 40,
-        0.5 + Math.random() * 5, // Float at various heights
+        0.5 + Math.random() * 5,
         (Math.random() - 0.5) * 80 - 20
       );
       
@@ -167,7 +297,6 @@ export class ParticleManager {
    * Create a slash trail effect when sword swings
    */
   spawnSlashTrail(origin, direction, isHeavy = false) {
-    // Create an arc geometry for the slash
     const arcRadius = isHeavy ? 1.8 : 1.4;
     const arcAngle = isHeavy ? Math.PI * 0.7 : Math.PI * 0.5;
     const segments = 12;
@@ -182,7 +311,6 @@ export class ParticleManager {
       if (i === 0) shape.moveTo(x, y);
       else shape.lineTo(x, y);
     }
-    // Close with inner arc
     for (let i = segments; i >= 0; i--) {
       const angle = -arcAngle / 2 + (arcAngle * i) / segments;
       const x = Math.cos(angle) * (arcRadius - thickness);
@@ -192,17 +320,15 @@ export class ParticleManager {
     shape.closePath();
 
     const geometry = new THREE.ShapeGeometry(shape);
-    const material = (isHeavy ? this.heavySlashMat : this.slashMat).clone();
+    const material = isHeavy ? this.heavySlashMat : this.slashMat;
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Position and rotate
     mesh.position.copy(origin);
     mesh.position.y += 1.2;
 
-    // Face the direction of the slash
     const yaw = Math.atan2(direction.x, direction.z);
     mesh.rotation.y = yaw;
-    mesh.rotation.x = isHeavy ? -0.5 : 0.2; // Tilt based on attack type
+    mesh.rotation.x = isHeavy ? -0.5 : 0.2;
 
     this.scene.add(mesh);
 
@@ -212,27 +338,30 @@ export class ParticleManager {
       maxLife: isHeavy ? 0.35 : 0.25,
       scaleStart: 0.3,
       scaleEnd: 1.0,
+      ownedGeometry: geometry, // Track for cleanup
     });
   }
 
   /**
-   * Spawn spark particles on weapon impact
+   * Spawn spark particles on weapon impact (uses pool)
    */
   spawnHitSparks(position, count = 8, isCritical = false) {
-    const sparkCount = isCritical ? count * 2 : count;
-    const material = isCritical ? this.critSparkMat : this.sparkMat;
+    const sparkCount = isCritical ? Math.min(count * 2, 16) : Math.min(count, 10);
 
     for (let i = 0; i < sparkCount; i++) {
-      const mesh = new THREE.Mesh(this.sparkGeo, material.clone());
+      const mesh = this._getFromPool(this.sparkPool);
+      if (!mesh) continue; // Pool exhausted
+      
+      // Set critical color via userData flag (material is shared)
+      mesh.userData.isCritical = isCritical;
+      
       mesh.position.copy(position);
       mesh.position.y += 0.8 + Math.random() * 0.4;
 
-      // Random spread velocity
       const angle = Math.random() * Math.PI * 2;
       const speed = 2 + Math.random() * 4;
       const upSpeed = 2 + Math.random() * 3;
 
-      this.scene.add(mesh);
       this.particles.push({
         mesh,
         velocity: new THREE.Vector3(
@@ -244,29 +373,29 @@ export class ParticleManager {
         life: 0,
         maxLife: 0.3 + Math.random() * 0.2,
         type: 'spark',
+        pool: this.sparkPool,
       });
     }
   }
 
   /**
-   * Spawn blood particles on damage
+   * Spawn blood particles on damage (uses pool)
    */
   spawnBlood(position, direction, amount = 6) {
-    // More blood for higher damage
-    const count = Math.min(amount, 15);
+    const count = Math.min(amount, 10); // Cap for performance
 
     for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(this.bloodGeo, this.bloodMat.clone());
+      const mesh = this._getFromPool(this.bloodPool);
+      if (!mesh) continue; // Pool exhausted
+
       mesh.position.copy(position);
       mesh.position.y += 0.8 + Math.random() * 0.6;
 
-      // Spray in direction with spread
       const baseAngle = Math.atan2(direction.x, direction.z);
       const angle = baseAngle + (Math.random() - 0.5) * Math.PI * 0.6;
       const speed = 3 + Math.random() * 3;
       const upSpeed = 1 + Math.random() * 3;
 
-      this.scene.add(mesh);
       this.particles.push({
         mesh,
         velocity: new THREE.Vector3(
@@ -279,59 +408,54 @@ export class ParticleManager {
         maxLife: 0.6 + Math.random() * 0.4,
         type: 'blood',
         scale: 0.8 + Math.random() * 0.4,
+        pool: this.bloodPool,
       });
     }
   }
 
   /**
-   * Spawn posture break burst (dramatic spark explosion)
+   * Spawn posture break burst (uses pools)
    */
   spawnPostureBreak(position) {
-    // Large burst of golden sparks
-    this.spawnHitSparks(position, 20, true);
+    // Golden sparks
+    this.spawnHitSparks(position, 12, true);
 
-    // Add shockwave ring
-    const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xffcc44,
-      transparent: true,
-      opacity: 0.8,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.position.copy(position);
-    ring.position.y += 1.0;
-    ring.rotation.x = -Math.PI / 2;
-    this.scene.add(ring);
+    // Shockwave ring from pool
+    const ring = this._getFromPool(this.ringPool);
+    if (ring) {
+      ring.position.copy(position);
+      ring.position.y += 1.0;
+      ring.rotation.x = -Math.PI / 2;
+      ring.scale.set(1, 1, 1);
 
-    this.particles.push({
-      mesh: ring,
-      velocity: new THREE.Vector3(0, 0, 0),
-      gravity: 0,
-      life: 0,
-      maxLife: 0.5,
-      type: 'ring',
-      expandRate: 8,
-    });
+      this.particles.push({
+        mesh: ring,
+        velocity: new THREE.Vector3(0, 0, 0),
+        gravity: 0,
+        life: 0,
+        maxLife: 0.5,
+        type: 'ring',
+        expandRate: 8,
+        pool: this.ringPool,
+      });
+    }
   }
 
   /**
-   * Spawn block sparks (when attack is blocked)
+   * Spawn block sparks (uses pool)
    */
   spawnBlockSparks(position) {
     const sparkCount = 5;
     for (let i = 0; i < sparkCount; i++) {
-      const mesh = new THREE.Mesh(this.sparkGeo, this.sparkMat.clone());
-      mesh.material.color.setHex(0x8888ff);
+      const mesh = this._getFromPool(this.sparkPool);
+      if (!mesh) continue;
+
       mesh.position.copy(position);
       mesh.position.y += 1.0;
 
       const angle = Math.random() * Math.PI * 2;
       const speed = 1 + Math.random() * 2;
 
-      this.scene.add(mesh);
       this.particles.push({
         mesh,
         velocity: new THREE.Vector3(
@@ -343,22 +467,26 @@ export class ParticleManager {
         life: 0,
         maxLife: 0.25,
         type: 'spark',
+        isBlock: true,
+        pool: this.sparkPool,
       });
     }
   }
 
   /**
-   * Spawn death burst (enemy dies)
+   * Spawn death burst (enemy dies) - OPTIMIZED with pools
+   * Reduced particle count for performance
    */
   spawnDeathBurst(position) {
-    // Large blood burst
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const mesh = new THREE.Mesh(this.bloodGeo, this.bloodMat.clone());
+    // Blood burst - reduced from 12 to 6
+    for (let i = 0; i < 6; i++) {
+      const mesh = this._getFromPool(this.bloodPool);
+      if (!mesh) continue;
+
+      const angle = (i / 6) * Math.PI * 2;
       mesh.position.copy(position);
       mesh.position.y += 1.0;
 
-      this.scene.add(mesh);
       this.particles.push({
         mesh,
         velocity: new THREE.Vector3(
@@ -371,36 +499,32 @@ export class ParticleManager {
         maxLife: 0.8,
         type: 'blood',
         scale: 1.2,
+        pool: this.bloodPool,
       });
     }
 
-    // Soul wisps rising
-    for (let i = 0; i < 6; i++) {
-      const wispGeo = new THREE.SphereGeometry(0.1, 8, 8);
-      const wispMat = new THREE.MeshBasicMaterial({
-        color: 0x88aaff,
-        transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending,
-      });
-      const wisp = new THREE.Mesh(wispGeo, wispMat);
-      wisp.position.copy(position);
-      wisp.position.y += 0.5 + Math.random() * 0.5;
-      wisp.position.x += (Math.random() - 0.5) * 0.5;
-      wisp.position.z += (Math.random() - 0.5) * 0.5;
+    // Soul wisps rising - reduced from 6 to 3
+    for (let i = 0; i < 3; i++) {
+      const mesh = this._getFromPool(this.wispPool);
+      if (!mesh) continue;
 
-      this.scene.add(wisp);
+      mesh.position.copy(position);
+      mesh.position.y += 0.5 + Math.random() * 0.5;
+      mesh.position.x += (Math.random() - 0.5) * 0.5;
+      mesh.position.z += (Math.random() - 0.5) * 0.5;
+
       this.particles.push({
-        mesh: wisp,
+        mesh,
         velocity: new THREE.Vector3(
           (Math.random() - 0.5) * 0.5,
           2 + Math.random() * 1,
           (Math.random() - 0.5) * 0.5
         ),
-        gravity: 0, // Wisps float up
+        gravity: 0,
         life: 0,
         maxLife: 1.5 + Math.random() * 0.5,
         type: 'wisp',
+        pool: this.wispPool,
       });
     }
   }
@@ -432,27 +556,21 @@ export class ParticleManager {
         const spiralSpeed = 2;
         p.mesh.position.x += Math.sin(p.life * spiralSpeed) * delta * 0.5;
         p.mesh.position.z += Math.cos(p.life * spiralSpeed) * delta * 0.5;
-        // Glow pulse
-        const pulse = 0.6 + Math.sin(p.life * 5) * 0.4;
-        p.mesh.material.opacity = pulse * (1 - p.life / p.maxLife);
       }
 
-      // Death mist expands and fades
+      // Death mist expands
       if (p.type === 'deathMist') {
         const expandScale = 1 + p.life * 0.5;
         p.mesh.scale.setScalar(expandScale);
       }
 
-      // Fade out
+      // Calculate fade (used for visual but material is shared)
       const fadeRatio = 1 - p.life / p.maxLife;
-      if (p.mesh.material.opacity !== undefined) {
-        p.mesh.material.opacity = fadeRatio * (p.type === 'blood' ? 0.9 : 1);
-      }
 
       // Apply scale if specified
       if (p.scale) {
         const scaleVal = p.scale * fadeRatio;
-        p.mesh.scale.setScalar(scaleVal);
+        p.mesh.scale.setScalar(Math.max(0.1, scaleVal));
       }
 
       // Ground collision for blood
@@ -469,11 +587,15 @@ export class ParticleManager {
         p.mesh.rotation.z += delta * 8;
       }
 
-      // Remove dead particles
+      // Remove dead particles - return to pool
       if (p.life >= p.maxLife) {
-        this.scene.remove(p.mesh);
-        p.mesh.geometry.dispose?.();
-        p.mesh.material.dispose?.();
+        if (p.pool) {
+          this._returnToPool(p.mesh);
+        } else {
+          // Non-pooled particle (legacy) - dispose
+          this.scene.remove(p.mesh);
+          p.mesh.geometry?.dispose?.();
+        }
         this.particles.splice(i, 1);
       }
     }
@@ -486,17 +608,15 @@ export class ParticleManager {
       const progress = t.life / t.maxLife;
       const scale = THREE.MathUtils.lerp(t.scaleStart, t.scaleEnd, progress);
       t.mesh.scale.setScalar(scale);
-      t.mesh.material.opacity = (1 - progress) * 0.6;
 
       if (t.life >= t.maxLife) {
         this.scene.remove(t.mesh);
-        t.mesh.geometry.dispose();
-        t.mesh.material.dispose();
+        t.ownedGeometry?.dispose();
         this.slashTrails.splice(i, 1);
       }
     }
 
-    // Update embers
+    // Update embers (recycled)
     for (let i = this.embers.length - 1; i >= 0; i--) {
       const e = this.embers[i];
       e.life += delta;
@@ -506,11 +626,7 @@ export class ParticleManager {
       e.mesh.position.x += Math.sin(e.life * 2) * 0.01;
       e.mesh.position.z += Math.cos(e.life * 1.5) * 0.01;
 
-      // Fade
-      const fadeRatio = 1 - (e.life / e.maxLife);
-      e.mesh.material.opacity = fadeRatio * 0.7;
-
-      // Recycle embers
+      // Recycle embers (no disposal)
       if (e.life >= e.maxLife) {
         e.life = 0;
         e.mesh.position.set(
@@ -523,76 +639,58 @@ export class ParticleManager {
     }
     
     // Update dust motes - gentle floating animation
-    const time = Date.now() * 0.001; // Current time in seconds
+    const time = Date.now() * 0.001;
     for (const dust of this.dustMotes) {
-      // Gentle vertical bob
       dust.mesh.position.y = dust.baseY + Math.sin(time * dust.driftSpeed + dust.phase) * dust.driftAmplitude;
-      
-      // Slow horizontal drift
       dust.mesh.position.x += Math.sin(time * 0.5 + dust.phase) * 0.002;
       dust.mesh.position.z += Math.cos(time * 0.3 + dust.phase) * 0.002;
-      
-      // Gentle rotation to catch light
       dust.mesh.rotation.z += dust.rotateSpeed * delta;
-      
-      // Subtle opacity flicker (like dust catching light)
-      const flicker = 0.3 + Math.sin(time * 3 + dust.phase * 5) * 0.15;
-      dust.mesh.material.opacity = flicker;
     }
   }
 
   /**
-   * Spawn player death effect (dramatic soul escape + vignette)
+   * Spawn player death effect - OPTIMIZED with pools
+   * Reduced particle counts for performance
    */
   spawnPlayerDeathEffect(position, camera) {
-    // Large soul burst escaping upward
-    for (let i = 0; i < 15; i++) {
-      const soulGeo = new THREE.SphereGeometry(0.15 + Math.random() * 0.1, 8, 8);
-      const soulMat = new THREE.MeshBasicMaterial({
-        color: 0x88ccff,
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending,
-      });
-      const soul = new THREE.Mesh(soulGeo, soulMat);
-      soul.position.copy(position);
-      soul.position.y += 0.5 + Math.random() * 0.8;
-      soul.position.x += (Math.random() - 0.5) * 0.6;
-      soul.position.z += (Math.random() - 0.5) * 0.6;
+    // Soul burst - reduced from 15 to 8
+    for (let i = 0; i < 8; i++) {
+      const mesh = this._getFromPool(this.wispPool);
+      if (!mesh) continue;
 
-      this.scene.add(soul);
+      mesh.position.copy(position);
+      mesh.position.y += 0.5 + Math.random() * 0.8;
+      mesh.position.x += (Math.random() - 0.5) * 0.6;
+      mesh.position.z += (Math.random() - 0.5) * 0.6;
+
       this.particles.push({
-        mesh: soul,
+        mesh,
         velocity: new THREE.Vector3(
           (Math.random() - 0.5) * 1.5,
           3 + Math.random() * 2,
           (Math.random() - 0.5) * 1.5
         ),
-        gravity: -0.5, // Slow gravity for ethereal float
+        gravity: -0.5,
         life: 0,
         maxLife: 2.5 + Math.random() * 1.5,
         type: 'playerSoul',
+        pool: this.wispPool,
       });
     }
 
-    // Create a red-black blood mist burst
-    for (let i = 0; i < 20; i++) {
-      const mistGeo = new THREE.SphereGeometry(0.2 + Math.random() * 0.15, 6, 6);
-      const mistMat = new THREE.MeshBasicMaterial({
-        color: 0x440011,
-        transparent: true,
-        opacity: 0.7,
-      });
-      const mist = new THREE.Mesh(mistGeo, mistMat);
-      mist.position.copy(position);
-      mist.position.y += Math.random() * 1.5;
+    // Blood mist - reduced from 20 to 10
+    for (let i = 0; i < 10; i++) {
+      const mesh = this._getFromPool(this.bloodPool);
+      if (!mesh) continue;
+
+      mesh.position.copy(position);
+      mesh.position.y += Math.random() * 1.5;
 
       const angle = Math.random() * Math.PI * 2;
       const speed = 1 + Math.random() * 2;
 
-      this.scene.add(mist);
       this.particles.push({
-        mesh: mist,
+        mesh,
         velocity: new THREE.Vector3(
           Math.cos(angle) * speed,
           0.5 + Math.random() * 1,
@@ -603,10 +701,11 @@ export class ParticleManager {
         maxLife: 2.0 + Math.random() * 1,
         type: 'deathMist',
         scale: 1.0,
+        pool: this.bloodPool,
       });
     }
 
-    // Screen vignette effect (fullscreen quad that fades in)
+    // Screen vignette effect
     this._createDeathVignette(camera);
 
     // Camera shake
@@ -616,10 +715,8 @@ export class ParticleManager {
   }
 
   _createDeathVignette(camera) {
-    // Create a fullscreen vignette overlay that fades to red-black edges
     const vignetteGeo = new THREE.PlaneGeometry(2, 2);
     
-    // Custom shader for vignette
     const vignetteMat = new THREE.ShaderMaterial({
       transparent: true,
       depthTest: false,
@@ -644,11 +741,9 @@ export class ParticleManager {
           vec2 center = vUv - 0.5;
           float dist = length(center) * 1.8;
           
-          // Dark red vignette
           float vignette = smoothstep(0.3, 1.2, dist);
           vec3 color = mix(vec3(0.0), vec3(0.3, 0.0, 0.0), vignette);
           
-          // Pulsing effect
           float pulse = sin(uTime * 2.0) * 0.1 + 0.9;
           float alpha = vignette * uIntensity * pulse;
           
@@ -661,10 +756,8 @@ export class ParticleManager {
     vignette.frustumCulled = false;
     vignette.renderOrder = 999;
 
-    // Add to scene as screen-space overlay
     this.scene.add(vignette);
 
-    // Animate the vignette
     this.deathVignette = {
       mesh: vignette,
       material: vignetteMat,
@@ -688,9 +781,6 @@ export class ParticleManager {
     }
   }
 
-  /**
-   * Update death vignette and camera shake
-   */
   _updateDeathEffects(delta) {
     // Update vignette
     if (this.deathVignette) {
@@ -701,17 +791,13 @@ export class ParticleManager {
       const totalDuration = v.fadeInDuration + v.holdDuration + v.fadeOutDuration;
 
       if (v.life < v.fadeInDuration) {
-        // Fade in
         v.material.uniforms.uIntensity.value = v.life / v.fadeInDuration;
       } else if (v.life < v.fadeInDuration + v.holdDuration) {
-        // Hold
         v.material.uniforms.uIntensity.value = 1.0;
       } else if (v.life < totalDuration) {
-        // Fade out
         const fadeProgress = (v.life - v.fadeInDuration - v.holdDuration) / v.fadeOutDuration;
         v.material.uniforms.uIntensity.value = 1.0 - fadeProgress;
       } else {
-        // Remove vignette
         this.scene.remove(v.mesh);
         v.mesh.geometry.dispose();
         v.material.dispose();
@@ -741,32 +827,64 @@ export class ParticleManager {
    * Cleanup all particles (for scene reset)
    */
   dispose() {
+    // Return all active particles to pools
     this.particles.forEach(p => {
-      this.scene.remove(p.mesh);
-      p.mesh.geometry?.dispose();
-      p.mesh.material?.dispose();
+      if (p.pool) {
+        this._returnToPool(p.mesh);
+      } else {
+        this.scene.remove(p.mesh);
+        p.mesh.geometry?.dispose?.();
+      }
     });
     this.particles = [];
 
+    // Slash trails (not pooled - have unique geometry)
     this.slashTrails.forEach(t => {
       this.scene.remove(t.mesh);
-      t.mesh.geometry?.dispose();
-      t.mesh.material?.dispose();
+      t.ownedGeometry?.dispose();
     });
     this.slashTrails = [];
 
+    // Embers (not pooled but shared geometry/material)
     this.embers.forEach(e => {
       this.scene.remove(e.mesh);
-      e.mesh.geometry?.dispose();
-      e.mesh.material?.dispose();
     });
     this.embers = [];
     
+    // Dust motes
     this.dustMotes.forEach(d => {
       this.scene.remove(d.mesh);
-      d.mesh.geometry?.dispose();
-      d.mesh.material?.dispose();
     });
     this.dustMotes = [];
+    
+    // Dispose pools
+    [...this.sparkPool, ...this.bloodPool, ...this.wispPool, ...this.ringPool].forEach(mesh => {
+      this.scene.remove(mesh);
+    });
+    this.sparkPool = [];
+    this.bloodPool = [];
+    this.wispPool = [];
+    this.ringPool = [];
+    
+    // Dispose shared geometries
+    this.sparkGeo?.dispose();
+    this.bloodGeo?.dispose();
+    this.emberGeo?.dispose();
+    this.wispGeo?.dispose();
+    this.playerWispGeo?.dispose();
+    this.mistGeo?.dispose();
+    this.dustGeo?.dispose();
+    
+    // Dispose shared materials
+    this.sparkMat?.dispose();
+    this.critSparkMat?.dispose();
+    this.bloodMat?.dispose();
+    this.emberMat?.dispose();
+    this.wispMat?.dispose();
+    this.playerSoulMat?.dispose();
+    this.deathMistMat?.dispose();
+    this.slashMat?.dispose();
+    this.heavySlashMat?.dispose();
+    this.dustMat?.dispose();
   }
 }
