@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TerrainGenerator } from './TerrainGenerator.js';
 import { FoliageManager } from './FoliageManager.js';
+import { VillageManager } from './VillageManager.js';
 
 /**
  * World - Open World Environment
@@ -35,6 +36,7 @@ export class World {
     this.terrain = new TerrainGenerator(scene);
     this._createStartingCastle();
     this.foliage = new FoliageManager(scene, this.terrain);
+    this.villages = new VillageManager(scene, this.terrain);
     this._createLighting();
     
     // Update bonfire position to be on terrain
@@ -171,6 +173,22 @@ export class World {
   isNearTree(x, z, minDistance = 3) {
     if (!this.foliage) return false;
     return this.foliage.isNearTree(x, z, minDistance);
+  }
+  
+  /**
+   * Check if position is near a village (for spawn validation)
+   */
+  isNearVillage(x, z, radius = 25) {
+    if (!this.villages) return false;
+    return this.villages.isNearVillage(x, z, radius);
+  }
+  
+  /**
+   * Get village data (for NPCs, quests, etc.)
+   */
+  getVillages() {
+    if (!this.villages) return [];
+    return this.villages.getVillages();
   }
   
   // ========================================
@@ -497,6 +515,9 @@ export class World {
     }
     if (this.foliage) {
       this.foliage.dispose();
+    }
+    if (this.villages) {
+      this.villages.dispose();
     }
   }
 }
