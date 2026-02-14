@@ -1,4 +1,141 @@
 import * as THREE from 'three';
+import { generateBossLoot, BOSS_SOULS } from '../data/BossData.js';
+
+// ========== BOSS ITEM DEFINITIONS ==========
+// Special boss-only items (souls, trophies, legendary drops)
+export const BOSS_ITEM_TYPES = {
+  // Boss Souls (tradeable with NPCs for unique items)
+  GOLEM_SOUL: {
+    id: 'golem_soul',
+    name: "Gormund's Soul",
+    type: 'boss_soul',
+    description: 'The crystalline essence of the Ancient Golem. Radiates ancient power.',
+    color: 0x4488ff,
+    emissive: 0x2266cc,
+    stackable: false,
+    rarity: 'legendary',
+    bossId: 'ancient_golem',
+  },
+  WRAITH_SOUL: {
+    id: 'wraith_soul',
+    name: "Vexaris's Soul",
+    type: 'boss_soul',
+    description: 'Dark energy swirls within this ephemeral essence.',
+    color: 0xaa22ff,
+    emissive: 0x6611aa,
+    stackable: false,
+    rarity: 'legendary',
+    bossId: 'shadow_wraith',
+  },
+  GUARDIAN_SOUL: {
+    id: 'guardian_soul',
+    name: "Thornwood's Soul",
+    type: 'boss_soul',
+    description: 'Pulsing with the life force of the ancient forest.',
+    color: 0x88ff44,
+    emissive: 0x44aa22,
+    stackable: false,
+    rarity: 'legendary',
+    bossId: 'forest_guardian',
+  },
+  KNIGHT_SOUL: {
+    id: 'knight_soul',
+    name: "Sir Aldric's Soul",
+    type: 'boss_soul',
+    description: 'A tortured soul seeking redemption... or vengeance.',
+    color: 0xff2244,
+    emissive: 0xaa1133,
+    stackable: false,
+    rarity: 'legendary',
+    bossId: 'corrupted_knight',
+  },
+  // Boss Materials
+  ANCIENT_CORE: {
+    id: 'ancient_core',
+    name: 'Ancient Core',
+    type: 'material',
+    description: 'The magical heart of a golem. Extremely rare crafting material.',
+    color: 0x66aaff,
+    emissive: 0x4488cc,
+    stackable: true,
+    maxStack: 5,
+    rarity: 'epic',
+  },
+  SHADOW_ESSENCE: {
+    id: 'shadow_essence',
+    name: 'Shadow Essence',
+    type: 'material',
+    description: 'Concentrated darkness from the void. Use with caution.',
+    color: 0x6622aa,
+    emissive: 0x441188,
+    stackable: true,
+    maxStack: 10,
+    rarity: 'epic',
+  },
+  HEARTWOOD: {
+    id: 'heartwood',
+    name: 'Ancient Heartwood',
+    type: 'material',
+    description: 'Living wood from the heart of a treant guardian.',
+    color: 0x66aa44,
+    emissive: 0x448822,
+    stackable: true,
+    maxStack: 5,
+    rarity: 'epic',
+  },
+  CORRUPTED_SIGIL: {
+    id: 'corrupted_sigil',
+    name: 'Corrupted Sigil',
+    type: 'material',
+    description: 'A holy symbol twisted by dark corruption.',
+    color: 0x880044,
+    emissive: 0x550033,
+    stackable: true,
+    maxStack: 5,
+    rarity: 'epic',
+  },
+  // Boss Trophies (proof of first kill)
+  GOLEM_TROPHY: {
+    id: 'golem_trophy',
+    name: "Golem Slayer's Trophy",
+    type: 'trophy',
+    description: 'Proof that you have defeated the Ancient Golem.',
+    color: 0xffd700,
+    emissive: 0xaa8800,
+    stackable: false,
+    rarity: 'legendary',
+  },
+  WRAITH_TROPHY: {
+    id: 'wraith_trophy',
+    name: "Wraith Hunter's Trophy",
+    type: 'trophy',
+    description: 'Proof that you have defeated the Shadow Wraith.',
+    color: 0xffd700,
+    emissive: 0xaa8800,
+    stackable: false,
+    rarity: 'legendary',
+  },
+  GUARDIAN_TROPHY: {
+    id: 'guardian_trophy',
+    name: "Grove Protector's Trophy",
+    type: 'trophy',
+    description: 'Proof that you have defeated the Forest Guardian.',
+    color: 0xffd700,
+    emissive: 0xaa8800,
+    stackable: false,
+    rarity: 'legendary',
+  },
+  KNIGHT_TROPHY: {
+    id: 'knight_trophy',
+    name: "Knight Slayer's Trophy",
+    type: 'trophy',
+    description: 'Proof that you have defeated the Corrupted Knight.',
+    color: 0xffd700,
+    emissive: 0xaa8800,
+    stackable: false,
+    rarity: 'legendary',
+  },
+};
 
 // ========== ITEM DEFINITIONS ==========
 export const ITEM_TYPES = {
@@ -413,6 +550,9 @@ export class LootManager {
       }
     }
     
+    // Update boss chests (Phase 21)
+    this.updateBossChests(playerPos);
+    
     // Process notification queue
     this._processNotificationQueue();
   }
@@ -702,5 +842,555 @@ export class LootManager {
    */
   get gameManager() {
     return this.gm;
+  }
+
+  // =====================================================
+  // BOSS REWARD SYSTEM (Phase 21)
+  // =====================================================
+
+  /**
+   * Generate and spawn boss loot
+   * @param {string} bossId - Boss identifier
+   * @param {THREE.Vector3} position - World position for drops
+   * @param {boolean} isFirstKill - Whether this is the first time defeating this boss
+   * @returns {Object} - Generated loot data
+   */
+  generateBossLoot(bossId, position, isFirstKill = false) {
+    // Get loot from BossData
+    const loot = generateBossLoot(bossId, isFirstKill);
+    
+    if (!loot || !loot.items) {
+      console.warn(`[LootManager] No loot defined for boss: ${bossId}`);
+      return null;
+    }
+
+    console.log(`[LootManager] Generating boss loot for ${bossId}:`, loot);
+
+    // Spawn dramatic boss chest at position
+    this.spawnBossChest(position, loot, bossId, isFirstKill);
+
+    // Track boss kill
+    this._trackBossKill(bossId, isFirstKill);
+
+    return loot;
+  }
+
+  /**
+   * Spawn a dramatic boss treasure chest
+   */
+  spawnBossChest(position, loot, bossId, isFirstKill) {
+    // Create boss chest visual (larger, glowing)
+    const chestGroup = new THREE.Group();
+    chestGroup.position.copy(position);
+    chestGroup.position.y = 0.3;
+
+    // Chest base (larger than normal chests)
+    const chestMat = new THREE.MeshStandardMaterial({
+      color: isFirstKill ? 0xffd700 : 0x8866aa, // Gold for first kill, purple otherwise
+      roughness: 0.3,
+      metalness: 0.8,
+      emissive: isFirstKill ? 0xaa7700 : 0x442266,
+      emissiveIntensity: 0.5,
+    });
+
+    const baseGeo = new THREE.BoxGeometry(1.5, 0.8, 1.0);
+    const base = new THREE.Mesh(baseGeo, chestMat);
+    base.position.y = 0.4;
+    base.castShadow = true;
+    chestGroup.add(base);
+
+    // Chest lid
+    const lidGeo = new THREE.BoxGeometry(1.5, 0.3, 1.0);
+    const lid = new THREE.Mesh(lidGeo, chestMat.clone());
+    lid.position.y = 0.95;
+    lid.position.z = -0.35;
+    lid.rotation.x = -0.3; // Slightly open
+    lid.castShadow = true;
+    chestGroup.add(lid);
+
+    // Glowing contents
+    const glowMat = new THREE.MeshStandardMaterial({
+      color: 0xffdd44,
+      emissive: 0xffaa22,
+      emissiveIntensity: 3,
+      transparent: true,
+      opacity: 0.8,
+    });
+
+    const glowGeo = new THREE.SphereGeometry(0.4, 16, 12);
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.y = 0.6;
+    chestGroup.add(glow);
+
+    // Boss soul orb (if included)
+    const soulItem = loot.items.find(item => item.type === 'boss_soul');
+    if (soulItem) {
+      const soulDef = Object.values(BOSS_ITEM_TYPES).find(t => t.id === soulItem.id);
+      if (soulDef) {
+        const soulMat = new THREE.MeshStandardMaterial({
+          color: soulDef.color,
+          emissive: soulDef.emissive,
+          emissiveIntensity: 4,
+          transparent: true,
+          opacity: 0.85,
+        });
+
+        const soulGeo = new THREE.IcosahedronGeometry(0.25, 1);
+        const soul = new THREE.Mesh(soulGeo, soulMat);
+        soul.position.y = 1.3;
+        chestGroup.add(soul);
+        chestGroup.userData.soul = soul;
+      }
+    }
+
+    // Chest light
+    const light = new THREE.PointLight(0xffdd44, 2, 8);
+    light.position.y = 1;
+    chestGroup.add(light);
+
+    // Particle burst
+    this._createBossLootParticles(chestGroup, isFirstKill);
+
+    this.scene.add(chestGroup);
+
+    // Store chest data
+    chestGroup.userData.loot = loot;
+    chestGroup.userData.bossId = bossId;
+    chestGroup.userData.isFirstKill = isFirstKill;
+    chestGroup.userData.collected = false;
+    chestGroup.userData.light = light;
+    chestGroup.userData.glow = glow;
+
+    // Add to boss chests array
+    if (!this.bossChests) this.bossChests = [];
+    this.bossChests.push(chestGroup);
+
+    // Show notification
+    if (isFirstKill) {
+      this._showBossNotification('FIRST VICTORY!', 'boss_first');
+      setTimeout(() => {
+        this._showBossNotification(`${bossId.toUpperCase()} DEFEATED`, 'boss');
+      }, 1500);
+    } else {
+      this._showBossNotification(`${bossId.toUpperCase()} DEFEATED`, 'boss');
+    }
+
+    return chestGroup;
+  }
+
+  /**
+   * Create particle burst for boss loot
+   */
+  _createBossLootParticles(chestGroup, isFirstKill) {
+    const particleCount = 100;
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const velocities = [];
+
+    const baseColor = isFirstKill ? new THREE.Color(0xffd700) : new THREE.Color(0xaa66ff);
+
+    for (let i = 0; i < particleCount; i++) {
+      // Start at center
+      positions[i * 3] = 0;
+      positions[i * 3 + 1] = 0.5;
+      positions[i * 3 + 2] = 0;
+
+      // Random colors
+      const variation = 0.7 + Math.random() * 0.3;
+      colors[i * 3] = baseColor.r * variation;
+      colors[i * 3 + 1] = baseColor.g * variation;
+      colors[i * 3 + 2] = baseColor.b * variation;
+
+      // Random velocities (burst outward)
+      velocities.push(new THREE.Vector3(
+        (Math.random() - 0.5) * 4,
+        Math.random() * 3 + 1,
+        (Math.random() - 0.5) * 4
+      ));
+    }
+
+    const particleGeo = new THREE.BufferGeometry();
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particleGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const particleMat = new THREE.PointsMaterial({
+      size: 0.15,
+      vertexColors: true,
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const particles = new THREE.Points(particleGeo, particleMat);
+    chestGroup.add(particles);
+
+    // Animate particles
+    let time = 0;
+    const animateParticles = () => {
+      time += 0.016;
+      if (time > 3) {
+        chestGroup.remove(particles);
+        particleGeo.dispose();
+        particleMat.dispose();
+        return;
+      }
+
+      const posArr = particles.geometry.attributes.position.array;
+      for (let i = 0; i < particleCount; i++) {
+        posArr[i * 3] += velocities[i].x * 0.016;
+        posArr[i * 3 + 1] += velocities[i].y * 0.016;
+        posArr[i * 3 + 2] += velocities[i].z * 0.016;
+        velocities[i].y -= 0.05; // Gravity
+      }
+      particles.geometry.attributes.position.needsUpdate = true;
+      particleMat.opacity = Math.max(0, 1 - time / 2.5);
+
+      requestAnimationFrame(animateParticles);
+    };
+    animateParticles();
+  }
+
+  /**
+   * Update boss chests (animate + check pickup)
+   */
+  updateBossChests(playerPos) {
+    if (!this.bossChests) return;
+
+    for (let i = this.bossChests.length - 1; i >= 0; i--) {
+      const chest = this.bossChests[i];
+      if (chest.userData.collected) continue;
+
+      // Animate
+      const time = Date.now() * 0.001;
+      
+      // Bob chest
+      chest.position.y = 0.3 + Math.sin(time * 2) * 0.05;
+      
+      // Rotate soul
+      if (chest.userData.soul) {
+        chest.userData.soul.rotation.y += 0.02;
+        chest.userData.soul.position.y = 1.3 + Math.sin(time * 3) * 0.1;
+      }
+
+      // Pulse light
+      if (chest.userData.light) {
+        chest.userData.light.intensity = 2 + Math.sin(time * 4) * 0.5;
+      }
+
+      // Pulse glow
+      if (chest.userData.glow) {
+        chest.userData.glow.scale.setScalar(1 + Math.sin(time * 3) * 0.1);
+      }
+
+      // Check pickup
+      const dist = playerPos.distanceTo(chest.position);
+      if (dist < 3) {
+        this._collectBossChest(chest, i);
+      }
+    }
+  }
+
+  /**
+   * Collect boss chest
+   */
+  _collectBossChest(chest, index) {
+    chest.userData.collected = true;
+    const loot = chest.userData.loot;
+
+    // Add all loot to inventory
+    loot.items.forEach(item => {
+      const itemDef = this._getBossItemDef(item.id) || 
+                      Object.values(ITEM_TYPES).find(t => t.id === item.id);
+      
+      if (itemDef) {
+        this.addItem(item.id, item.quantity || 1);
+        
+        // Show notification for each item
+        const qtyText = (item.quantity && item.quantity > 1) ? ` x${item.quantity}` : '';
+        const rarityColors = {
+          legendary: 0xffd700,
+          epic: 0xaa66ff,
+          rare: 0x4488ff,
+          uncommon: 0x44ff44,
+          common: 0xffffff,
+        };
+        const color = rarityColors[itemDef.rarity] || itemDef.color || 0xffffff;
+        this._queueNotification(`${itemDef.name}${qtyText}`, color);
+      }
+    });
+
+    // Add remnants (XP/currency)
+    if (loot.remnants > 0) {
+      this.addGold(loot.remnants);
+      this._queueNotification(`${loot.remnants} Remnants`, 0xffd700);
+    }
+
+    // Play sound
+    if (this.gm?.audioManager) {
+      this.gm.audioManager.play('levelUp', { volume: 0.8 });
+    }
+
+    // Visual effect: items burst out
+    this._burstItemsFromChest(chest, loot.items);
+
+    // Remove chest after delay
+    setTimeout(() => {
+      this.scene.remove(chest);
+      chest.traverse(child => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      });
+      this.bossChests.splice(index, 1);
+    }, 1000);
+
+    this._saveInventory();
+    console.log(`[LootManager] Collected boss chest with ${loot.items.length} items`);
+  }
+
+  /**
+   * Burst items visually from chest
+   */
+  _burstItemsFromChest(chest, items) {
+    const basePos = chest.position.clone();
+    items.forEach((item, i) => {
+      const itemDef = this._getBossItemDef(item.id) ||
+                      Object.values(ITEM_TYPES).find(t => t.id === item.id);
+      if (!itemDef) return;
+
+      // Create item visual
+      const geo = new THREE.OctahedronGeometry(0.15, 0);
+      const mat = new THREE.MeshStandardMaterial({
+        color: itemDef.color || 0xffffff,
+        emissive: itemDef.emissive || 0x444444,
+        emissiveIntensity: 1.5,
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(basePos);
+      mesh.position.y += 0.8;
+      this.scene.add(mesh);
+
+      // Animate outward
+      const angle = (i / items.length) * Math.PI * 2;
+      const velocity = new THREE.Vector3(
+        Math.cos(angle) * 2,
+        3 + Math.random(),
+        Math.sin(angle) * 2
+      );
+
+      let time = 0;
+      const animate = () => {
+        time += 0.016;
+        if (time > 1.5) {
+          this.scene.remove(mesh);
+          geo.dispose();
+          mat.dispose();
+          return;
+        }
+
+        mesh.position.add(velocity.clone().multiplyScalar(0.016));
+        velocity.y -= 0.1; // Gravity
+        mesh.rotation.x += 0.1;
+        mesh.rotation.y += 0.15;
+        mat.opacity = Math.max(0, 1 - time);
+
+        requestAnimationFrame(animate);
+      };
+      animate();
+    });
+  }
+
+  /**
+   * Get boss item definition
+   */
+  _getBossItemDef(itemId) {
+    return Object.values(BOSS_ITEM_TYPES).find(t => t.id === itemId);
+  }
+
+  /**
+   * Show boss-specific notification (larger, more dramatic)
+   */
+  _showBossNotification(text, type = 'boss') {
+    // Create or get boss notification element
+    let el = document.getElementById('boss-notification');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'boss-notification';
+      el.style.cssText = `
+        position: fixed;
+        top: 30%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, rgba(20, 10, 30, 0.95), rgba(50, 20, 60, 0.95));
+        color: #fff;
+        padding: 20px 60px;
+        border-radius: 8px;
+        font-family: 'Georgia', serif;
+        font-size: 32px;
+        font-weight: bold;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        opacity: 0;
+        transition: opacity 0.5s ease, transform 0.5s ease;
+        pointer-events: none;
+        z-index: 2000;
+        border: 2px solid #ffd700;
+        box-shadow: 0 0 40px rgba(255, 215, 0, 0.5), inset 0 0 30px rgba(0, 0, 0, 0.5);
+        text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+      `;
+      document.body.appendChild(el);
+    }
+
+    // Style based on type
+    if (type === 'boss_first') {
+      el.style.color = '#ffd700';
+      el.style.borderColor = '#ffd700';
+      el.style.textShadow = '0 0 30px rgba(255, 215, 0, 1)';
+    } else {
+      el.style.color = '#ffffff';
+      el.style.borderColor = '#aa66ff';
+      el.style.textShadow = '0 0 20px rgba(170, 102, 255, 0.8)';
+    }
+
+    el.textContent = text;
+    el.style.opacity = '1';
+    el.style.transform = 'translate(-50%, -50%) scale(1)';
+
+    setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transform = 'translate(-50%, -50%) scale(0.8)';
+    }, 2500);
+  }
+
+  /**
+   * Track boss kills (for first-kill bonus)
+   */
+  _trackBossKill(bossId, isFirstKill) {
+    if (!this.bossKills) {
+      this.bossKills = {};
+      this._loadBossKills();
+    }
+
+    if (!this.bossKills[bossId]) {
+      this.bossKills[bossId] = { count: 0, firstKillAt: null };
+    }
+
+    this.bossKills[bossId].count++;
+    if (isFirstKill) {
+      this.bossKills[bossId].firstKillAt = Date.now();
+    }
+
+    this._saveBossKills();
+  }
+
+  /**
+   * Check if boss has been killed before
+   */
+  hasKilledBoss(bossId) {
+    if (!this.bossKills) {
+      this.bossKills = {};
+      this._loadBossKills();
+    }
+    return this.bossKills[bossId]?.count > 0;
+  }
+
+  /**
+   * Get boss kill count
+   */
+  getBossKillCount(bossId) {
+    if (!this.bossKills) {
+      this.bossKills = {};
+      this._loadBossKills();
+    }
+    return this.bossKills[bossId]?.count || 0;
+  }
+
+  /**
+   * Save boss kills to localStorage
+   */
+  _saveBossKills() {
+    try {
+      localStorage.setItem('ashen_boss_kills', JSON.stringify(this.bossKills));
+    } catch (e) {
+      console.warn('[LootManager] Failed to save boss kills:', e);
+    }
+  }
+
+  /**
+   * Load boss kills from localStorage
+   */
+  _loadBossKills() {
+    try {
+      const saved = localStorage.getItem('ashen_boss_kills');
+      if (saved) {
+        this.bossKills = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('[LootManager] Failed to load boss kills:', e);
+    }
+  }
+
+  /**
+   * Get boss soul exchange options
+   */
+  getBossSoulExchangeOptions(soulId) {
+    return BOSS_SOULS[soulId]?.exchangeOptions || [];
+  }
+
+  /**
+   * Check if player has a specific boss soul
+   */
+  hasBossSoul(soulId) {
+    return this.getItemCount(soulId) > 0;
+  }
+
+  /**
+   * Exchange boss soul for item/ability
+   */
+  exchangeBossSoul(soulId, exchangeId) {
+    if (!this.hasBossSoul(soulId)) {
+      console.warn(`[LootManager] No ${soulId} to exchange`);
+      return false;
+    }
+
+    const options = this.getBossSoulExchangeOptions(soulId);
+    const exchange = options.find(o => o.id === exchangeId);
+    if (!exchange) {
+      console.warn(`[LootManager] Invalid exchange option: ${exchangeId}`);
+      return false;
+    }
+
+    // Remove soul
+    this.removeItem(soulId, 1);
+
+    // Grant exchange item
+    if (exchange.id === 'remnants') {
+      this.addGold(exchange.quantity);
+      this._queueNotification(`+${exchange.quantity} Remnants`, 0xffd700);
+    } else if (exchange.type === 'weapon') {
+      // Add to equipment manager
+      if (this.equipmentManager) {
+        // Would create weapon from exchange data
+        console.log(`[LootManager] Granted weapon: ${exchange.name}`);
+      }
+      this._queueNotification(`Obtained: ${exchange.name}`, 0xffd700);
+    } else if (exchange.type === 'spell') {
+      // Add to spell manager
+      if (this.gm?.spellManager) {
+        // Would unlock spell
+        console.log(`[LootManager] Unlocked spell: ${exchange.name}`);
+      }
+      this._queueNotification(`Learned: ${exchange.name}`, 0x4488ff);
+    }
+
+    this._saveInventory();
+    return true;
   }
 }

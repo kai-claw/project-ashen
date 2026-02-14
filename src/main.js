@@ -30,6 +30,8 @@ import { SpellManager } from './systems/SpellManager.js';
 import { SpellCaster } from './systems/SpellCaster.js';
 import { SpellEffects } from './systems/SpellEffects.js';
 import { BossUI } from './ui/BossUI.js';
+import { createBossSpawner } from './systems/BossSpawner.js';
+import { bossRenderer } from './systems/BossRenderer.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -324,6 +326,45 @@ hud.setSpellManager(spellManager);
 const bossUI = new BossUI(gameManager);
 gameManager.bossUI = bossUI;
 
+// --- Boss Spawner System (Phase 21) ---
+const bossSpawner = createBossSpawner(scene, world, enemyManager, null); // null for saveManager (optional)
+gameManager.bossSpawner = bossSpawner;
+
+// Wire boss events to UI
+bossSpawner.onBossActivate = (bossData) => {
+  console.log(`[Main] Boss fight started: ${bossData.name}`);
+  bossUI.showBoss(bossData);
+  // Optional: Change music here
+  if (audioManager) {
+    audioManager.play('bossMusic', { volume: 0.6, loop: true });
+  }
+};
+
+bossSpawner.onBossDefeated = (bossData, arena) => {
+  console.log(`[Main] Boss defeated: ${bossData.name}`);
+  bossUI.hideBoss();
+  
+  // Generate boss loot
+  const isFirstKill = !localStorage.getItem(`boss_killed_${bossData.id}`);
+  if (lootManager) {
+    lootManager.generateBossLoot(bossData.id, arena.position, isFirstKill);
+  }
+  
+  // Track first kill
+  if (isFirstKill) {
+    localStorage.setItem(`boss_killed_${bossData.id}`, 'true');
+  }
+  
+  // Optional: Play victory fanfare
+  if (audioManager) {
+    audioManager.stop('bossMusic');
+    audioManager.play('victory', { volume: 0.7 });
+  }
+};
+
+// Initialize boss spawner after player is ready
+bossSpawner.initialize(player);
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -398,6 +439,26 @@ function animate() {
     // Update chests for infinite world (placement + interaction)
     if (chestManager && chestManager.update) {
       chestManager.update(player.mesh.position.x, player.mesh.position.z, delta);
+    }
+    
+    // Update boss spawner (Phase 21) - handles boss arenas, spawns, proximity triggers
+    if (bossSpawner) {
+      bossSpawner.update(delta);
+      
+      // Update BossUI with boss health if in a fight
+      const currentBoss = bossSpawner.getCurrentBossFight();
+      if (currentBoss && bossUI) {
+        bossUI.updateHealth(currentBoss.health, currentBoss.data.stats.maxHealth);
+        bossUI.updatePosture(currentBoss.posture, currentBoss.data.stats.maxPosture);
+        
+        // Check for phase changes
+        const healthPercent = currentBoss.health / currentBoss.data.stats.maxHealth;
+        const newPhase = currentBoss.data.phases.filter(p => healthPercent <= p.threshold).pop();
+        if (newPhase && newPhase.id !== currentBoss.currentPhase) {
+          bossSpawner.updateBossPhase(currentBoss.id, newPhase.id, newPhase.visualChange);
+          bossUI.setPhase(newPhase.id, currentBoss.data.phases.length);
+        }
+      }
     }
     
     // Boss arena update (ritual circle damage pulse in Phase 2)
