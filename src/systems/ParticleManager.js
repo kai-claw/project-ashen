@@ -600,7 +600,7 @@ export class ParticleManager {
       }
     }
 
-    // Update slash trails
+    // Update slash trails and attack arcs
     for (let i = this.slashTrails.length - 1; i >= 0; i--) {
       const t = this.slashTrails[i];
       t.life += delta;
@@ -608,10 +608,27 @@ export class ParticleManager {
       const progress = t.life / t.maxLife;
       const scale = THREE.MathUtils.lerp(t.scaleStart, t.scaleEnd, progress);
       t.mesh.scale.setScalar(scale);
+      
+      // Attack arc rotation animation (swinging motion)
+      if (t.isAttackArc && t.rotationSpeed) {
+        // Ease-out rotation for impact feel
+        const rotProgress = Math.pow(progress, 0.6);
+        t.mesh.rotation.z = t.initialRotationZ + rotProgress * t.rotationSpeed;
+        
+        // Fade out with eased opacity
+        if (t.material) {
+          const fadeStart = 0.4; // Start fading at 40% through animation
+          if (progress > fadeStart) {
+            const fadeProgress = (progress - fadeStart) / (1 - fadeStart);
+            t.material.opacity = (1 - fadeProgress) * 0.85;
+          }
+        }
+      }
 
       if (t.life >= t.maxLife) {
         this.scene.remove(t.mesh);
         t.ownedGeometry?.dispose();
+        t.material?.dispose();
         this.slashTrails.splice(i, 1);
       }
     }
@@ -1087,6 +1104,117 @@ export class ParticleManager {
         pool: this.ringPool,
       });
     }
+  }
+
+  /**
+   * Spawn attack arc effect - weapon swing trail
+   * Creates an animated arc that follows the swing motion
+   */
+  spawnAttackArc(position, direction, isHeavy = false) {
+    const arcColor = isHeavy ? 0xff6644 : 0x88aaff;
+    const arcRadius = isHeavy ? 2.0 : 1.6;
+    const arcAngle = isHeavy ? Math.PI * 0.8 : Math.PI * 0.6;
+    const arcThickness = isHeavy ? 0.18 : 0.12;
+    const arcDuration = isHeavy ? 0.35 : 0.22;
+    
+    // Create arc geometry
+    const segments = 16;
+    const shape = new THREE.Shape();
+    
+    // Draw arc shape
+    for (let i = 0; i <= segments; i++) {
+      const angle = -arcAngle / 2 + (arcAngle * i) / segments;
+      const x = Math.cos(angle) * arcRadius;
+      const y = Math.sin(angle) * arcRadius;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    }
+    // Inner edge
+    for (let i = segments; i >= 0; i--) {
+      const angle = -arcAngle / 2 + (arcAngle * i) / segments;
+      const x = Math.cos(angle) * (arcRadius - arcThickness);
+      const y = Math.sin(angle) * (arcRadius - arcThickness);
+      shape.lineTo(x, y);
+    }
+    shape.closePath();
+    
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({
+      color: arcColor,
+      transparent: true,
+      opacity: isHeavy ? 0.85 : 0.7,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    mesh.position.y += 1.1;
+    
+    // Orient arc to face attack direction
+    const yaw = Math.atan2(direction.x, direction.z);
+    mesh.rotation.y = yaw;
+    
+    // Tilt for visual appeal - heavy swings downward, light swings horizontal
+    mesh.rotation.x = isHeavy ? -0.6 : 0.15;
+    mesh.rotation.z = isHeavy ? 0.2 : -0.1;
+    
+    this.scene.add(mesh);
+    
+    // Add trailing particles along the arc
+    const particleCount = isHeavy ? 10 : 6;
+    for (let i = 0; i < particleCount; i++) {
+      const sparkMesh = this._getFromPool(this.sparkPool);
+      if (!sparkMesh) continue;
+      
+      const angle = -arcAngle / 2 + (arcAngle * i) / (particleCount - 1);
+      const sparkPos = position.clone();
+      sparkPos.y += 1.1;
+      
+      // Position along arc
+      const localX = Math.cos(angle) * arcRadius;
+      const localY = Math.sin(angle) * arcRadius;
+      
+      // Transform to world space based on direction
+      sparkPos.x += localX * Math.cos(yaw) - localY * Math.sin(yaw) * 0.3;
+      sparkPos.z += localX * Math.sin(yaw) + localY * Math.cos(yaw) * 0.3;
+      sparkPos.y += localY * 0.7;
+      
+      sparkMesh.position.copy(sparkPos);
+      sparkMesh.userData.isAttackSpark = true;
+      
+      // Sparks fly outward from arc
+      const outSpeed = isHeavy ? 3 : 2;
+      this.particles.push({
+        mesh: sparkMesh,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * outSpeed,
+          (Math.random() - 0.5) * outSpeed,
+          (Math.random() - 0.5) * outSpeed
+        ),
+        gravity: -8,
+        life: 0,
+        maxLife: 0.2 + Math.random() * 0.15,
+        type: 'spark',
+        isAttackSpark: true,
+        pool: this.sparkPool,
+      });
+    }
+    
+    // Track arc for animation
+    this.slashTrails.push({
+      mesh,
+      life: 0,
+      maxLife: arcDuration,
+      scaleStart: 0.2,
+      scaleEnd: 1.0,
+      ownedGeometry: geometry,
+      material: material, // Track for disposal
+      isAttackArc: true,
+      rotationSpeed: isHeavy ? 2.5 : 4.0, // Arc rotation during swing
+      initialRotationZ: mesh.rotation.z,
+    });
   }
 
   /**

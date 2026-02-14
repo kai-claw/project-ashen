@@ -27,14 +27,15 @@ const COSTS = {
 const TIMINGS = {
   dodgeDuration: 0.45,
   dodgeIframes: 0.3,
-  lightAttackDuration: 0.4,
-  heavyAttackDuration: 0.7,
-  lightHitStart: 0.1,
-  lightHitEnd: 0.25,
-  heavyHitStart: 0.2,
-  heavyHitEnd: 0.4,
+  // IMPROVED ATTACK TIMINGS - snappier with better anticipation/recovery
+  lightAttackDuration: 0.35,     // Slightly faster overall
+  heavyAttackDuration: 0.65,    // Slightly faster, still weighty
+  lightHitStart: 0.06,          // Earlier hit window - snappy
+  lightHitEnd: 0.18,            // Short hit window
+  heavyHitStart: 0.15,          // Wind-up before hit
+  heavyHitEnd: 0.35,            // Longer active frames
   staggerDuration: 0.8,
-  comboWindow: 0.15,
+  comboWindow: 0.12,            // Tighter combo window for skill
   // Ability timings
   dashDuration: 0.25,
   dashIframes: 0.2,
@@ -246,18 +247,27 @@ export class Player {
       clampWhenFinished: state === STATES.DEAD,
     };
 
-    // Speed adjustments per state
+    // Speed adjustments per state - IMPROVED for attack feel
     if (state === STATES.ATTACKING) {
-      defaultOptions.timeScale = 1.3 + (this.attackCombo * 0.1);
+      // Light attack: fast and snappy, speeds up with combo
+      defaultOptions.timeScale = 1.6 + (this.attackCombo * 0.15);
       defaultOptions.loop = false;
+      defaultOptions.fadeIn = 0.05; // Instant transition for responsiveness
     } else if (state === STATES.HEAVY_ATTACKING) {
-      defaultOptions.timeScale = 0.9;
+      // Heavy attack: slower wind-up, powerful follow-through
+      defaultOptions.timeScale = 0.75;
       defaultOptions.loop = false;
+      defaultOptions.fadeIn = 0.1;
     } else if (state === STATES.DODGING) {
       defaultOptions.timeScale = 1.5;
       defaultOptions.loop = false;
     } else if (state === STATES.MOVING) {
       defaultOptions.timeScale = 1.2;
+    } else if (state === STATES.CHARGED_ATTACKING) {
+      // Charged attack: dramatic and weighty
+      defaultOptions.timeScale = 0.65;
+      defaultOptions.loop = false;
+      defaultOptions.fadeIn = 0.08;
     }
 
     const mergedOptions = { ...defaultOptions, ...options };
@@ -740,10 +750,23 @@ export class Player {
     // Add Math.PI offset to match GLTF model's default orientation
     this.mesh.rotation.y = camYaw + Math.PI;
     
+    // Visual anticipation - flash weapon glow based on attack type
+    if (isHeavy) {
+      // Heavy attack: dramatic orange/red wind-up glow
+      this._flashModel(0xff6622, 200);
+    } else {
+      // Light attack: quick blue flash
+      this._flashModel(0x4488ff, 80);
+    }
+    
+    // Spawn attack arc trail
     if (this.gm.particleManager) {
-      // Slash trail disabled - was creating visual artifacts
-      // const attackDir = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
-      // this.gm.particleManager.spawnSlashTrail(this.mesh.position.clone(), attackDir, isHeavy);
+      const attackDir = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+      this.gm.particleManager.spawnAttackArc(
+        this.mesh.position.clone(),
+        attackDir,
+        isHeavy
+      );
     }
     
     this._changeState(isHeavy ? STATES.HEAVY_ATTACKING : STATES.ATTACKING);
@@ -769,9 +792,23 @@ export class Player {
 
     // Forward direction must match movement formula (negative sin/cos)
     const fwd = new THREE.Vector3(-Math.sin(this.facingAngle), 0, -Math.cos(this.facingAngle));
-    const lungeSpeed = isHeavy ? 3 : 2;
+    
+    // IMPROVED LUNGE: Different curves for light vs heavy
     if (this.stateTimer < hitEnd) {
-      this.mesh.position.addScaledVector(fwd, lungeSpeed * delta);
+      const lungeProgress = this.stateTimer / hitEnd;
+      
+      if (isHeavy) {
+        // Heavy: slow start, explosive burst at impact
+        const heavyCurve = Math.pow(lungeProgress, 0.5); // Accelerating curve
+        const lungeSpeed = 5 * (1 - heavyCurve * 0.5); // Fast at start, slows at end
+        this.mesh.position.addScaledVector(fwd, lungeSpeed * delta);
+      } else {
+        // Light: quick burst forward, maintains momentum
+        const lightCurve = Math.sin(lungeProgress * Math.PI * 0.5); // Ease-out
+        const lungeSpeed = 4 * (1 - lightCurve * 0.3);
+        this.mesh.position.addScaledVector(fwd, lungeSpeed * delta);
+      }
+      
       // Apply wall collision during attack lunge
       this._applyWallCollision();
     }
