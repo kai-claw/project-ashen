@@ -27,6 +27,51 @@ const STATES = {
   BOSS_PROJECTILE: 'boss_projectile', // Dark magic projectile
 };
 
+// ========== ATTACK VARIETY SYSTEM ==========
+// Regular enemy attack types based on context
+const ATTACK_TYPES = {
+  NORMAL: 'normal',      // Default balanced attack
+  QUICK_JAB: 'quick_jab', // Fast attack when player moving/dodging
+  HEAVY: 'heavy',        // Slow windup, high damage when player stationary
+  COMBO: 'combo',        // Multi-hit chain (elite enemies only)
+};
+
+// Attack type configurations (multipliers of base stats)
+const ATTACK_CONFIGS = {
+  [ATTACK_TYPES.NORMAL]: {
+    windupMult: 1.0,
+    damageMult: 1.0,
+    postureMult: 1.0,
+    cooldownMult: 1.0,
+    rangeMult: 1.0,
+    tell: 'normal',     // Visual tell type
+  },
+  [ATTACK_TYPES.QUICK_JAB]: {
+    windupMult: 0.5,    // 50% faster windup
+    damageMult: 0.6,    // Lower damage
+    postureMult: 0.5,   // Low posture damage
+    cooldownMult: 0.7,  // Faster recovery
+    rangeMult: 0.85,    // Slightly shorter range
+    tell: 'jab',        // Quick flash
+  },
+  [ATTACK_TYPES.HEAVY]: {
+    windupMult: 1.8,    // 80% slower windup (learnable)
+    damageMult: 1.6,    // High damage
+    postureMult: 2.0,   // Heavy posture damage
+    cooldownMult: 1.5,  // Longer recovery (punish window)
+    rangeMult: 1.2,     // Slightly longer range
+    tell: 'heavy',      // Dramatic windup
+  },
+  [ATTACK_TYPES.COMBO]: {
+    windupMult: 0.7,    // Faster first hit
+    damageMult: 0.5,    // Each hit does less
+    postureMult: 0.6,
+    cooldownMult: 0.4,  // Very short between combo hits
+    rangeMult: 1.0,
+    tell: 'combo',      // Series of quick flashes
+  },
+};
+
 // Animation name mapping for robot_expressive.glb
 const ENEMY_ANIM_MAP = {
   [STATES.IDLE]: 'Idle',
@@ -74,6 +119,13 @@ export const ENEMY_TYPES = {
     maxPosture: 60,
     hasShield: false,
     canRetreat: false,     // Basic melee - stands ground
+    // Attack variety - basic enemy, mostly normal attacks
+    attackVariety: {
+      enabled: true,
+      heavyChance: 0.2,      // 20% heavy if player stationary
+      quickJabChance: 0.3,   // 30% jab if player moving
+      comboEnabled: false,   // No combos for basic enemy
+    },
     // GLTF settings - use relative path, BASE_URL added at load time
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.5,
@@ -101,6 +153,15 @@ export const ENEMY_TYPES = {
     hasShield: false,
     canRetreat: false,     // Aggressive berserker - never retreats
     canFlank: true,        // Fast/aggressive - flanks when grouped
+    // Attack variety - aggressive with combos and quick jabs
+    attackVariety: {
+      enabled: true,
+      heavyChance: 0.05,     // Rarely winds up (too aggressive)
+      quickJabChance: 0.5,   // 50% quick jab if player moving
+      comboEnabled: true,    // Uses combo chains
+      comboChance: 0.4,      // 40% chance to start combo
+      maxComboHits: 3,       // Up to 3-hit combo
+    },
     // GLTF settings - use relative path, BASE_URL added at load time
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.55,
@@ -127,6 +188,13 @@ export const ENEMY_TYPES = {
     hasShield: true,
     shieldBlockChance: 0.4,
     canRetreat: false,     // Tank with shield - stands ground
+    // Attack variety - tank favors heavy, learnable attacks
+    attackVariety: {
+      enabled: true,
+      heavyChance: 0.6,      // 60% heavy if player stationary
+      quickJabChance: 0.15,  // Rarely jabs (too slow)
+      comboEnabled: false,   // No combos for tank
+    },
     // GLTF settings - use relative path, BASE_URL added at load time
     modelPath: 'assets/models/soldier.glb',
     modelScale: 0.9,
@@ -156,6 +224,15 @@ export const ENEMY_TYPES = {
     hasShield: false,      // No shield, pure aggression
     isElite: true,         // Flag for special behaviors
     canRetreat: false,     // Elite guardian - never retreats
+    // Attack variety - elite with 2-hit combos
+    attackVariety: {
+      enabled: true,
+      heavyChance: 0.35,     // 35% heavy
+      quickJabChance: 0.25,  // Some jabs to mix it up
+      comboEnabled: true,    // Uses 2-hit combos
+      comboChance: 0.35,     // 35% combo
+      maxComboHits: 2,       // 2-hit combo
+    },
     // GLTF settings
     modelPath: 'assets/models/soldier.glb',
     modelScale: 1.2,       // Larger than normal
@@ -188,6 +265,15 @@ export const ENEMY_TYPES = {
     retreatHealthThreshold: 0.25,  // Retreat at 25% HP
     retreatDistance: 12,   // Retreat 12 units before re-engaging
     canFlank: true,        // Fast/rogue type - flanks when grouped
+    // Attack variety - fast, unpredictable with quick combos
+    attackVariety: {
+      enabled: true,
+      heavyChance: 0.1,      // Rarely heavy (too fast)
+      quickJabChance: 0.55,  // 55% quick jab
+      comboEnabled: true,    // Quick 2-hit combos
+      comboChance: 0.3,      // 30% combo
+      maxComboHits: 2,       // 2-hit combo
+    },
     // GLTF settings
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.45,      // Slightly smaller
@@ -344,6 +430,22 @@ export class Enemy {
     this.canAttackInGroup = true;     // EnemyManager sets false when max attackers reached
     this.lastGroupAttackTime = 0;     // Timestamp of last attack in group context
     this.groupEngageTime = 0;         // When this enemy first engaged with group
+    
+    // ========== ATTACK VARIETY SYSTEM ==========
+    const av = this.config.attackVariety || {};
+    this.attackVarietyEnabled = av.enabled || false;
+    this.currentAttackType = ATTACK_TYPES.NORMAL;  // Current attack being performed
+    this.lastAttackType = null;                    // Previous attack type
+    this.attackTypeCooldowns = {                   // Cooldowns per attack type
+      [ATTACK_TYPES.HEAVY]: 0,
+      [ATTACK_TYPES.QUICK_JAB]: 0,
+      [ATTACK_TYPES.COMBO]: 0,
+    };
+    this.playerLastPos = null;         // Track player position for movement detection
+    this.playerMoveSpeed = 0;          // Estimated player movement speed
+    this.comboHitsRemaining = 0;       // Hits left in current combo
+    this.attackTellActive = false;     // True during attack tell animation
+    this.attackTellStartTime = 0;      // When tell started
     
     // ========== BOSS-SPECIFIC INITIALIZATION ==========
     if (this.config.isBoss) {
@@ -2116,14 +2218,34 @@ export class Enemy {
   }
 
   _processAttack(delta, player) {
-    const windupTime = this.config.attackWindup;
-    const strikeTime = windupTime + this.config.attackDuration;
+    // ========== ATTACK VARIETY: Select attack type on first frame ==========
+    if (this.stateTimer < delta * 2 && this.attackVarietyEnabled) {
+      this._selectAttackType(player);
+    }
     
+    // Get attack configuration based on current attack type
+    const attackConfig = this.attackVarietyEnabled 
+      ? ATTACK_CONFIGS[this.currentAttackType] || ATTACK_CONFIGS[ATTACK_TYPES.NORMAL]
+      : ATTACK_CONFIGS[ATTACK_TYPES.NORMAL];
+    
+    // Calculate timing with multipliers
+    const windupTime = this.config.attackWindup * attackConfig.windupMult;
+    const strikeDuration = this.config.attackDuration;
+    const strikeTime = windupTime + strikeDuration;
+    const cooldownTime = this.config.attackCooldown * attackConfig.cooldownMult;
+    
+    // ========== WINDUP PHASE (with visible tells) ==========
     if (this.stateTimer < windupTime) {
       this._faceTarget(player.mesh.position, delta * 2);
+      
+      // Visual tell based on attack type
+      if (this.attackVarietyEnabled) {
+        this._showAttackTell(attackConfig.tell, this.stateTimer / windupTime);
+      }
       return;
     }
 
+    // ========== STRIKE PHASE ==========
     if (this.stateTimer >= windupTime && this.stateTimer < strikeTime) {
       if (!this.hitThisSwing) {
         const attackDir = new THREE.Vector3(
@@ -2131,21 +2253,67 @@ export class Enemy {
           0,
           Math.cos(this.mesh.rotation.y)
         );
+        
+        // Apply damage/range multipliers
+        const damage = Math.floor(this.config.damage * attackConfig.damageMult);
+        const postureDmg = Math.floor(this.config.postureDmg * attackConfig.postureMult);
+        const range = this.config.attackRange * attackConfig.rangeMult;
+        
         this.activeAttack = {
           position: this.mesh.position.clone().add(attackDir.multiplyScalar(1.0)).add(new THREE.Vector3(0, 1, 0)),
-          range: this.config.attackRange,
-          damage: this.config.damage,
-          postureDmg: this.config.postureDmg,
+          range: range,
+          damage: damage,
+          postureDmg: postureDmg,
+          attackType: this.currentAttackType,
+          isHeavy: this.currentAttackType === ATTACK_TYPES.HEAVY,
         };
+        
+        // Play sound with pitch variation based on attack type
+        if (this.gm?.audioManager) {
+          const pitch = this.currentAttackType === ATTACK_TYPES.HEAVY ? 0.7 :
+                       this.currentAttackType === ATTACK_TYPES.QUICK_JAB ? 1.3 : 1.0;
+          this.gm.audioManager.play('swordSwing', { 
+            position: this.mesh.position, 
+            volume: 0.6,
+            pitch: pitch
+          });
+        }
+        
+        this.hitThisSwing = true;
       }
+      
+      // Reset visual tell
+      this._resetAttackTell();
     }
 
-    if (this.stateTimer >= this.config.attackCooldown) {
+    // ========== RECOVERY PHASE ==========
+    if (this.stateTimer >= cooldownTime) {
       this.hitThisSwing = false;
       this.activeAttack = null;
+      this.lastAttackType = this.currentAttackType;
+      
+      // Set cooldown for the attack type just used
+      if (this.attackVarietyEnabled) {
+        this.attackTypeCooldowns[this.currentAttackType] = 3.0; // 3s cooldown per type
+      }
 
       const distToPlayer = this.mesh.position.distanceTo(player.mesh.position);
       
+      // ========== COMBO CONTINUATION ==========
+      // Check for combo attacks (ATTACK_TYPES.COMBO or legacy canChainAttacks)
+      const isInCombo = this.currentAttackType === ATTACK_TYPES.COMBO || 
+                        (this.config.canChainAttacks && this.comboHitsRemaining > 0);
+      
+      if (isInCombo && distToPlayer <= this.config.attackRange * 1.3) {
+        this.comboHitsRemaining--;
+        if (this.comboHitsRemaining > 0) {
+          this.currentAttackType = ATTACK_TYPES.COMBO;
+          this._changeState(STATES.ATTACK);
+          return;
+        }
+      }
+      
+      // Legacy chain attack support
       if (this.config.canChainAttacks && distToPlayer <= this.config.attackRange * 1.3) {
         this.chainAttackCount++;
         if (this.chainAttackCount < this.config.maxChainAttacks) {
@@ -2154,7 +2322,10 @@ export class Enemy {
         }
       }
       
+      // Reset combo/chain state
       this.chainAttackCount = 0;
+      this.comboHitsRemaining = 0;
+      this.currentAttackType = ATTACK_TYPES.NORMAL;
       
       if (distToPlayer <= this.config.attackRange) {
         this._changeState(STATES.ATTACK);
@@ -2162,6 +2333,137 @@ export class Enemy {
         this._changeState(STATES.CHASE);
       }
     }
+  }
+  
+  // ========== ATTACK TYPE SELECTION (based on player behavior) ==========
+  _selectAttackType(player) {
+    const av = this.config.attackVariety || {};
+    if (!av.enabled) {
+      this.currentAttackType = ATTACK_TYPES.NORMAL;
+      return;
+    }
+    
+    // Track player movement
+    const playerPos = player.mesh.position.clone();
+    if (this.playerLastPos) {
+      this.playerMoveSpeed = playerPos.distanceTo(this.playerLastPos);
+    }
+    this.playerLastPos = playerPos;
+    
+    // Determine if player is moving (threshold ~0.05 per frame)
+    const playerIsMoving = this.playerMoveSpeed > 0.03;
+    const playerIsStationary = this.playerMoveSpeed < 0.01;
+    
+    // Update cooldowns
+    for (const type in this.attackTypeCooldowns) {
+      if (this.attackTypeCooldowns[type] > 0) {
+        this.attackTypeCooldowns[type] -= 0.016; // ~1 frame
+      }
+    }
+    
+    const roll = Math.random();
+    let selectedType = ATTACK_TYPES.NORMAL;
+    
+    // ========== COMBO: Check first (highest priority for elite enemies) ==========
+    if (av.comboEnabled && this.attackTypeCooldowns[ATTACK_TYPES.COMBO] <= 0) {
+      const comboChance = av.comboChance || 0.3;
+      if (roll < comboChance) {
+        selectedType = ATTACK_TYPES.COMBO;
+        this.comboHitsRemaining = av.maxComboHits || 2;
+      }
+    }
+    
+    // ========== HEAVY: If player is stationary (punish passive play) ==========
+    if (selectedType === ATTACK_TYPES.NORMAL && 
+        playerIsStationary && 
+        this.attackTypeCooldowns[ATTACK_TYPES.HEAVY] <= 0) {
+      const heavyChance = av.heavyChance || 0.25;
+      if (roll < heavyChance) {
+        selectedType = ATTACK_TYPES.HEAVY;
+      }
+    }
+    
+    // ========== QUICK JAB: If player is moving (catch dodging players) ==========
+    if (selectedType === ATTACK_TYPES.NORMAL && 
+        playerIsMoving && 
+        this.attackTypeCooldowns[ATTACK_TYPES.QUICK_JAB] <= 0) {
+      const jabChance = av.quickJabChance || 0.3;
+      if (roll < jabChance) {
+        selectedType = ATTACK_TYPES.QUICK_JAB;
+      }
+    }
+    
+    // Avoid repeating same attack type twice in a row (variety)
+    if (selectedType === this.lastAttackType && selectedType !== ATTACK_TYPES.COMBO) {
+      // 50% chance to force normal instead
+      if (Math.random() < 0.5) {
+        selectedType = ATTACK_TYPES.NORMAL;
+      }
+    }
+    
+    this.currentAttackType = selectedType;
+  }
+  
+  // ========== VISUAL TELLS (learnable patterns) ==========
+  _showAttackTell(tellType, progress) {
+    const targetModel = this.gltfModel || this.fallbackBody;
+    if (!targetModel) return;
+    
+    switch (tellType) {
+      case 'heavy':
+        // Heavy attack: dramatic lean back, slow buildup
+        targetModel.rotation.x = -progress * 0.35;  // Lean back
+        targetModel.position.y = progress * 0.15;   // Rise slightly
+        // Red glow intensifies
+        if (this.eye && progress > 0.3) {
+          this.eye.material.emissiveIntensity = 4 + progress * 4;
+        }
+        // Flash red at 50% and 80% progress (warning pulses)
+        if ((progress > 0.5 && progress < 0.55) || (progress > 0.8 && progress < 0.85)) {
+          this._flashModel(0xff2222, 50);
+        }
+        break;
+        
+      case 'jab':
+        // Quick jab: minimal windup, slight crouch
+        targetModel.position.y = -progress * 0.08;  // Quick crouch
+        break;
+        
+      case 'combo':
+        // Combo: aggressive forward lean, rapid flashes
+        targetModel.rotation.x = progress * 0.15;   // Lean forward
+        // Quick yellow flashes
+        if (progress > 0.6 && Math.random() < 0.3) {
+          this._flashModel(0xffaa00, 30);
+        }
+        break;
+        
+      case 'normal':
+      default:
+        // Normal: standard balanced windup
+        targetModel.rotation.x = -progress * 0.1;   // Slight lean back
+        break;
+    }
+    
+    this.attackTellActive = true;
+  }
+  
+  _resetAttackTell() {
+    if (!this.attackTellActive) return;
+    
+    const targetModel = this.gltfModel || this.fallbackBody;
+    if (targetModel) {
+      // Smoothly reset transforms
+      targetModel.rotation.x = 0;
+      targetModel.position.y = 0;
+    }
+    
+    // Reset eye intensity
+    if (this.eye) {
+      this.eye.material.emissiveIntensity = 4;
+    }
+    
+    this.attackTellActive = false;
   }
 
   takeDamage(amount, postureDmg = 0, attackerPos = null) {
