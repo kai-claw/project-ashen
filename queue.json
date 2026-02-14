@@ -36,9 +36,27 @@
       "status": "ready-for-review",
       "worker": 2,
       "description": "Gameplay integration for time/weather: night enemies, NPC schedules, visibility, crafting, debuffs, campfires",
-      "workerNotes": "Created TimeWeatherGameplay.js with comprehensive gameplay integration: (1) NIGHT_ENEMIES: wraith, shadow_stalker, night_howler, phantom with spawn hours, moon phase bonuses, stats, special abilities, loot tables, (2) SHOP_HOURS: 6 shop types with open/close times (black_market night-only), (3) NPC_SCHEDULES: VILLAGER/GUARD/MERCHANT daily routines, (4) TIME_LOCKED_RECIPES: moonlit_blade, sun_essence, dawn_elixir, dusk_potion, starlight_crystal, shadow_cloak with phase/hour/moon requirements, (5) WEATHER_EFFECTS: movement/stamina/torch/fire/detection modifiers per weather type, debuffs (wet, soaked, chilled, frostbite), cold damage, lightning chance, (6) REST_CONFIG: campfire rest system advancing 6 hours, health/stamina regen, warmth buff for 30 game hours with cold immunity, (7) DETECTION_MODIFIERS: reduced visibility at night/fog, (8) SPAWN_RATE_MODIFIERS: 1.8x hostile spawns at night. Also added: Weather HUD indicator with debuff icons, tutorial hints for night danger and weather hazards, shop closed messages when trying to shop after hours, time-locked recipe checks in CraftingManager, night enemy spawning in EnemyManager with dawn fade-out, getCampfires() in VillageManager for warmth proximity. Built, deployed, and committed."
+      "workerNotes": "Created TimeWeatherGameplay.js with comprehensive gameplay integration: (1) NIGHT_ENEMIES: wraith, shadow_stalker, night_howler, phantom with spawn hours, moon phase bonuses, stats, special abilities, loot tables, (2) SHOP_HOURS: 6 shop types with open/close times (black_market night-only), (3) NPC_SCHEDULES: VILLAGER/GUARD/MERCHANT daily routines, (4) TIME_LOCKED_RECIPES: moonlit_blade, sun_essence, dawn_elixir, dusk_potion, starlight_crystal, shadow_cloak with phase/hour/moon requirements, (5) WEATHER_EFFECTS: movement/stamina/torch/fire/detection modifiers per weather type, debuffs (wet, soaked, chilled, frostbite), cold damage, lightning chance, (6) REST_CONFIG: campfire rest system advancing 6 hours, health/stamina regen, warmth buff for 30 game hours with cold immunity, (7) DETECTION_MODIFIERS: reduced visibility at night/fog, (8) SPAWN_RATE_MODIFIERS: 1.8x hostile spawns at night. Also added: Weather HUD indicator with debuff icons, tutorial hints for night danger and weather hazards."
+    },
+    {
+      "id": "weather-data",
+      "name": "WeatherData.js",
+      "priority": "P0",
+      "status": "ready-for-review",
+      "worker": 2,
+      "description": "Centralized weather type definitions with gameplay flags and rare celestial events",
+      "workerNotes": "Created src/data/WeatherData.js with: (1) WEATHER_TYPES enum for 9 weather types, (2) WEATHER_CONFIG with full properties: ambientColor, fogDensity, fogColor, skyTint, particleType, soundLoop, lightIntensity plus GAMEPLAY FLAGS: wetGround, coldDebuff, reducedVisibility, movementPenalty, staminaDrain, (3) BIOME_WEATHER_PROBABILITIES for 6 biomes (default, forest, mountain, swamp, desert, tundra), (4) WEATHER_DURATION (5-30 game hours) and WEATHER_TRANSITION_TIME (60 sec), (5) RARE_EVENTS system with 5 celestial events: BLOOD_MOON (crimson moon, 1.5x enemy damage, 3x night spawns, special loot), METEOR_SHOWER (falling meteors, collectible meteorites including rare void_crystal), AURORA (magic power buffs, mana regen, rare herbs), SOLAR_ECLIPSE (darkness at noon, night creatures active, shadow magic 2x), SPIRIT_NIGHT (ghost NPCs, spirit quests, ethereal visuals), (6) Each event has triggerConditions, duration, visuals, effects, sounds, (7) checkRareEventTrigger() and getPossibleRareEvents() helper functions"
+    },
+    {
+      "id": "rare-events",
+      "name": "RareEventManager.js",
+      "priority": "P1",
+      "status": "ready-for-review",
+      "worker": 2,
+      "description": "System to trigger, display, and manage rare celestial events",
+      "workerNotes": "Created src/systems/RareEventManager.js with: (1) Event triggering based on WeatherData conditions (moon phase, time, weather, biome), (2) Visual effects per event type - Blood Moon (red ambient/fog tint), Meteor Shower (falling meteor particles with impact spawns), Aurora (color-wave lights), Solar Eclipse (darkness + corona pulse), Spirit Night (wandering spirit wisps), (3) Event banner UI with themed styling per event type, (4) Meteorite collection system (3-8 per shower, rare drops like void_crystal), (5) Event cooldowns (1 hour between same events), (6) Save/load persistence for cooldowns and active events, (7) Integration with TimeManager hour changes for event checks, (8) getEventEffects() for gameplay systems to query active bonuses/penalties, (9) forceEvent() for testing/scripting, (10) Integrated into main.js game loop with update(delta, playerPosition)"
     }
   ],
-  "lastUpdated": "2026-02-14T20:51:00Z",
-  "workerStatus": "All subtasks ready-for-review. Build verified ✓"
+  "lastUpdated": "2026-02-14T20:56:00Z",
+  "workerStatus": "All 6 subtasks ready-for-review. Build verified ✓ Deploy verified ✓"
 }
