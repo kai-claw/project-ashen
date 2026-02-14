@@ -8,6 +8,7 @@ const STATES = {
   CHASE: 'chase',
   CIRCLE: 'circle',
   RETREAT: 'retreat',
+  FLANK: 'flank',      // Flanking maneuver - approach from side
   ATTACK: 'attack',
   STAGGERED: 'staggered',
   DEAD: 'dead',
@@ -33,6 +34,7 @@ const ENEMY_ANIM_MAP = {
   [STATES.CHASE]: 'Running',
   [STATES.CIRCLE]: 'Walking',
   [STATES.RETREAT]: 'Walking',
+  [STATES.FLANK]: 'Walking',
   [STATES.ATTACK]: 'Punch',
   [STATES.STAGGERED]: 'No',
   [STATES.DEAD]: 'Death',
@@ -98,6 +100,7 @@ export const ENEMY_TYPES = {
     maxPosture: 40,
     hasShield: false,
     canRetreat: false,     // Aggressive berserker - never retreats
+    canFlank: true,        // Fast/aggressive - flanks when grouped
     // GLTF settings - use relative path, BASE_URL added at load time
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.55,
@@ -184,6 +187,7 @@ export const ENEMY_TYPES = {
     canRetreat: true,      // Fast, fragile - retreats when hurt
     retreatHealthThreshold: 0.25,  // Retreat at 25% HP
     retreatDistance: 12,   // Retreat 12 units before re-engaging
+    canFlank: true,        // Fast/rogue type - flanks when grouped
     // GLTF settings
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.45,      // Slightly smaller
@@ -319,6 +323,15 @@ export class Enemy {
     this.retreatStartPos = null;     // Position when retreat started
     this.isRetreating = false;       // Active retreat flag
     this.retreatWallHits = 0;        // Count wall collisions during retreat
+    
+    // ========== FLANKING BEHAVIOR ==========
+    this.canFlank = this.config.canFlank || false;
+    this.flankCooldown = 5.0;        // Seconds between flank attempts
+    this.lastFlankTime = -this.flankCooldown; // Allow immediate first flank
+    this.flankTarget = null;         // Position to flank to (90° from player-enemy line)
+    this.isFlankAssigned = false;    // Set by EnemyManager when this enemy should flank
+    this.flankDirection = 1;         // 1 = flank right, -1 = flank left
+    this.flankProgress = 0;          // Track progress to flank position
     
     // ========== BOSS-SPECIFIC INITIALIZATION ==========
     if (this.config.isBoss) {
@@ -669,6 +682,18 @@ export class Enemy {
           break;
         }
         
+        // Flanking behavior - when assigned by EnemyManager and off cooldown
+        if (!this.isBoss && this.canFlank && this.isFlankAssigned) {
+          const timeSinceLastFlank = this.stateTimer + (Date.now() / 1000) - this.lastFlankTime;
+          if (timeSinceLastFlank >= this.flankCooldown) {
+            // Calculate flank position (90° from player-to-enemy line)
+            this._calculateFlankTarget(player.mesh.position);
+            this.flankProgress = 0;
+            this._changeState(STATES.FLANK);
+            break;
+          }
+        }
+        
         if (distToPlayer <= this.config.attackRange && this.bossAttackCooldown <= 0) {
           if (this.isBoss) {
             // Boss selects from special attacks
@@ -706,6 +731,61 @@ export class Enemy {
         }
         this._circleStrafe(player.mesh.position, delta);
         this._faceTarget(player.mesh.position, delta);
+        break;
+        
+      case STATES.FLANK:
+        // Flanking maneuver - move to 90° position from player-enemy line
+        this.flankProgress += delta;
+        
+        // Timeout - if flanking takes too long (>3s), fallback to direct approach
+        if (this.flankProgress > 3.0) {
+          this._endFlankManeuver(false);
+          this._changeState(STATES.CHASE);
+          break;
+        }
+        
+        // Lost player - abort flank
+        if (distToPlayer > this.config.detectionRange * 1.5) {
+          this._endFlankManeuver(false);
+          this._changeState(STATES.IDLE);
+          this.healthBarGroup.visible = false;
+          break;
+        }
+        
+        // Recalculate flank target as player moves (slight tracking)
+        if (this.flankProgress % 0.5 < delta) {
+          this._calculateFlankTarget(player.mesh.position);
+        }
+        
+        // Check if we've reached flank position
+        const distToFlankTarget = this.flankTarget 
+          ? this.mesh.position.distanceTo(this.flankTarget) 
+          : Infinity;
+        
+        // Flank position reached - attack!
+        if (distToFlankTarget < 1.5 || distToPlayer <= this.config.attackRange) {
+          this._endFlankManeuver(true);
+          this._changeState(STATES.ATTACK);
+          break;
+        }
+        
+        // Move toward flank position (slightly faster - surprise attack)
+        const preMovePos = this.mesh.position.clone();
+        this._moveToward(this.flankTarget, this.config.moveSpeed * 1.1, delta);
+        
+        // Check if blocked (didn't move enough) - abort and direct approach
+        const moved = this.mesh.position.distanceTo(preMovePos);
+        if (moved < this.config.moveSpeed * 0.5 * delta) {
+          // Blocked by obstacle - fallback to direct approach
+          this._endFlankManeuver(false);
+          this._changeState(STATES.CHASE);
+          break;
+        }
+        
+        // Face movement direction while flanking (not player)
+        if (this.flankTarget) {
+          this._faceTarget(this.flankTarget, delta);
+        }
         break;
         
       case STATES.RETREAT:
@@ -910,6 +990,83 @@ export class Enemy {
     } else {
       this.mesh.position.addScaledVector(moveDir, moveAmount);
     }
+  }
+  
+  // ========== FLANKING BEHAVIOR HELPERS ==========
+  
+  /**
+   * Calculate flank target position - 90° from player-to-enemy line
+   * @param {THREE.Vector3} playerPos - Player's current position
+   */
+  _calculateFlankTarget(playerPos) {
+    // Vector from player to this enemy
+    const toEnemy = new THREE.Vector3().subVectors(this.mesh.position, playerPos);
+    toEnemy.y = 0;
+    const currentDist = toEnemy.length();
+    toEnemy.normalize();
+    
+    // Calculate perpendicular direction (90° flank)
+    // flankDirection: 1 = right, -1 = left
+    const perpDir = new THREE.Vector3(
+      -toEnemy.z * this.flankDirection,
+      0,
+      toEnemy.x * this.flankDirection
+    );
+    
+    // Flank position: offset from player, at attack range
+    // Position is 90° from current approach angle, at ideal attack distance
+    const flankDistance = this.config.attackRange * 1.2;
+    this.flankTarget = new THREE.Vector3(
+      playerPos.x + perpDir.x * flankDistance,
+      this.mesh.position.y,
+      playerPos.z + perpDir.z * flankDistance
+    );
+    
+    // Slightly toward player so we end up in attack range
+    const toPlayer = new THREE.Vector3().subVectors(playerPos, this.flankTarget);
+    toPlayer.y = 0;
+    toPlayer.normalize();
+    this.flankTarget.addScaledVector(toPlayer, flankDistance * 0.3);
+  }
+  
+  /**
+   * End flank maneuver - clean up state and set cooldown
+   * @param {boolean} success - Whether flank completed successfully
+   */
+  _endFlankManeuver(success) {
+    this.isFlankAssigned = false;
+    this.flankTarget = null;
+    this.flankProgress = 0;
+    
+    if (success) {
+      // Successful flank - set cooldown
+      this.lastFlankTime = Date.now() / 1000;
+    } else {
+      // Failed flank (blocked) - shorter cooldown, but flip direction for next attempt
+      this.lastFlankTime = (Date.now() / 1000) - (this.flankCooldown * 0.5);
+      this.flankDirection *= -1;
+    }
+  }
+  
+  /**
+   * Request this enemy to attempt a flank (called by EnemyManager)
+   * @returns {boolean} Whether the enemy accepted the flank assignment
+   */
+  requestFlank() {
+    if (!this.canFlank) return false;
+    if (this.state === STATES.DEAD || this.state === STATES.STAGGERED) return false;
+    if (this.state === STATES.FLANK) return false; // Already flanking
+    if (this.isRetreating) return false;
+    
+    // Check cooldown
+    const timeSinceLastFlank = (Date.now() / 1000) - this.lastFlankTime;
+    if (timeSinceLastFlank < this.flankCooldown) return false;
+    
+    // Accept flank assignment
+    this.isFlankAssigned = true;
+    // Randomize flank direction
+    this.flankDirection = Math.random() > 0.5 ? 1 : -1;
+    return true;
   }
 
   // ========== BOSS ATTACK SELECTION ==========

@@ -360,6 +360,9 @@ export class EnemyManager {
     // Check for dormant enemy triggers (ambush spawns)
     this._checkDormantTriggers(player);
     
+    // Coordinate flanking behavior when multiple enemies engage
+    this._coordinateFlanking(player);
+    
     // Update regular enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
@@ -593,6 +596,62 @@ export class EnemyManager {
         if (this.gm?.cameraController) {
           this.gm.cameraController.shakeLight();
         }
+      }
+    }
+  }
+  
+  /**
+   * Coordinate flanking behavior when multiple enemies engage the player
+   * Assigns one enemy to flank when 2+ enemies are targeting same player
+   */
+  _coordinateFlanking(player) {
+    const playerPos = player.mesh.position;
+    
+    // Find enemies currently chasing/engaging the player
+    const engagingEnemies = this.enemies.filter(enemy => {
+      if (enemy.isDead || enemy.state === 'dead') return false;
+      if (enemy.state === 'staggered' || enemy.state === 'dormant') return false;
+      if (enemy.isBoss) return false; // Bosses don't flank
+      
+      // Check if enemy is in combat range (detection * 1.2)
+      const dist = enemy.mesh.position.distanceTo(playerPos);
+      if (dist > (enemy.config.detectionRange || 10) * 1.2) return false;
+      
+      // Must be in a combat state
+      return enemy.state === 'chase' || enemy.state === 'circle' || enemy.state === 'attack';
+    });
+    
+    // Need 2+ enemies for flanking coordination
+    if (engagingEnemies.length < 2) return;
+    
+    // Find enemies capable of flanking that aren't already flanking
+    const flankCandidates = engagingEnemies.filter(enemy => {
+      if (!enemy.canFlank) return false;
+      if (enemy.state === 'flank') return false;
+      if (enemy.isFlankAssigned) return false;
+      if (enemy.isRetreating) return false;
+      return true;
+    });
+    
+    // Count how many are already flanking
+    const currentlyFlanking = engagingEnemies.filter(e => e.state === 'flank').length;
+    
+    // Allow at most 1 flanker per 3 engaging enemies
+    const maxFlankers = Math.floor(engagingEnemies.length / 2);
+    if (currentlyFlanking >= maxFlankers) return;
+    
+    // Sort candidates by distance to player (furthest should flank)
+    flankCandidates.sort((a, b) => {
+      const distA = a.mesh.position.distanceTo(playerPos);
+      const distB = b.mesh.position.distanceTo(playerPos);
+      return distB - distA; // Furthest first
+    });
+    
+    // Request flank from best candidate
+    for (const candidate of flankCandidates) {
+      if (candidate.requestFlank && candidate.requestFlank()) {
+        // Successfully assigned a flanker
+        break;
       }
     }
   }
