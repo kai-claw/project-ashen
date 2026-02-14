@@ -20,6 +20,7 @@ import { CameraController } from './systems/CameraController.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { ParticleManager } from './systems/ParticleManager.js';
 import { FloatingText } from './ui/FloatingText.js';
+import { InteractionManager } from './systems/InteractionManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -189,6 +190,16 @@ player.setCameraController(cameraController);
 
 const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager, lootManager);
 
+// --- NPC Interaction System ---
+const interactionManager = new InteractionManager(
+  scene,
+  camera,
+  inputManager,
+  world.npcManager,
+  gameManager,
+  audioManager
+);
+
 // --- Floating Text (XP gains, level ups) ---
 const floatingText = new FloatingText(camera);
 
@@ -309,6 +320,12 @@ function animate() {
   itemManager.update(player.mesh.position);
   lootManager.update(player.mesh.position);
   equipmentManager.updateEquipmentDrops(player.mesh.position, delta);
+  
+  // NPC interaction system (prompts, facing, labels)
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen) {
+    interactionManager.update(player.mesh.position, delta);
+  }
+  
   inventoryUI.update();
   hud.update();
   crucibleUI.update();
@@ -433,6 +450,7 @@ window.equipmentManager = equipmentManager;
 window.inventoryUI = inventoryUI;
 window.audioManager = audioManager;
 window.particleManager = particleManager;
+window.interactionManager = interactionManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
