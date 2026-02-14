@@ -43,6 +43,9 @@ import { createTimeWeatherGameplay, getTimeWeatherGameplay } from './systems/Tim
 import { createRareEventManager, getRareEventManager } from './systems/RareEventManager.js';
 import { createQuestManager, getQuestManager } from './systems/QuestManager.js';
 import { createQuestWorldHooks, getQuestWorldHooks } from './systems/QuestWorldHooks.js';
+import { createQuestUI, getQuestUI } from './ui/QuestUI.js';
+import { createNPCQuestGivers, getNPCQuestGivers } from './systems/NPCQuestGivers.js';
+import { createQuestRewards, getQuestRewards } from './systems/QuestRewards.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -185,8 +188,12 @@ gameManager.rareEventManager = rareEventManager;
 // --- Quest System (Phase 25) ---
 const questManager = createQuestManager();
 const questWorldHooks = createQuestWorldHooks();
+const questUI = createQuestUI();
+const questRewards = createQuestRewards();
 gameManager.questManager = questManager;
 gameManager.questWorldHooks = questWorldHooks;
+gameManager.questUI = questUI;
+gameManager.questRewards = questRewards;
 
 // Initialize audio on first user interaction
 let audioInitialized = false;
@@ -443,6 +450,17 @@ questWorldHooks.init({
   player: player,
 });
 
+// Initialize Quest UI (Phase 25 - Worker 2)
+questUI.init(questManager);
+
+// Initialize NPC Quest Givers (Phase 25 - Worker 2)
+const npcQuestGivers = createNPCQuestGivers(scene);
+npcQuestGivers.init(questManager);
+gameManager.npcQuestGivers = npcQuestGivers;
+
+// Initialize Quest Rewards & Reputation (Phase 25 - Worker 2)
+questRewards.init(questManager, scene);
+
 // Wire enemy death events to quest system
 enemyManager.onEnemyDeath = (enemyType, enemyData, position) => {
   questWorldHooks.onEnemyKilled(enemyType, enemyData);
@@ -464,6 +482,13 @@ lootManager.onItemPickup = (itemId, amount) => {
 const originalDialogueStart = dialogueManager.startDialogue.bind(dialogueManager);
 dialogueManager.startDialogue = (npc) => {
   questWorldHooks.onNpcInteraction(npc.id || npc.name, npc);
+  
+  // Check if NPC is a quest giver (Phase 25 - Worker 2)
+  if (npcQuestGivers && npcQuestGivers.getNPCById(npc.id || npc.name?.toLowerCase().replace(/\s+/g, '_'))) {
+    npcQuestGivers.interactWithNPC(npc.id || npc.name?.toLowerCase().replace(/\s+/g, '_'));
+    return; // Quest dialogue handles it
+  }
+  
   originalDialogueStart(npc);
 };
 
@@ -724,6 +749,16 @@ function animate() {
   // Phase 25: Quest system update (exploration markers, location tracking)
   questWorldHooks.update(delta, player.mesh.position);
   questManager.updateQuestUI();
+  
+  // Phase 25 (Worker 2): NPC quest giver markers and animations
+  if (npcQuestGivers) {
+    npcQuestGivers.update(delta);
+  }
+  
+  // Update quest UI player position for distance sorting
+  if (questUI) {
+    questUI.updatePlayerPosition(player.mesh.position);
+  }
   
   audioManager.updateListener();
   floatingText.update(delta);
