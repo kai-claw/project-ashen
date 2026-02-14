@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ITEM_TYPES } from '../systems/LootManager.js';
 import { RARITY } from '../systems/EquipmentManager.js';
+import { RECIPES, UNLOCK_METHOD } from '../data/RecipeData.js';
 
 /**
  * ChestManager - Places and manages treasure chests throughout the world
@@ -32,6 +33,7 @@ export const CHEST_TIERS = {
     equipmentRarityWeights: { common: 80, uncommon: 18, rare: 2, epic: 0 },
     materialChance: 0.4,
     materialRange: [1, 3],
+    recipeScrollChance: 0.1,  // Phase 23: Recipe scrolls
   },
   SILVER: {
     id: 'silver',
@@ -47,6 +49,7 @@ export const CHEST_TIERS = {
     equipmentRarityWeights: { common: 40, uncommon: 40, rare: 18, epic: 2 },
     materialChance: 0.6,
     materialRange: [2, 5],
+    recipeScrollChance: 0.25,  // Phase 23: Recipe scrolls
   },
   GOLD: {
     id: 'gold',
@@ -62,6 +65,7 @@ export const CHEST_TIERS = {
     equipmentRarityWeights: { common: 10, uncommon: 30, rare: 45, epic: 15 },
     materialChance: 0.9,
     materialRange: [3, 8],
+    recipeScrollChance: 0.5,  // Phase 23: Recipe scrolls
   },
 };
 
@@ -677,10 +681,46 @@ export class ChestManager {
       }
     }
     
+    // Recipe scroll chance (Phase 23)
+    if (tier.recipeScrollChance && this._seededRandom(seed + 500) < tier.recipeScrollChance) {
+      const recipeScroll = this._rollRecipeScroll(seed + 501);
+      if (recipeScroll) {
+        // Attempt to unlock via CraftingManager
+        if (this.lootManager?.gameManager?.craftingManager) {
+          const unlocked = this.lootManager.gameManager.craftingManager.handleRecipeScroll(recipeScroll.id);
+          if (unlocked) {
+            this.lootManager.showNotification(`Recipe Discovered: ${recipeScroll.name}`, 'gold');
+          } else {
+            // Already known - give gold instead
+            const bonusGold = Math.floor(50 + this._seededRandom(seed + 502) * 50);
+            if (this.lootManager) {
+              this.lootManager.spawnLootDrop({ itemId: 'gold', quantity: bonusGold }, position.clone());
+            }
+          }
+        }
+      }
+    }
+    
     // Show notification
     if (this.lootManager && this.lootManager.showNotification) {
       this.lootManager.showNotification(`Opened ${tier.name}!`, tier.id);
     }
+  }
+  
+  /**
+   * Roll for a recipe scroll from chest-unlockable recipes
+   */
+  _rollRecipeScroll(seed) {
+    // Get recipes that can be found in chests
+    const chestRecipes = Object.values(RECIPES).filter(r => 
+      r.unlockMethod === UNLOCK_METHOD.FOUND_IN_CHEST
+    );
+    
+    if (chestRecipes.length === 0) return null;
+    
+    // Select random recipe
+    const index = Math.floor(this._seededRandom(seed) * chestRecipes.length);
+    return chestRecipes[index];
   }
   
   _updateAnimations(delta) {

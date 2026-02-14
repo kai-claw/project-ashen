@@ -468,6 +468,166 @@ export const SHOP_ITEMS = {
     levelRequired: 4,
     category: 'misc',
   },
+  
+  // ===================================
+  // CRAFTING MATERIALS - Phase 23
+  // ===================================
+  
+  iron_ore_stack: {
+    id: 'iron_ore_stack',
+    name: 'Iron Ore',
+    type: 'material',
+    materialId: 'iron_ore',
+    basePrice: 15,
+    rarity: RARITY.COMMON,
+    description: 'Raw iron for forging weapons and armor.',
+    levelRequired: 1,
+    category: 'material',
+    quantity: 1,
+  },
+  copper_ore_stack: {
+    id: 'copper_ore_stack',
+    name: 'Copper Ore',
+    type: 'material',
+    materialId: 'copper_ore',
+    basePrice: 10,
+    rarity: RARITY.COMMON,
+    description: 'Soft metal for basic crafting.',
+    levelRequired: 1,
+    category: 'material',
+    quantity: 1,
+  },
+  healing_herb: {
+    id: 'healing_herb',
+    name: 'Healing Herb',
+    type: 'material',
+    materialId: 'healing_leaf',
+    basePrice: 8,
+    rarity: RARITY.COMMON,
+    description: 'Basic herb for health potions.',
+    levelRequired: 1,
+    category: 'material',
+    quantity: 1,
+  },
+  mana_bloom: {
+    id: 'mana_bloom',
+    name: 'Mana Bloom',
+    type: 'material',
+    materialId: 'mana_bloom',
+    basePrice: 12,
+    rarity: RARITY.COMMON,
+    description: 'Mystical flower for mana potions.',
+    levelRequired: 3,
+    category: 'material',
+    quantity: 1,
+  },
+  leather_scrap: {
+    id: 'leather_scrap',
+    name: 'Leather',
+    type: 'material',
+    materialId: 'crude_leather',
+    basePrice: 10,
+    rarity: RARITY.COMMON,
+    description: 'Basic leather for armor crafting.',
+    levelRequired: 1,
+    category: 'material',
+    quantity: 1,
+  },
+  cloth_bundle: {
+    id: 'cloth_bundle',
+    name: 'Cloth',
+    type: 'material',
+    materialId: 'cloth',
+    basePrice: 6,
+    rarity: RARITY.COMMON,
+    description: 'Fabric for light armor and accessories.',
+    levelRequired: 1,
+    category: 'material',
+    quantity: 1,
+  },
+  thread_spool: {
+    id: 'thread_spool',
+    name: 'Thread',
+    type: 'material',
+    materialId: 'thread',
+    basePrice: 4,
+    rarity: RARITY.COMMON,
+    description: 'For sewing and crafting accessories.',
+    levelRequired: 1,
+    category: 'material',
+    quantity: 1,
+  },
+  
+  // ===================================
+  // RECIPE SCROLLS - Phase 23
+  // ===================================
+  
+  recipe_health_potion: {
+    id: 'recipe_health_potion',
+    name: 'Recipe: Health Potion',
+    type: 'recipe',
+    recipeId: 'health_potion',
+    basePrice: 100,
+    rarity: RARITY.UNCOMMON,
+    description: 'Learn to craft Health Potions.',
+    levelRequired: 1,
+    category: 'recipe',
+  },
+  recipe_mana_potion: {
+    id: 'recipe_mana_potion',
+    name: 'Recipe: Mana Potion',
+    type: 'recipe',
+    recipeId: 'mana_potion',
+    basePrice: 120,
+    rarity: RARITY.UNCOMMON,
+    description: 'Learn to craft Mana Potions.',
+    levelRequired: 5,
+    category: 'recipe',
+  },
+  recipe_stamina_potion: {
+    id: 'recipe_stamina_potion',
+    name: 'Recipe: Stamina Potion',
+    type: 'recipe',
+    recipeId: 'stamina_potion',
+    basePrice: 100,
+    rarity: RARITY.UNCOMMON,
+    description: 'Learn to craft Stamina Potions.',
+    levelRequired: 3,
+    category: 'recipe',
+  },
+  recipe_iron_sword: {
+    id: 'recipe_iron_sword',
+    name: 'Recipe: Iron Sword',
+    type: 'recipe',
+    recipeId: 'iron_sword',
+    basePrice: 150,
+    rarity: RARITY.UNCOMMON,
+    description: 'Learn to forge Iron Swords.',
+    levelRequired: 3,
+    category: 'recipe',
+  },
+  recipe_leather_armor: {
+    id: 'recipe_leather_armor',
+    name: 'Recipe: Leather Armor',
+    type: 'recipe',
+    recipeId: 'leather_armor',
+    basePrice: 180,
+    rarity: RARITY.UNCOMMON,
+    description: 'Learn to craft Leather Armor.',
+    levelRequired: 5,
+    category: 'recipe',
+  },
+  recipe_strength_elixir: {
+    id: 'recipe_strength_elixir',
+    name: 'Recipe: Strength Elixir',
+    type: 'recipe',
+    recipeId: 'strength_elixir',
+    basePrice: 300,
+    rarity: RARITY.RARE,
+    description: 'Learn to brew Strength Elixirs.',
+    levelRequired: 10,
+    category: 'recipe',
+  },
 };
 
 // ========== MERCHANT INVENTORIES ==========
@@ -493,6 +653,9 @@ export const MERCHANT_INVENTORIES = {
       'iron_shield', 'steel_shield', 'tower_shield',
       // Utility
       'repair_powder',
+      // Phase 23: Crafting materials and recipes
+      'iron_ore_stack', 'copper_ore_stack', 'leather_scrap',
+      'recipe_iron_sword', 'recipe_leather_armor',
     ],
     specialStock: {
       // Items that only appear after certain conditions
@@ -514,9 +677,13 @@ export const MERCHANT_INVENTORIES = {
       'antidote',
       // Elixirs (high level)
       'elixir_of_strength', 'elixir_of_iron',
+      // Phase 23: Alchemy materials and recipes
+      'healing_herb', 'mana_bloom',
+      'recipe_health_potion', 'recipe_mana_potion', 'recipe_stamina_potion',
+      'recipe_strength_elixir',
     ],
     specialStock: {
-      10: ['elixir_of_strength', 'elixir_of_iron'],
+      10: ['elixir_of_strength', 'elixir_of_iron', 'recipe_strength_elixir'],
       15: ['health_potion_xl'],
     },
   },
@@ -539,6 +706,9 @@ export const MERCHANT_INVENTORIES = {
       'throwing_knife', 'firebomb',
       // Basic equipment for those without a blacksmith
       'leather_armor',
+      // Phase 23: Basic crafting materials
+      'iron_ore_stack', 'copper_ore_stack', 'healing_herb',
+      'leather_scrap', 'cloth_bundle', 'thread_spool',
     ],
     specialStock: {
       5: ['homeward_bone', 'map_fragment'],

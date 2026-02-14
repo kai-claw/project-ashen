@@ -598,6 +598,24 @@ function animate() {
     gatheringManager.update(player.mesh.position.x, player.mesh.position.z, delta);
   }
   
+  // Crafting station proximity check (Phase 23)
+  if (world.villages && craftingManager) {
+    const nearbyStation = world.villages.getNearbyCraftingStation(
+      player.mesh.position.x, 
+      player.mesh.position.z, 
+      3.5
+    );
+    if (nearbyStation) {
+      craftingManager.setNearbyStation(nearbyStation, nearbyStation);
+      // Show tutorial hint if first time near a station
+      if (!localStorage.getItem('ashen-crafting-tutorial-shown')) {
+        craftingUI.showTutorialHint(nearbyStation.name);
+      }
+    } else {
+      craftingManager.clearNearbyStation();
+    }
+  }
+  
   // Update dialogue manager
   dialogueManager.update(delta);
   

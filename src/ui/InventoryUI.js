@@ -1,5 +1,6 @@
 import { ITEM_TYPES } from '../systems/LootManager.js';
 import { RARITY, EQUIPMENT_SLOTS } from '../systems/EquipmentManager.js';
+import { MATERIALS, MATERIAL_CATEGORY, getMaterial } from '../data/MaterialData.js';
 
 /**
  * InventoryUI - Unified inventory interface for items and equipment
@@ -416,11 +417,16 @@ export class InventoryUI {
         <button class="tab-btn ${this.activeTab === 'equipment' ? 'active' : ''}" data-tab="equipment">
           ⚔️ Equipment
         </button>
+        <button class="tab-btn ${this.activeTab === 'materials' ? 'active' : ''}" data-tab="materials">
+          ⚗️ Materials
+        </button>
       </div>
       
       <!-- Content area -->
       <div style="padding: 20px; max-height: calc(85vh - 140px); overflow-y: auto;">
-        ${this.activeTab === 'items' ? this.renderItemsTab(inv) : this.renderEquipmentTab(equippedItems, equipInv, bonuses)}
+        ${this.activeTab === 'items' ? this.renderItemsTab(inv) : 
+          this.activeTab === 'materials' ? this.renderMaterialsTab() :
+          this.renderEquipmentTab(equippedItems, equipInv, bonuses)}
       </div>
       
       <!-- Footer -->
@@ -487,6 +493,201 @@ export class InventoryUI {
     `;
   }
   
+  /**
+   * Render the Materials tab content (Phase 23: Crafting Materials)
+   */
+  renderMaterialsTab() {
+    // Read crafting materials from localStorage
+    const storedMaterials = JSON.parse(localStorage.getItem('ashen-materials') || '{}');
+    
+    // Group materials by category
+    const categorizedMaterials = {
+      ore: [],
+      herb: [],
+      monster_drop: [],
+      gem: [],
+      misc: [],
+    };
+    
+    for (const [materialId, quantity] of Object.entries(storedMaterials)) {
+      if (quantity <= 0) continue;
+      
+      const matDef = getMaterial(materialId);
+      if (matDef) {
+        const categoryId = matDef.category?.id || 'misc';
+        if (!categorizedMaterials[categoryId]) {
+          categorizedMaterials[categoryId] = [];
+        }
+        categorizedMaterials[categoryId].push({
+          ...matDef,
+          quantity,
+        });
+      } else {
+        // Unknown material - add to misc
+        categorizedMaterials.misc.push({
+          id: materialId,
+          name: materialId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          quantity,
+          iconColor: 0x888888,
+          rarity: { color: '#888888' },
+          description: 'Unknown material',
+        });
+      }
+    }
+    
+    // Calculate totals
+    const totalMaterials = Object.values(storedMaterials).reduce((sum, qty) => sum + qty, 0);
+    const totalTypes = Object.keys(storedMaterials).filter(k => storedMaterials[k] > 0).length;
+    
+    return `
+      <!-- Materials Summary -->
+      <div style="
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(100, 180, 100, 0.3);
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      ">
+        <div>
+          <span style="color: #88cc88; font-size: 14px;">⚗️ Crafting Materials</span>
+          <span style="color: #666; font-size: 12px; margin-left: 10px;">Press C to open Crafting</span>
+        </div>
+        <div style="color: #aaa; font-size: 12px;">
+          ${totalTypes} types • ${totalMaterials} total
+        </div>
+      </div>
+      
+      <!-- Ores -->
+      ${this.renderMaterialCategory('ore', '⛏️ Ores', categorizedMaterials.ore)}
+      
+      <!-- Herbs -->
+      ${this.renderMaterialCategory('herb', '🌿 Herbs', categorizedMaterials.herb)}
+      
+      <!-- Monster Drops -->
+      ${this.renderMaterialCategory('monster_drop', '💀 Monster Drops', categorizedMaterials.monster_drop)}
+      
+      <!-- Gems -->
+      ${this.renderMaterialCategory('gem', '💎 Gems', categorizedMaterials.gem)}
+      
+      <!-- Miscellaneous -->
+      ${this.renderMaterialCategory('misc', '📦 Miscellaneous', categorizedMaterials.misc)}
+    `;
+  }
+  
+  /**
+   * Render a material category section
+   */
+  renderMaterialCategory(categoryId, title, materials) {
+    if (materials.length === 0) {
+      return `
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #666; font-size: 13px; margin: 0 0 10px 0; padding-bottom: 4px; border-bottom: 1px solid rgba(80, 80, 80, 0.2);">
+            ${title}
+          </h3>
+          <span style="color: #444; font-size: 12px; font-style: italic;">None collected</span>
+        </div>
+      `;
+    }
+    
+    return `
+      <div style="margin-bottom: 20px;">
+        <h3 style="color: #aaa; font-size: 13px; margin: 0 0 10px 0; padding-bottom: 4px; border-bottom: 1px solid rgba(80, 80, 80, 0.2);">
+          ${title} <span style="color: #666; font-size: 11px;">(${materials.length})</span>
+        </h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          ${materials.map(mat => this.renderMaterialSlot(mat)).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  /**
+   * Render a single material slot
+   */
+  renderMaterialSlot(material) {
+    const colorHex = '#' + (material.iconColor || 0x888888).toString(16).padStart(6, '0');
+    const rarityColor = material.rarity?.color || material.rarity?.hexColor?.toString(16).padStart(6, '0') || '#888888';
+    
+    return `
+      <div class="item-slot material-slot" 
+           data-material-id="${material.id}"
+           style="border-color: ${rarityColor}40; position: relative;"
+           onmouseenter="window.inventoryUI?.showMaterialTooltip(event, '${material.id}')"
+           onmouseleave="window.inventoryUI?.hideTooltip()">
+        <div class="item-icon" style="
+          background: radial-gradient(circle at 30% 30%, ${colorHex}, ${colorHex}66);
+          box-shadow: 0 0 8px ${colorHex}33;
+        "></div>
+        <span class="item-qty">${material.quantity}</span>
+      </div>
+    `;
+  }
+  
+  /**
+   * Show tooltip for crafting material
+   */
+  showMaterialTooltip(event, materialId) {
+    const matDef = getMaterial(materialId);
+    if (!matDef) {
+      // Fallback for unknown materials
+      this.tooltipEl.innerHTML = `
+        <div style="color: #888; font-weight: bold;">${materialId}</div>
+        <div style="color: #666; font-size: 11px;">Unknown material</div>
+      `;
+      this.tooltipEl.style.display = 'block';
+      this.positionTooltip(event);
+      return;
+    }
+    
+    const colorHex = '#' + (matDef.iconColor || 0x888888).toString(16).padStart(6, '0');
+    const rarityColor = matDef.rarity?.color || '#888888';
+    const categoryName = matDef.category?.name || 'Material';
+    const sellValue = matDef.sellValue || 0;
+    
+    // Get sources text
+    let sourcesText = '';
+    if (matDef.sources && matDef.sources.length > 0) {
+      const sourceLabels = {
+        'gathering': '⛏️ Gathering',
+        'enemy': '💀 Enemy Drops',
+        'chest': '📦 Chests',
+        'shop': '🛒 Merchants',
+        'boss': '👑 Boss Drops',
+      };
+      sourcesText = `
+        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(100,100,100,0.2);">
+          <div style="color: #666; font-size: 10px; margin-bottom: 4px;">Sources:</div>
+          <div style="color: #888; font-size: 11px;">
+            ${matDef.sources.map(s => sourceLabels[s] || s).join(' • ')}
+          </div>
+        </div>
+      `;
+    }
+    
+    this.tooltipEl.innerHTML = `
+      <div style="color: ${rarityColor}; font-weight: bold; margin-bottom: 4px;">${matDef.name}</div>
+      <div style="color: #888; font-size: 11px;">${matDef.rarity?.name || 'Common'} ${categoryName}</div>
+      <div style="margin-top: 8px; color: #aaa; font-size: 12px; line-height: 1.4;">
+        ${matDef.description || 'A crafting material.'}
+      </div>
+      ${sellValue > 0 ? `
+        <div style="margin-top: 8px; color: #ffd700; font-size: 11px;">
+          💰 Sell: ${sellValue} gold
+        </div>
+      ` : ''}
+      ${sourcesText}
+      <div style="color: #88cc88; font-size: 10px; margin-top: 10px;">
+        Press C to craft with this material
+      </div>
+    `;
+    
+    this.tooltipEl.style.display = 'block';
+    this.positionTooltip(event);
+  }
+
   /**
    * Render a single item slot
    */

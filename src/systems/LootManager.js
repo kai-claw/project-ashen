@@ -228,37 +228,67 @@ export const ITEM_TYPES = {
 
 // ========== LOOT TABLES ==========
 // Format: { itemId, chance (0-1), minQty, maxQty }
+// Phase 23: Enhanced with crafting materials matching MaterialData.js
 const LOOT_TABLES = {
-  // Basic remnant enemies
+  // Basic remnant enemies (hollow soldiers, basic skeletons)
   hollow_soldier: [
     { itemId: 'gold', chance: 0.9, minQty: 5, maxQty: 15 },
     { itemId: 'health-potion', chance: 0.15, minQty: 1, maxQty: 1 },
-    { itemId: 'bone-fragment', chance: 0.25, minQty: 1, maxQty: 2 },
+    { itemId: 'bone_shard', chance: 0.35, minQty: 1, maxQty: 3 },  // Crafting material
+    { itemId: 'tattered_cloth', chance: 0.25, minQty: 1, maxQty: 2 },  // Crafting material
   ],
+  // Berserkers (aggressive melee enemies)
   berserker: [
     { itemId: 'gold', chance: 0.95, minQty: 10, maxQty: 25 },
     { itemId: 'health-potion', chance: 0.2, minQty: 1, maxQty: 1 },
     { itemId: 'stamina-potion', chance: 0.2, minQty: 1, maxQty: 1 },
-    { itemId: 'bone-fragment', chance: 0.3, minQty: 1, maxQty: 3 },
+    { itemId: 'bone_shard', chance: 0.4, minQty: 1, maxQty: 3 },
+    { itemId: 'beast_fang', chance: 0.2, minQty: 1, maxQty: 2 },  // Wolf fang equivalent
     { itemId: 'dark-shard', chance: 0.1, minQty: 1, maxQty: 1 },
   ],
+  // Sentinels (armored guards)
   sentinel: [
     { itemId: 'gold', chance: 1.0, minQty: 20, maxQty: 40 },
     { itemId: 'health-potion', chance: 0.25, minQty: 1, maxQty: 2 },
-    { itemId: 'iron-ore', chance: 0.35, minQty: 1, maxQty: 3 },
-    { itemId: 'bone-fragment', chance: 0.4, minQty: 2, maxQty: 4 },
+    { itemId: 'iron_ore', chance: 0.35, minQty: 1, maxQty: 3 },  // Metal from armor
+    { itemId: 'bone_shard', chance: 0.4, minQty: 2, maxQty: 4 },
+    { itemId: 'crude_leather', chance: 0.2, minQty: 1, maxQty: 2 },
   ],
+  // Revenants (magical undead)
   revenant: [
     { itemId: 'gold', chance: 0.85, minQty: 8, maxQty: 18 },
     { itemId: 'stamina-potion', chance: 0.2, minQty: 1, maxQty: 1 },
     { itemId: 'mana-potion', chance: 0.15, minQty: 1, maxQty: 1 },
+    { itemId: 'shadow_essence', chance: 0.25, minQty: 1, maxQty: 2 },  // Crafting material
+    { itemId: 'spirit-essence', chance: 0.15, minQty: 1, maxQty: 1 },
     { itemId: 'dark-shard', chance: 0.2, minQty: 1, maxQty: 2 },
-    { itemId: 'spirit-essence', chance: 0.1, minQty: 1, maxQty: 1 },
   ],
+  // Ranged enemies (archers, casters)
   ranged: [
     { itemId: 'gold', chance: 0.85, minQty: 8, maxQty: 20 },
     { itemId: 'health-potion', chance: 0.15, minQty: 1, maxQty: 1 },
-    { itemId: 'bone-fragment', chance: 0.2, minQty: 1, maxQty: 2 },
+    { itemId: 'bone_shard', chance: 0.2, minQty: 1, maxQty: 2 },
+    { itemId: 'tattered_cloth', chance: 0.3, minQty: 1, maxQty: 2 },
+  ],
+  // Wolves and beasts
+  wolf: [
+    { itemId: 'gold', chance: 0.6, minQty: 3, maxQty: 8 },
+    { itemId: 'beast_fang', chance: 0.5, minQty: 1, maxQty: 2 },  // Wolf fang
+    { itemId: 'beast_hide', chance: 0.4, minQty: 1, maxQty: 2 },  // Leather source
+    { itemId: 'raw_meat', chance: 0.3, minQty: 1, maxQty: 1 },  // Optional cooking material
+  ],
+  // Slimes / oozes
+  slime: [
+    { itemId: 'gold', chance: 0.4, minQty: 2, maxQty: 6 },
+    { itemId: 'slime_gel', chance: 0.6, minQty: 1, maxQty: 3 },  // Alchemy ingredient
+    { itemId: 'poison_gland', chance: 0.15, minQty: 1, maxQty: 1 },
+  ],
+  // Spiders
+  spider: [
+    { itemId: 'gold', chance: 0.5, minQty: 4, maxQty: 10 },
+    { itemId: 'spider_silk', chance: 0.4, minQty: 1, maxQty: 2 },  // Thread equivalent
+    { itemId: 'poison_gland', chance: 0.25, minQty: 1, maxQty: 1 },
+    { itemId: 'chitin_shard', chance: 0.2, minQty: 1, maxQty: 2 },
   ],
   // Elite variants - better drops
   elite: [
@@ -266,9 +296,11 @@ const LOOT_TABLES = {
     { itemId: 'health-potion', chance: 0.4, minQty: 1, maxQty: 2 },
     { itemId: 'stamina-potion', chance: 0.35, minQty: 1, maxQty: 2 },
     { itemId: 'mana-potion', chance: 0.3, minQty: 1, maxQty: 2 },
-    { itemId: 'iron-ore', chance: 0.4, minQty: 2, maxQty: 4 },
+    { itemId: 'iron_ore', chance: 0.4, minQty: 2, maxQty: 4 },
     { itemId: 'dark-shard', chance: 0.3, minQty: 1, maxQty: 3 },
     { itemId: 'spirit-essence', chance: 0.2, minQty: 1, maxQty: 1 },
+    { itemId: 'mythril_ore', chance: 0.1, minQty: 1, maxQty: 1 },  // Rare ore
+    { itemId: 'dragon_scale', chance: 0.05, minQty: 1, maxQty: 1 },  // Very rare
   ],
   // Boss drops - guaranteed good stuff
   boss: [
@@ -278,25 +310,31 @@ const LOOT_TABLES = {
     { itemId: 'mana-potion', chance: 1.0, minQty: 2, maxQty: 4 },
     { itemId: 'dark-shard', chance: 1.0, minQty: 5, maxQty: 10 },
     { itemId: 'spirit-essence', chance: 1.0, minQty: 3, maxQty: 5 },
+    { itemId: 'mythril_ore', chance: 0.5, minQty: 2, maxQty: 4 },
+    { itemId: 'dragon_scale', chance: 0.3, minQty: 1, maxQty: 2 },
   ],
   // Default fallback
   default: [
     { itemId: 'gold', chance: 0.8, minQty: 3, maxQty: 10 },
-    { itemId: 'bone-fragment', chance: 0.15, minQty: 1, maxQty: 1 },
+    { itemId: 'bone_shard', chance: 0.2, minQty: 1, maxQty: 1 },
+    { itemId: 'tattered_cloth', chance: 0.1, minQty: 1, maxQty: 1 },
   ],
 };
 
-// Enemy type mapping to loot table
+// Enemy type mapping to loot table (Phase 23: Enhanced with material-dropping enemies)
 function getEnemyLootTable(enemy) {
   if (enemy.isBoss) return 'boss';
   if (enemy.config?.isElite) return 'elite';
   
   const name = (enemy.config?.name || '').toLowerCase();
-  if (name.includes('hollow') || name.includes('soldier')) return 'hollow_soldier';
-  if (name.includes('berserker')) return 'berserker';
-  if (name.includes('sentinel')) return 'sentinel';
-  if (name.includes('revenant')) return 'revenant';
-  if (name.includes('archer') || name.includes('ranged')) return 'ranged';
+  if (name.includes('hollow') || name.includes('soldier') || name.includes('skeleton')) return 'hollow_soldier';
+  if (name.includes('berserker') || name.includes('brute')) return 'berserker';
+  if (name.includes('sentinel') || name.includes('guard') || name.includes('knight')) return 'sentinel';
+  if (name.includes('revenant') || name.includes('wraith') || name.includes('ghost')) return 'revenant';
+  if (name.includes('archer') || name.includes('ranged') || name.includes('mage') || name.includes('caster')) return 'ranged';
+  if (name.includes('wolf') || name.includes('hound') || name.includes('beast')) return 'wolf';
+  if (name.includes('slime') || name.includes('ooze') || name.includes('blob')) return 'slime';
+  if (name.includes('spider') || name.includes('arachnid')) return 'spider';
   
   return 'default';
 }

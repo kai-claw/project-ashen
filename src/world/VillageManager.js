@@ -271,6 +271,10 @@ export class VillageManager {
       this._createMarketStall(group, Math.cos(angle) * dist, Math.sin(angle) * dist, village);
     }
     
+    // Crafting stations (Phase 23)
+    const stations = this._createCraftingStations(group, village);
+    village.craftingStations = stations;
+    
     // Fences
     const fenceCount = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < fenceCount; i++) {
@@ -439,6 +443,271 @@ export class VillageManager {
   }
   
   /**
+   * Create crafting stations (forge, workbench, alchemy table)
+   * Phase 23: Crafting Integration
+   */
+  _createCraftingStations(group, village) {
+    const stations = [];
+    
+    // Forge (near blacksmith area)
+    const forgeAngle = Math.random() * Math.PI * 2;
+    const forgeDist = 6 + Math.random() * 3;
+    const forgeX = Math.cos(forgeAngle) * forgeDist;
+    const forgeZ = Math.sin(forgeAngle) * forgeDist;
+    this._createForge(group, forgeX, forgeZ, village);
+    stations.push({
+      type: 'forge',
+      localX: forgeX,
+      localZ: forgeZ,
+      villageX: village.x,
+      villageZ: village.z,
+    });
+    
+    // Workbench (carpentry area)
+    const workbenchAngle = forgeAngle + Math.PI / 2 + Math.random() * 0.5;
+    const workbenchDist = 5 + Math.random() * 3;
+    const workbenchX = Math.cos(workbenchAngle) * workbenchDist;
+    const workbenchZ = Math.sin(workbenchAngle) * workbenchDist;
+    this._createWorkbench(group, workbenchX, workbenchZ, village);
+    stations.push({
+      type: 'workbench',
+      localX: workbenchX,
+      localZ: workbenchZ,
+      villageX: village.x,
+      villageZ: village.z,
+    });
+    
+    // Alchemy Table (near healer/elder area)
+    const alchemyAngle = forgeAngle + Math.PI + Math.random() * 0.5;
+    const alchemyDist = 5 + Math.random() * 2;
+    const alchemyX = Math.cos(alchemyAngle) * alchemyDist;
+    const alchemyZ = Math.sin(alchemyAngle) * alchemyDist;
+    this._createAlchemyTable(group, alchemyX, alchemyZ, village);
+    stations.push({
+      type: 'alchemy_table',
+      localX: alchemyX,
+      localZ: alchemyZ,
+      villageX: village.x,
+      villageZ: village.z,
+    });
+    
+    return stations;
+  }
+  
+  /**
+   * Create a forge (anvil + furnace)
+   */
+  _createForge(group, localX, localZ, village) {
+    const cos = Math.cos(village.rotation);
+    const sin = Math.sin(village.rotation);
+    const worldX = village.x + localX * cos - localZ * sin;
+    const worldZ = village.z + localX * sin + localZ * cos;
+    const terrainY = this.terrain.getTerrainHeight(worldX, worldZ);
+    
+    const forge = new THREE.Group();
+    forge.position.set(localX, terrainY, localZ);
+    
+    // Furnace (brick structure)
+    const furnaceMat = new THREE.MeshStandardMaterial({
+      color: 0x8b4513,
+      roughness: 0.95,
+    });
+    const furnaceGeo = new THREE.BoxGeometry(1.2, 1.5, 1.0);
+    const furnace = new THREE.Mesh(furnaceGeo, furnaceMat);
+    furnace.position.y = 0.75;
+    furnace.castShadow = true;
+    furnace.receiveShadow = true;
+    forge.add(furnace);
+    
+    // Furnace opening (glowing)
+    const openingMat = new THREE.MeshStandardMaterial({
+      color: 0xff4400,
+      emissive: 0xff2200,
+      emissiveIntensity: 2,
+    });
+    const openingGeo = new THREE.BoxGeometry(0.4, 0.5, 0.1);
+    const opening = new THREE.Mesh(openingGeo, openingMat);
+    opening.position.set(0, 0.5, 0.52);
+    forge.add(opening);
+    
+    // Fire glow light
+    const fireLight = new THREE.PointLight(0xff4400, 1.5, 6);
+    fireLight.position.set(0, 0.7, 0.6);
+    forge.add(fireLight);
+    
+    // Anvil next to furnace
+    const anvilMat = new THREE.MeshStandardMaterial({
+      color: 0x444444,
+      roughness: 0.3,
+      metalness: 0.8,
+    });
+    // Anvil base
+    const anvilBaseGeo = new THREE.BoxGeometry(0.6, 0.3, 0.4);
+    const anvilBase = new THREE.Mesh(anvilBaseGeo, anvilMat);
+    anvilBase.position.set(1.2, 0.15, 0);
+    anvilBase.castShadow = true;
+    forge.add(anvilBase);
+    // Anvil top
+    const anvilTopGeo = new THREE.BoxGeometry(0.7, 0.15, 0.35);
+    const anvilTop = new THREE.Mesh(anvilTopGeo, anvilMat);
+    anvilTop.position.set(1.2, 0.38, 0);
+    anvilTop.castShadow = true;
+    forge.add(anvilTop);
+    // Anvil horn
+    const anvilHornGeo = new THREE.ConeGeometry(0.08, 0.3, 6);
+    const anvilHorn = new THREE.Mesh(anvilHornGeo, anvilMat);
+    anvilHorn.position.set(1.55, 0.38, 0);
+    anvilHorn.rotation.z = Math.PI / 2;
+    forge.add(anvilHorn);
+    
+    // Mark as crafting station for interaction
+    forge.userData.craftingStation = {
+      type: 'forge',
+      id: 'forge',
+      name: 'Forge',
+    };
+    
+    group.add(forge);
+  }
+  
+  /**
+   * Create a workbench
+   */
+  _createWorkbench(group, localX, localZ, village) {
+    const cos = Math.cos(village.rotation);
+    const sin = Math.sin(village.rotation);
+    const worldX = village.x + localX * cos - localZ * sin;
+    const worldZ = village.z + localX * sin + localZ * cos;
+    const terrainY = this.terrain.getTerrainHeight(worldX, worldZ);
+    
+    const workbench = new THREE.Group();
+    workbench.position.set(localX, terrainY, localZ);
+    
+    // Table surface
+    const tableMat = new THREE.MeshStandardMaterial({
+      color: 0x6b5344,
+      roughness: 0.9,
+    });
+    const tableGeo = new THREE.BoxGeometry(1.6, 0.1, 0.9);
+    const table = new THREE.Mesh(tableGeo, tableMat);
+    table.position.y = 0.85;
+    table.castShadow = true;
+    table.receiveShadow = true;
+    workbench.add(table);
+    
+    // Table legs
+    const legMat = new THREE.MeshStandardMaterial({
+      color: 0x5a4030,
+      roughness: 0.95,
+    });
+    const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.85, 6);
+    const legPositions = [
+      [-0.7, 0.425, -0.35],
+      [0.7, 0.425, -0.35],
+      [-0.7, 0.425, 0.35],
+      [0.7, 0.425, 0.35],
+    ];
+    legPositions.forEach(([x, y, z]) => {
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.position.set(x, y, z);
+      leg.castShadow = true;
+      workbench.add(leg);
+    });
+    
+    // Tools on table (vice, saw)
+    const viceMat = new THREE.MeshStandardMaterial({
+      color: 0x555555,
+      roughness: 0.4,
+      metalness: 0.7,
+    });
+    const viceGeo = new THREE.BoxGeometry(0.2, 0.15, 0.15);
+    const vice = new THREE.Mesh(viceGeo, viceMat);
+    vice.position.set(-0.5, 0.98, 0);
+    workbench.add(vice);
+    
+    // Mark as crafting station
+    workbench.userData.craftingStation = {
+      type: 'workbench',
+      id: 'workbench',
+      name: 'Workbench',
+    };
+    
+    group.add(workbench);
+  }
+  
+  /**
+   * Create an alchemy table
+   */
+  _createAlchemyTable(group, localX, localZ, village) {
+    const cos = Math.cos(village.rotation);
+    const sin = Math.sin(village.rotation);
+    const worldX = village.x + localX * cos - localZ * sin;
+    const worldZ = village.z + localX * sin + localZ * cos;
+    const terrainY = this.terrain.getTerrainHeight(worldX, worldZ);
+    
+    const alchemyTable = new THREE.Group();
+    alchemyTable.position.set(localX, terrainY, localZ);
+    
+    // Table
+    const tableMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3050,
+      roughness: 0.85,
+    });
+    const tableGeo = new THREE.CylinderGeometry(0.7, 0.6, 0.1, 8);
+    const table = new THREE.Mesh(tableGeo, tableMat);
+    table.position.y = 0.8;
+    table.castShadow = true;
+    table.receiveShadow = true;
+    alchemyTable.add(table);
+    
+    // Pedestal
+    const pedestalGeo = new THREE.CylinderGeometry(0.25, 0.35, 0.8, 8);
+    const pedestal = new THREE.Mesh(pedestalGeo, tableMat);
+    pedestal.position.y = 0.35;
+    pedestal.castShadow = true;
+    alchemyTable.add(pedestal);
+    
+    // Glowing potion bottles
+    const bottleMat = new THREE.MeshStandardMaterial({
+      color: 0x44ff88,
+      emissive: 0x22aa44,
+      emissiveIntensity: 0.8,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const bottleGeo = new THREE.CapsuleGeometry(0.06, 0.12, 4, 8);
+    const bottlePositions = [
+      [-0.25, 0.98, 0.15],
+      [0.1, 0.98, -0.2],
+      [0.3, 0.98, 0.1],
+    ];
+    const bottleColors = [0x44ff88, 0xff4488, 0x4488ff];
+    bottlePositions.forEach(([x, y, z], i) => {
+      const mat = bottleMat.clone();
+      mat.color.setHex(bottleColors[i]);
+      mat.emissive.setHex(bottleColors[i]);
+      mat.emissiveIntensity = 0.5;
+      const bottle = new THREE.Mesh(bottleGeo, mat);
+      bottle.position.set(x, y, z);
+      alchemyTable.add(bottle);
+    });
+    
+    // Magical glow light
+    const glowLight = new THREE.PointLight(0x44ff88, 0.8, 4);
+    glowLight.position.set(0, 1.2, 0);
+    alchemyTable.add(glowLight);
+    
+    // Mark as crafting station
+    alchemyTable.userData.craftingStation = {
+      type: 'alchemy_table',
+      id: 'alchemy_table',
+      name: 'Alchemy Table',
+    };
+    
+    group.add(alchemyTable);
+  }
+  
+  /**
    * Create a fence section
    */
   _createFence(group, localX, localZ, angle, village) {
@@ -498,6 +767,56 @@ export class VillageManager {
       }
     }
     return false;
+  }
+  
+  /**
+   * Get nearby crafting station (Phase 23)
+   * @param {number} x - World X position
+   * @param {number} z - World Z position
+   * @param {number} radius - Search radius
+   * @returns {Object|null} Crafting station data or null
+   */
+  getNearbyCraftingStation(x, z, radius = 3) {
+    for (const village of this.villages) {
+      if (!village.craftingStations) continue;
+      
+      const cos = Math.cos(village.rotation);
+      const sin = Math.sin(village.rotation);
+      
+      for (const station of village.craftingStations) {
+        // Convert local position to world position
+        const worldX = village.x + station.localX * cos - station.localZ * sin;
+        const worldZ = village.z + station.localX * sin + station.localZ * cos;
+        
+        const dx = x - worldX;
+        const dz = z - worldZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < radius) {
+          return {
+            type: station.type,
+            id: station.type,
+            name: this._getStationName(station.type),
+            worldX,
+            worldZ,
+            distance: dist,
+          };
+        }
+      }
+    }
+    return null;
+  }
+  
+  /**
+   * Get display name for station type
+   */
+  _getStationName(type) {
+    const names = {
+      forge: 'Forge',
+      workbench: 'Workbench',
+      alchemy_table: 'Alchemy Table',
+    };
+    return names[type] || 'Crafting Station';
   }
   
   /**
