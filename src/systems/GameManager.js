@@ -18,6 +18,42 @@ for (let i = 0; i <= 20; i++) {
 }
 // Results: [0, 0, 75, 187, 356, 609, 989, 1559, 2413, 3695, 5617, 8501, 12827, 19315, 29048, 43647, 65545, 98393, 147664, 221571, 332431]
 
+// Ability definitions with unlock levels and base cooldowns
+const ABILITIES = {
+  dash: {
+    name: 'Dash',
+    description: 'Quick dodge in any direction',
+    unlockLevel: 3,
+    baseCooldown: 3.0, // seconds
+    hotkey: 'R',
+    staminaCost: 15,
+  },
+  heavyCharge: {
+    name: 'Heavy Charge',
+    description: 'Hold for a powerful charged strike',
+    unlockLevel: 5,
+    baseCooldown: 0, // No cooldown, resource-based
+    hotkey: 'HOLD LMB',
+    staminaCost: 35,
+  },
+  parry: {
+    name: 'Parry',
+    description: 'Perfect timed block for riposte',
+    unlockLevel: 8,
+    baseCooldown: 1.5,
+    hotkey: 'F',
+    staminaCost: 10,
+  },
+  warCry: {
+    name: 'War Cry',
+    description: 'Damage buff, scares weak enemies',
+    unlockLevel: 12,
+    baseCooldown: 20.0,
+    hotkey: 'G',
+    staminaCost: 25,
+  },
+};
+
 export class GameManager {
   constructor() {
     // === XP & LEVELING SYSTEM ===
@@ -25,6 +61,23 @@ export class GameManager {
     this.currentLevel = 1;
     this.maxLevel = 20;
     this.xpThresholds = XP_THRESHOLDS;
+    
+    // === ABILITY SYSTEM ===
+    this.abilities = ABILITIES;
+    this.abilityCooldowns = {
+      dash: 0,
+      heavyCharge: 0,
+      parry: 0,
+      warCry: 0,
+    };
+    this.unlockedAbilities = new Set();
+    this.warCryActive = false;
+    this.warCryDuration = 8.0; // seconds
+    this.warCryTimer = 0;
+    this.warCryDamageBonus = 0.5; // +50% damage
+    
+    // Mind stat (affects cooldowns) - default 0
+    this.mindStat = 0;
     
     // Floating text queue for XP gains
     this.floatingTexts = [];
@@ -185,6 +238,9 @@ export class GameManager {
     if (this.hud && this.hud.flashLevelUp) {
       this.hud.flashLevelUp();
     }
+    
+    // Check for new ability unlocks
+    this._checkAbilityUnlocks(this.currentLevel);
   }
   
   /**
@@ -226,6 +282,165 @@ export class GameManager {
   getXPToNextLevel() {
     if (this.currentLevel >= this.maxLevel) return 0;
     return this.xpThresholds[this.currentLevel + 1] - this.currentXP;
+  }
+  
+  // === ABILITY SYSTEM METHODS ===
+  
+  /**
+   * Check if an ability is unlocked based on level
+   */
+  isAbilityUnlocked(abilityId) {
+    const ability = this.abilities[abilityId];
+    if (!ability) return false;
+    return this.currentLevel >= ability.unlockLevel;
+  }
+  
+  /**
+   * Get all unlocked abilities
+   */
+  getUnlockedAbilities() {
+    const unlocked = [];
+    for (const [id, ability] of Object.entries(this.abilities)) {
+      if (this.currentLevel >= ability.unlockLevel) {
+        unlocked.push({ id, ...ability });
+      }
+    }
+    return unlocked;
+  }
+  
+  /**
+   * Get cooldown modifier based on Mind stat (reduces cooldowns)
+   */
+  getCooldownModifier() {
+    // Each point of Mind reduces cooldowns by 5% (max 50% at 10 Mind)
+    return Math.max(0.5, 1.0 - (this.mindStat * 0.05));
+  }
+  
+  /**
+   * Check if ability is ready (off cooldown)
+   */
+  isAbilityReady(abilityId) {
+    if (!this.isAbilityUnlocked(abilityId)) return false;
+    return this.abilityCooldowns[abilityId] <= 0;
+  }
+  
+  /**
+   * Use an ability - puts it on cooldown
+   */
+  useAbility(abilityId) {
+    const ability = this.abilities[abilityId];
+    if (!ability) return false;
+    
+    const cooldown = ability.baseCooldown * this.getCooldownModifier();
+    this.abilityCooldowns[abilityId] = cooldown;
+    
+    // Track usage for notifications
+    if (!this.unlockedAbilities.has(abilityId)) {
+      this.unlockedAbilities.add(abilityId);
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Get remaining cooldown for ability
+   */
+  getAbilityCooldown(abilityId) {
+    return Math.max(0, this.abilityCooldowns[abilityId] || 0);
+  }
+  
+  /**
+   * Get cooldown progress (0-1, 1 = ready)
+   */
+  getAbilityCooldownProgress(abilityId) {
+    const ability = this.abilities[abilityId];
+    if (!ability || ability.baseCooldown === 0) return 1;
+    
+    const current = this.abilityCooldowns[abilityId] || 0;
+    const max = ability.baseCooldown * this.getCooldownModifier();
+    return 1 - (current / max);
+  }
+  
+  /**
+   * Activate War Cry buff
+   */
+  activateWarCry() {
+    this.warCryActive = true;
+    this.warCryTimer = this.warCryDuration;
+    
+    // Play war cry sound
+    if (this.audioManager) {
+      this.audioManager.play('warCry', { volume: 0.8 });
+    }
+    
+    // Spawn effect at player
+    if (this.particleManager && this.player) {
+      this.particleManager.spawnWarCryEffect(this.player.mesh.position.clone());
+    }
+    
+    // Show floating text
+    if (this.player) {
+      this._spawnFloatingText('WAR CRY!', 
+        this.player.mesh.position.clone().add(new THREE.Vector3(0, 2.5, 0)), 
+        0xff6600, true);
+    }
+  }
+  
+  /**
+   * Get current damage multiplier (includes infusions and War Cry)
+   */
+  getDamageMultiplier() {
+    let mult = this.getInfusionBonuses().damageMult;
+    if (this.warCryActive) {
+      mult += this.warCryDamageBonus;
+    }
+    return mult;
+  }
+  
+  /**
+   * Check abilities unlocked on level up
+   */
+  _checkAbilityUnlocks(newLevel) {
+    for (const [id, ability] of Object.entries(this.abilities)) {
+      if (ability.unlockLevel === newLevel) {
+        // New ability unlocked!
+        this._showAbilityUnlockNotification(id, ability);
+      }
+    }
+  }
+  
+  /**
+   * Show ability unlock notification
+   */
+  _showAbilityUnlockNotification(abilityId, ability) {
+    // Use itemManager notification if available
+    if (this.itemManager && this.itemManager.showNotification) {
+      this.itemManager.showNotification(
+        `NEW ABILITY: ${ability.name}`,
+        'ability'
+      );
+    }
+    
+    // Spawn floating text
+    if (this.player) {
+      setTimeout(() => {
+        this._spawnFloatingText(`${ability.name} Unlocked!`, 
+          this.player.mesh.position.clone().add(new THREE.Vector3(0, 3, 0)), 
+          0x44aaff, true);
+      }, 500);
+      
+      // Show description after a delay
+      setTimeout(() => {
+        this._spawnFloatingText(`[${ability.hotkey}] ${ability.description}`, 
+          this.player.mesh.position.clone().add(new THREE.Vector3(0, 2.5, 0)), 
+          0x88ccff, false);
+      }, 1200);
+    }
+    
+    // Play unlock sound
+    if (this.audioManager) {
+      this.audioManager.play('abilityUnlock', { volume: 0.7 });
+    }
   }
   
   /**
@@ -296,6 +511,29 @@ export class GameManager {
     this.postureRegenTimer += delta;
     if (this.postureRegenTimer >= this.postureRegenDelay && this.posture > 0) {
       this.posture = Math.max(0, this.posture - this.postureRegenRate * delta);
+    }
+    
+    // Ability cooldowns
+    for (const abilityId in this.abilityCooldowns) {
+      if (this.abilityCooldowns[abilityId] > 0) {
+        this.abilityCooldowns[abilityId] -= delta;
+      }
+    }
+    
+    // War Cry timer
+    if (this.warCryActive) {
+      this.warCryTimer -= delta;
+      if (this.warCryTimer <= 0) {
+        this.warCryActive = false;
+        this.warCryTimer = 0;
+        
+        // Show buff ended notification
+        if (this.player) {
+          this._spawnFloatingText('War Cry ended', 
+            this.player.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 
+            0x888888, false);
+        }
+      }
     }
   }
 
@@ -499,7 +737,7 @@ export class GameManager {
 
   // --- Infusions ---
   getTotalDepth() {
-    return this.infusions.bone + this.infusions.blood + this.infusions.stone;
+    return this.infusions.strength + this.infusions.vitality + this.infusions.stamina + this.infusions.spirit;
   }
 
   canInfuse(track) {

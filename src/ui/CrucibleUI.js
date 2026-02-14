@@ -132,14 +132,16 @@ export class CrucibleUI {
   }
   
   _applyVisualEffect(track) {
-    if (!this.player) return;
+    if (!this.player || !this.player.mesh) return;
     
-    const level = this.gm.infusions[track];
-    const totalLevel = this.gm.getTotalDepth();
+    const level = this.gm.infusions[track] || 0;
+    const totalLevel = this.gm.getTotalDepth() || 0;
     
     // Scale player slightly based on total infusion
     const scale = 1.0 + (totalLevel * 0.01); // Up to 1.2x at max
-    this.player.mesh.scale.setScalar(scale);
+    if (isFinite(scale) && scale > 0) {
+      this.player.mesh.scale.setScalar(scale);
+    }
     
     // Track-specific effects
     switch (track) {
@@ -163,9 +165,9 @@ export class CrucibleUI {
   }
   
   _addGlow(mesh, color, intensity) {
-    if (!mesh || !mesh.material) return;
+    if (!mesh || !mesh.material || !mesh.material.emissive) return;
     // Blend emissive color
-    const existing = mesh.material.emissive ? mesh.material.emissive.getHex() : 0;
+    const existing = mesh.material.emissive.getHex();
     const blended = this._blendColors(existing, color, 0.5);
     mesh.material.emissive.setHex(blended);
     mesh.material.emissiveIntensity = Math.min(2, (mesh.material.emissiveIntensity || 0) + intensity);

@@ -120,6 +120,15 @@ export class AudioManager {
     
     // Level up fanfare (ascending chime)
     this.soundBuffers.levelUp = this.createLevelUpBuffer(0.8);
+    
+    // Ability sounds
+    this.soundBuffers.dash = this.createNoiseBuffer(0.15, 'highpass', 3000, 0.4);
+    this.soundBuffers.chargedSwing = this.createImpactBuffer(0.25, 100, 0.7);
+    this.soundBuffers.parryReady = this.createChimeBuffer(0.1, [440]);
+    this.soundBuffers.parrySuccess = this.createImpactBuffer(0.15, 300, 0.6);
+    this.soundBuffers.riposte = this.createImpactBuffer(0.2, 180, 0.8);
+    this.soundBuffers.warCry = this.createRoarBuffer(0.4);
+    this.soundBuffers.abilityUnlock = this.createChimeBuffer(0.5, [523, 659, 784, 1047]); // Full chord
   }
   
   /**

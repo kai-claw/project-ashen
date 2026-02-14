@@ -10,6 +10,12 @@ const STATES = {
   BLOCKING: 'blocking',
   STAGGERED: 'staggered',
   DEAD: 'dead',
+  // Ability states
+  DASHING: 'dashing',
+  CHARGING: 'charging',
+  CHARGED_ATTACKING: 'charged_attacking',
+  PARRYING: 'parrying',
+  WAR_CRYING: 'war_crying',
 };
 
 const COSTS = {
@@ -29,6 +35,15 @@ const TIMINGS = {
   heavyHitEnd: 0.4,
   staggerDuration: 0.8,
   comboWindow: 0.15,
+  // Ability timings
+  dashDuration: 0.25,
+  dashIframes: 0.2,
+  parryWindow: 0.15, // Perfect parry window
+  parryDuration: 0.35,
+  chargedAttackDuration: 0.9,
+  chargedHitStart: 0.25,
+  chargedHitEnd: 0.5,
+  warCryDuration: 0.8,
 };
 
 // Animation name mapping for robot_expressive.glb
@@ -41,6 +56,12 @@ const ANIM_MAP = {
   [STATES.BLOCKING]: 'Idle', // Use idle with modified pose
   [STATES.STAGGERED]: 'No',
   [STATES.DEAD]: 'Death',
+  // Ability animations (reusing existing)
+  [STATES.DASHING]: 'Jump',
+  [STATES.CHARGING]: 'Idle',
+  [STATES.CHARGED_ATTACKING]: 'Punch',
+  [STATES.PARRYING]: 'Idle',
+  [STATES.WAR_CRYING]: 'ThumbsUp',
 };
 
 export class Player {
@@ -74,6 +95,14 @@ export class Player {
     this.dodgeGhostMeshes = [];
     this.lastGhostSpawnTime = 0;
     this.ghostSpawnInterval = 0.05;
+    
+    // Ability states
+    this.dashDir = new THREE.Vector3();
+    this.dashSpeed = 18;
+    this.parrySuccessful = false;
+    this.chargeProgress = 0;
+    this.chargedDamage = 60; // Base charged attack damage
+    this.chargedPostureDmg = 40;
 
     // Directions
     this.moveDir = new THREE.Vector3();
@@ -279,6 +308,22 @@ export class Player {
         break;
       case STATES.DEAD:
         break;
+      // Ability states
+      case STATES.DASHING:
+        this._processDash(delta);
+        break;
+      case STATES.CHARGING:
+        this._processCharging(delta);
+        break;
+      case STATES.CHARGED_ATTACKING:
+        this._processChargedAttack(delta);
+        break;
+      case STATES.PARRYING:
+        this._processParry(delta);
+        break;
+      case STATES.WAR_CRYING:
+        this._processWarCry(delta);
+        break;
     }
 
     // Floor collision and gravity
@@ -404,6 +449,38 @@ export class Player {
     if (this.input.lockOn) {
       this._toggleLockOn();
     }
+    
+    // === ABILITY INPUTS ===
+    
+    // Dash ability (R key) - Level 3
+    if (this.input.dashAbility && this.gm.isAbilityUnlocked('dash') && 
+        this.gm.isAbilityReady('dash') && this.gm.canUseStamina(15)) {
+      this._startDash();
+      return;
+    }
+    
+    // Parry ability (F key) - Level 8
+    if (this.input.parryAbility && this.gm.isAbilityUnlocked('parry') && 
+        this.gm.isAbilityReady('parry') && this.gm.canUseStamina(10)) {
+      this._startParry();
+      return;
+    }
+    
+    // War Cry ability (G key) - Level 12
+    if (this.input.warCryAbility && this.gm.isAbilityUnlocked('warCry') && 
+        this.gm.isAbilityReady('warCry') && this.gm.canUseStamina(25)) {
+      this._startWarCry();
+      return;
+    }
+    
+    // Charged Attack (hold LMB) - Level 5
+    if (this.input.chargedAttack && this.gm.isAbilityUnlocked('heavyCharge') && 
+        this.gm.canUseStamina(35)) {
+      this._startChargedAttack();
+      return;
+    }
+    
+    // === NORMAL COMBAT INPUTS ===
     
     if (this.input.dodge && this.gm.canUseStamina(COSTS.dodge)) {
       this._startDodge();
@@ -732,6 +809,258 @@ export class Player {
         .normalize();
       this.mesh.position.addScaledVector(dir, this.moveSpeed * 0.3 * delta);
     }
+  }
+
+  // ========== ABILITY METHODS ==========
+  
+  /**
+   * DASH ABILITY (Level 3) - Quick directional dash with i-frames
+   */
+  _startDash() {
+    this.gm.useStamina(15);
+    this.gm.useAbility('dash');
+    
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('dash', { 
+        position: this.mesh.position, 
+        volume: 0.6 
+      });
+    }
+    
+    // Get dash direction
+    const move = this.input.getMovementVector();
+    if (move.x !== 0 || move.z !== 0) {
+      const camYaw = this._getCameraYaw();
+      const forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+      const right = new THREE.Vector3(-Math.cos(camYaw), 0, Math.sin(camYaw));
+      this.dashDir.set(0, 0, 0)
+        .addScaledVector(forward, -move.z)
+        .addScaledVector(right, move.x)
+        .normalize();
+    } else {
+      // Dash forward if no direction input
+      this.dashDir.set(-Math.sin(this.facingAngle), 0, -Math.cos(this.facingAngle));
+    }
+    
+    this.isInvincible = true;
+    this._flashModel(0x00ff88, 150);
+    
+    // Spawn dash particles
+    if (this.gm.particleManager) {
+      this.gm.particleManager.spawnDashEffect(this.mesh.position.clone(), this.dashDir);
+    }
+    
+    this._changeState(STATES.DASHING);
+  }
+  
+  _processDash(delta) {
+    const progress = this.stateTimer / TIMINGS.dashDuration;
+    // Faster initial burst that slows down
+    const speedCurve = Math.pow(1 - progress, 0.5);
+    
+    this.mesh.position.addScaledVector(this.dashDir, this.dashSpeed * speedCurve * delta);
+    this._applyWallCollision();
+    
+    // Spawn afterimage ghosts
+    this.lastGhostSpawnTime += delta;
+    if (this.lastGhostSpawnTime >= 0.04) {
+      this._spawnDodgeGhost(); // Reuse ghost system
+      this.lastGhostSpawnTime = 0;
+    }
+    this._updateDodgeGhosts();
+    
+    // End i-frames slightly before dash ends
+    if (this.stateTimer >= TIMINGS.dashIframes && this.isInvincible) {
+      this.isInvincible = false;
+    }
+    
+    if (this.stateTimer >= TIMINGS.dashDuration) {
+      this.isInvincible = false;
+      this._changeState(STATES.IDLE);
+    }
+  }
+  
+  /**
+   * CHARGED ATTACK (Level 5) - Hold LMB for powerful strike
+   */
+  _startChargedAttack() {
+    this.gm.useStamina(35);
+    this.hitThisSwing = false;
+    
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('chargedSwing', { 
+        position: this.mesh.position, 
+        volume: 0.7,
+        pitch: 0.7
+      });
+    }
+    
+    const camYaw = this._getCameraYaw();
+    this.facingAngle = camYaw;
+    this.mesh.rotation.y = camYaw + Math.PI;
+    
+    // Flash gold for charged attack
+    this._flashModel(0xffaa00, 200);
+    
+    // Camera shake for impact
+    if (this.gm.cameraController) {
+      this.gm.cameraController.shakeHeavy();
+    }
+    
+    this._changeState(STATES.CHARGED_ATTACKING);
+  }
+  
+  _processChargedAttack(delta) {
+    // Check for hit window
+    if (this.stateTimer >= TIMINGS.chargedHitStart && 
+        this.stateTimer < TIMINGS.chargedHitEnd && !this.hitThisSwing) {
+      this._checkChargedHit();
+    }
+    
+    // Forward lunge
+    const fwd = new THREE.Vector3(-Math.sin(this.facingAngle), 0, -Math.cos(this.facingAngle));
+    if (this.stateTimer < TIMINGS.chargedHitEnd) {
+      this.mesh.position.addScaledVector(fwd, 5 * delta); // Bigger lunge
+      this._applyWallCollision();
+    }
+    
+    if (this.stateTimer >= TIMINGS.chargedAttackDuration) {
+      this._changeState(STATES.IDLE);
+    }
+  }
+  
+  _checkChargedHit() {
+    // Apply damage multiplier from War Cry
+    const damageMultiplier = this.gm.getDamageMultiplier();
+    
+    this.activeAttack = {
+      position: this.mesh.position.clone().add(
+        new THREE.Vector3(Math.sin(this.facingAngle), 1, Math.cos(this.facingAngle)).multiplyScalar(1.5)
+      ),
+      range: this.attackRange * 1.3, // Wider range
+      damage: Math.floor(this.chargedDamage * damageMultiplier),
+      postureDmg: this.chargedPostureDmg,
+      isHeavy: true,
+      isCharged: true,
+    };
+    
+    // Hitstop for impact
+    this.gm.hitstopHeavy();
+  }
+  
+  /**
+   * PARRY (Level 8) - Timed block for riposte
+   */
+  _startParry() {
+    this.gm.useStamina(10);
+    this.gm.useAbility('parry');
+    this.parrySuccessful = false;
+    
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('parryReady', { 
+        position: this.mesh.position, 
+        volume: 0.5 
+      });
+    }
+    
+    // Flash white for parry window
+    this._flashModel(0xffffff, 100);
+    
+    this._changeState(STATES.PARRYING);
+  }
+  
+  _processParry(delta) {
+    // During parry window, any incoming attack is deflected
+    // This is checked in takeDamage via isParrying getter
+    
+    if (this.stateTimer >= TIMINGS.parryDuration) {
+      if (this.parrySuccessful) {
+        // Successful parry - trigger riposte window
+        this._startRiposte();
+      } else {
+        this._changeState(STATES.IDLE);
+      }
+    }
+  }
+  
+  _startRiposte() {
+    // Riposte is a guaranteed crit
+    this.hitThisSwing = false;
+    
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('riposte', { volume: 0.8 });
+    }
+    
+    // Flash red for riposte
+    this._flashModel(0xff4444, 150);
+    
+    // Set up riposte attack (uses charged attack state)
+    this.activeAttack = {
+      position: this.mesh.position.clone().add(
+        new THREE.Vector3(Math.sin(this.facingAngle), 1, Math.cos(this.facingAngle)).multiplyScalar(1.2)
+      ),
+      range: this.attackRange,
+      damage: this.chargedDamage * 1.5, // Riposte does 150% charged damage
+      postureDmg: 50, // Massive posture damage
+      isHeavy: true,
+      isRiposte: true,
+    };
+    
+    this.gm.hitstopHeavy();
+    this._changeState(STATES.ATTACKING);
+  }
+  
+  /**
+   * Called when parry succeeds (from external damage check)
+   */
+  onParrySuccess() {
+    this.parrySuccessful = true;
+    
+    if (this.gm.audioManager) {
+      this.gm.audioManager.play('parrySuccess', { 
+        position: this.mesh.position, 
+        volume: 0.8 
+      });
+    }
+    
+    // Flash gold and brief hitstop
+    this._flashModel(0xffdd00, 200);
+    this.gm.triggerHitstop(0.1);
+    
+    // Spawn parry sparks
+    if (this.gm.particleManager) {
+      this.gm.particleManager.spawnParryEffect(this.mesh.position.clone());
+    }
+  }
+  
+  /**
+   * WAR CRY (Level 12) - Damage buff + scare weak enemies
+   */
+  _startWarCry() {
+    this.gm.useStamina(25);
+    this.gm.useAbility('warCry');
+    
+    // Activate the buff
+    this.gm.activateWarCry();
+    
+    // Flash orange for war cry
+    this._flashModel(0xff6600, 300);
+    
+    this._changeState(STATES.WAR_CRYING);
+  }
+  
+  _processWarCry(delta) {
+    // Brief animation/pose during war cry
+    if (this.stateTimer >= TIMINGS.warCryDuration) {
+      this._changeState(STATES.IDLE);
+    }
+  }
+  
+  /**
+   * Check if player is in parry window
+   */
+  get isParrying() {
+    return this.state === STATES.PARRYING && this.stateTimer < TIMINGS.parryWindow;
   }
 
   _changeState(newState) {

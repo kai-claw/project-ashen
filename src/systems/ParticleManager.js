@@ -907,6 +907,187 @@ export class ParticleManager {
       });
     }
   }
+  
+  /**
+   * Spawn dash ability effect - green/blue trail
+   */
+  spawnDashEffect(position, direction) {
+    // Speed lines in dash direction
+    for (let i = 0; i < 12; i++) {
+      const mesh = this._getFromPool(this.sparkPool);
+      if (!mesh) continue;
+      
+      mesh.userData.isDash = true;
+      
+      mesh.position.copy(position);
+      mesh.position.y += 0.5 + Math.random() * 1.0;
+      mesh.position.x += (Math.random() - 0.5) * 0.8;
+      mesh.position.z += (Math.random() - 0.5) * 0.8;
+      
+      // Particles trail behind the dash
+      const oppositeDir = direction.clone().multiplyScalar(-1);
+      const spreadAngle = (Math.random() - 0.5) * 0.5;
+      
+      this.particles.push({
+        mesh,
+        velocity: oppositeDir.clone().multiplyScalar(5 + Math.random() * 3).add(
+          new THREE.Vector3(spreadAngle, Math.random() * 2, spreadAngle)
+        ),
+        gravity: -2,
+        life: 0,
+        maxLife: 0.3 + Math.random() * 0.2,
+        type: 'spark',
+        isDash: true,
+        pool: this.sparkPool,
+      });
+    }
+  }
+  
+  /**
+   * Spawn parry success effect - golden sparks burst
+   */
+  spawnParryEffect(position) {
+    // Golden sparks in shield pattern
+    for (let i = 0; i < 15; i++) {
+      const mesh = this._getFromPool(this.sparkPool);
+      if (!mesh) continue;
+      
+      mesh.userData.isParry = true;
+      
+      mesh.position.copy(position);
+      mesh.position.y += 1.2;
+      mesh.position.z += 0.5; // Slightly in front
+      
+      const angle = (i / 15) * Math.PI * 2;
+      const speed = 4 + Math.random() * 3;
+      
+      this.particles.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * speed * 0.5,
+          Math.sin(angle) * speed,
+          -2 // Burst forward
+        ),
+        gravity: -6,
+        life: 0,
+        maxLife: 0.4 + Math.random() * 0.2,
+        type: 'spark',
+        isParry: true,
+        pool: this.sparkPool,
+      });
+    }
+    
+    // Impact ring
+    const ring = this._getFromPool(this.ringPool);
+    if (ring) {
+      ring.position.copy(position);
+      ring.position.y += 1.2;
+      ring.rotation.x = 0;
+      ring.rotation.y = 0;
+      ring.scale.set(0.3, 0.3, 1);
+      ring.userData.isParry = true;
+      
+      this.particles.push({
+        mesh: ring,
+        velocity: new THREE.Vector3(0, 0, 0),
+        gravity: 0,
+        life: 0,
+        maxLife: 0.4,
+        type: 'ring',
+        expandRate: 8,
+        isParry: true,
+        pool: this.ringPool,
+      });
+    }
+  }
+  
+  /**
+   * Spawn war cry effect - fiery aura burst
+   */
+  spawnWarCryEffect(position) {
+    // Fire burst outward
+    for (let i = 0; i < 25; i++) {
+      const mesh = this._getFromPool(this.sparkPool);
+      if (!mesh) continue;
+      
+      mesh.userData.isWarCry = true;
+      
+      const angle = (i / 25) * Math.PI * 2;
+      mesh.position.copy(position);
+      mesh.position.y += 0.5;
+      
+      const radius = 0.5 + Math.random() * 0.3;
+      mesh.position.x += Math.cos(angle) * radius;
+      mesh.position.z += Math.sin(angle) * radius;
+      
+      const speed = 5 + Math.random() * 4;
+      
+      this.particles.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * speed,
+          2 + Math.random() * 3,
+          Math.sin(angle) * speed
+        ),
+        gravity: -4,
+        life: 0,
+        maxLife: 0.6 + Math.random() * 0.4,
+        type: 'spark',
+        isWarCry: true,
+        pool: this.sparkPool,
+      });
+    }
+    
+    // Rising fire wisps
+    for (let i = 0; i < 6; i++) {
+      const mesh = this._getFromPool(this.wispPool);
+      if (!mesh) continue;
+      
+      mesh.userData.isWarCry = true;
+      
+      const angle = (i / 6) * Math.PI * 2;
+      mesh.position.copy(position);
+      mesh.position.x += Math.cos(angle) * 0.8;
+      mesh.position.z += Math.sin(angle) * 0.8;
+      
+      this.particles.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * 2,
+          5 + Math.random() * 2,
+          Math.sin(angle) * 2
+        ),
+        gravity: 1, // Rise against gravity
+        life: 0,
+        maxLife: 1.0 + Math.random() * 0.5,
+        type: 'wisp',
+        isWarCry: true,
+        pool: this.wispPool,
+      });
+    }
+    
+    // Expanding fire ring
+    const ring = this._getFromPool(this.ringPool);
+    if (ring) {
+      ring.position.copy(position);
+      ring.position.y += 0.1;
+      ring.rotation.x = -Math.PI / 2;
+      ring.scale.set(1, 1, 1);
+      ring.userData.isWarCry = true;
+      
+      this.particles.push({
+        mesh: ring,
+        velocity: new THREE.Vector3(0, 0, 0),
+        gravity: 0,
+        life: 0,
+        maxLife: 0.6,
+        type: 'ring',
+        expandRate: 15,
+        isWarCry: true,
+        pool: this.ringPool,
+      });
+    }
+  }
 
   /**
    * Cleanup all particles (for scene reset)

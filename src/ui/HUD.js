@@ -27,6 +27,9 @@ export class HUD {
     // Create XP bar UI
     this._createXPBar();
     
+    // Create ability bar UI
+    this._createAbilityBar();
+    
     // Level up flash
     this.levelUpFlashActive = false;
   }
@@ -88,6 +91,155 @@ export class HUD {
     this.xpContainer.appendChild(this.xpBarBg);
     
     document.body.appendChild(this.xpContainer);
+  }
+  
+  _createAbilityBar() {
+    // Create ability bar container (bottom right)
+    this.abilityContainer = document.createElement('div');
+    this.abilityContainer.id = 'ability-container';
+    this.abilityContainer.style.cssText = `
+      position: fixed;
+      bottom: 60px;
+      right: 20px;
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+      z-index: 100;
+      pointer-events: none;
+    `;
+    
+    // Ability definitions (order: Dash, HeavyCharge, Parry, WarCry)
+    this.abilitySlots = {};
+    const abilities = [
+      { id: 'dash', hotkey: 'R', icon: '⚡', color: '#00ff88' },
+      { id: 'heavyCharge', hotkey: '🖱️', icon: '💥', color: '#ffaa00' },
+      { id: 'parry', hotkey: 'F', icon: '🛡️', color: '#4488ff' },
+      { id: 'warCry', hotkey: 'G', icon: '🔥', color: '#ff6600' },
+    ];
+    
+    for (const ability of abilities) {
+      const slot = document.createElement('div');
+      slot.className = 'ability-slot';
+      slot.dataset.abilityId = ability.id;
+      slot.style.cssText = `
+        width: 48px;
+        height: 48px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 2px solid rgba(100, 100, 100, 0.5);
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        opacity: 0.3;
+        transition: opacity 0.3s, border-color 0.3s;
+      `;
+      
+      // Icon
+      const icon = document.createElement('div');
+      icon.className = 'ability-icon';
+      icon.textContent = ability.icon;
+      icon.style.cssText = `
+        font-size: 20px;
+        line-height: 1;
+      `;
+      slot.appendChild(icon);
+      
+      // Hotkey label
+      const hotkey = document.createElement('div');
+      hotkey.className = 'ability-hotkey';
+      hotkey.textContent = ability.hotkey;
+      hotkey.style.cssText = `
+        font-family: 'Cinzel', serif;
+        font-size: 10px;
+        color: #aaa;
+        margin-top: 2px;
+      `;
+      slot.appendChild(hotkey);
+      
+      // Cooldown overlay
+      const cooldownOverlay = document.createElement('div');
+      cooldownOverlay.className = 'cooldown-overlay';
+      cooldownOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 0%;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 4px;
+        pointer-events: none;
+      `;
+      slot.appendChild(cooldownOverlay);
+      
+      // Cooldown text
+      const cooldownText = document.createElement('div');
+      cooldownText.className = 'cooldown-text';
+      cooldownText.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-family: 'Cinzel', serif;
+        font-size: 14px;
+        font-weight: bold;
+        color: #fff;
+        text-shadow: 0 0 4px rgba(0,0,0,0.8);
+        display: none;
+      `;
+      slot.appendChild(cooldownText);
+      
+      this.abilitySlots[ability.id] = {
+        element: slot,
+        cooldownOverlay,
+        cooldownText,
+        color: ability.color,
+      };
+      
+      this.abilityContainer.appendChild(slot);
+    }
+    
+    document.body.appendChild(this.abilityContainer);
+  }
+  
+  _updateAbilityBar() {
+    if (!this.abilitySlots || !this.gm.abilities) return;
+    
+    for (const [abilityId, slot] of Object.entries(this.abilitySlots)) {
+      const isUnlocked = this.gm.isAbilityUnlocked(abilityId);
+      const cooldown = this.gm.getAbilityCooldown(abilityId);
+      const ability = this.gm.abilities[abilityId];
+      
+      // Show/hide based on unlock
+      if (isUnlocked) {
+        slot.element.style.opacity = '1';
+        slot.element.style.borderColor = cooldown > 0 ? 'rgba(100,100,100,0.5)' : slot.color;
+        
+        // Update cooldown display
+        if (cooldown > 0) {
+          const progress = (cooldown / (ability.baseCooldown * this.gm.getCooldownModifier())) * 100;
+          slot.cooldownOverlay.style.height = `${progress}%`;
+          slot.cooldownText.textContent = Math.ceil(cooldown);
+          slot.cooldownText.style.display = 'block';
+        } else {
+          slot.cooldownOverlay.style.height = '0%';
+          slot.cooldownText.style.display = 'none';
+        }
+      } else {
+        slot.element.style.opacity = '0.3';
+        slot.cooldownOverlay.style.height = '0%';
+        slot.cooldownText.style.display = 'none';
+      }
+    }
+    
+    // Show War Cry active indicator
+    if (this.gm.warCryActive && this.abilitySlots.warCry) {
+      const warCrySlot = this.abilitySlots.warCry;
+      warCrySlot.element.style.boxShadow = '0 0 10px #ff6600, 0 0 20px #ff440088';
+    } else if (this.abilitySlots.warCry) {
+      this.abilitySlots.warCry.element.style.boxShadow = 'none';
+    }
   }
   
   flashLevelUp() {
@@ -240,6 +392,9 @@ export class HUD {
     
     // Update XP bar
     this._updateXPBar();
+    
+    // Update ability bar
+    this._updateAbilityBar();
     
     // Boss health bar
     this._updateBossUI();

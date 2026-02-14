@@ -8,6 +8,12 @@ export class InputManager {
     // Input buffer for responsive combat
     this.buffer = {};
     this.bufferDuration = 0.15; // 150ms
+    
+    // Heavy attack charge tracking
+    this.lmbHoldTime = 0;
+    this.lmbHoldStart = 0;
+    this.lmbWasHeld = false;
+    this.chargeThreshold = 0.4; // seconds to hold for charged attack
 
     this.domElement = domElement;
 
@@ -24,9 +30,25 @@ export class InputManager {
     domElement.addEventListener('mousedown', (e) => {
       this.mouseButtons[e.button] = true;
       this._bufferAction(`mouse${e.button}`);
+      
+      // Track LMB hold for charged attacks
+      if (e.button === 0) {
+        this.lmbHoldStart = performance.now();
+        this.lmbWasHeld = false;
+      }
     });
     domElement.addEventListener('mouseup', (e) => {
       this.mouseButtons[e.button] = false;
+      
+      // Check for charged attack release
+      if (e.button === 0 && this.lmbHoldStart > 0) {
+        this.lmbHoldTime = (performance.now() - this.lmbHoldStart) / 1000;
+        if (this.lmbHoldTime >= this.chargeThreshold) {
+          this.lmbWasHeld = true;
+          this._bufferAction('chargedAttack');
+        }
+        this.lmbHoldStart = 0;
+      }
     });
 
     // Mouse movement
@@ -91,6 +113,24 @@ export class InputManager {
   get block() { return this.keys['ShiftLeft'] || this.keys['ShiftRight']; }
   get lockOn() { return this.consumeBuffer('KeyQ'); }
   get interact() { return this.consumeBuffer('KeyE'); }
+  
+  // --- Ability Inputs ---
+  get dashAbility() { return this.consumeBuffer('KeyR'); }
+  get parryAbility() { return this.consumeBuffer('KeyF'); }
+  get warCryAbility() { return this.consumeBuffer('KeyG'); }
+  get chargedAttack() { return this.consumeBuffer('chargedAttack'); }
+  
+  // Check if LMB is being held (for charge indicator)
+  get isChargingAttack() { 
+    return this.mouseButtons[0] && this.lmbHoldStart > 0; 
+  }
+  
+  // Get current charge progress (0-1)
+  getChargeProgress() {
+    if (!this.isChargingAttack) return 0;
+    const elapsed = (performance.now() - this.lmbHoldStart) / 1000;
+    return Math.min(1, elapsed / this.chargeThreshold);
+  }
 
   getMovementVector() {
     let x = 0, z = 0;
