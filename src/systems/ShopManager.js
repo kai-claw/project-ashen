@@ -1,5 +1,16 @@
 import { ITEM_TYPES } from './LootManager.js';
 import { RARITY, EQUIPMENT_BASES, EQUIPMENT_SLOTS } from './EquipmentManager.js';
+import { 
+  SHOP_ITEMS, 
+  MERCHANT_INVENTORIES, 
+  RARITY_PRICE_MULT, 
+  SELL_RATIO,
+  getAvailableItems,
+  getItemPrice as getMerchantItemPrice,
+} from '../data/MerchantData.js';
+
+// Re-export for backwards compatibility
+export { SHOP_ITEMS, MERCHANT_INVENTORIES };
 
 /**
  * ShopManager - Handles all shop/trading logic
@@ -10,198 +21,12 @@ import { RARITY, EQUIPMENT_BASES, EQUIPMENT_SLOTS } from './EquipmentManager.js'
  * - Gold transactions with confirmation
  * - Different merchant types (Blacksmith, Healer, General)
  * - Price scaling based on item rarity
+ * - Level-locked items (items appear as player levels up)
  * - Insufficient gold feedback
  */
 
-// ========== SHOP ITEM DEFINITIONS ==========
-export const SHOP_ITEMS = {
-  // === WEAPONS ===
-  iron_sword: {
-    id: 'iron_sword',
-    name: 'Iron Sword',
-    type: 'equipment',
-    slot: EQUIPMENT_SLOTS.WEAPON,
-    basePrice: 150,
-    rarity: RARITY.COMMON,
-    description: 'A sturdy iron blade.',
-    stats: { damage: 10 },
-    weaponModel: 'sword',
-  },
-  steel_sword: {
-    id: 'steel_sword',
-    name: 'Steel Sword',
-    type: 'equipment',
-    slot: EQUIPMENT_SLOTS.WEAPON,
-    basePrice: 350,
-    rarity: RARITY.UNCOMMON,
-    description: 'Tempered steel, sharp and reliable.',
-    stats: { damage: 18, critChance: 3 },
-    weaponModel: 'longsword',
-  },
-  knight_blade: {
-    id: 'knight_blade',
-    name: 'Knight\'s Blade',
-    type: 'equipment',
-    slot: EQUIPMENT_SLOTS.WEAPON,
-    basePrice: 800,
-    rarity: RARITY.RARE,
-    description: 'A finely crafted sword bearing a knight\'s crest.',
-    stats: { damage: 25, critChance: 5, attackSpeed: 5 },
-    weaponModel: 'longsword',
-  },
-  
-  // === ARMOR ===
-  leather_armor: {
-    id: 'leather_armor',
-    name: 'Leather Armor',
-    type: 'equipment',
-    slot: EQUIPMENT_SLOTS.ARMOR,
-    basePrice: 100,
-    rarity: RARITY.COMMON,
-    description: 'Light armor for mobility.',
-    stats: { defense: 8, stamina: 10 },
-  },
-  chainmail_armor: {
-    id: 'chainmail_armor',
-    name: 'Chainmail',
-    type: 'equipment',
-    slot: EQUIPMENT_SLOTS.ARMOR,
-    basePrice: 300,
-    rarity: RARITY.UNCOMMON,
-    description: 'Interlocking metal rings provide solid protection.',
-    stats: { defense: 15, health: 15 },
-  },
-  iron_shield: {
-    id: 'iron_shield',
-    name: 'Iron Shield',
-    type: 'equipment',
-    slot: EQUIPMENT_SLOTS.ACCESSORY,
-    basePrice: 200,
-    rarity: RARITY.COMMON,
-    description: 'A sturdy shield for blocking attacks.',
-    stats: { defense: 12 },
-  },
-  
-  // === POTIONS ===
-  health_potion_s: {
-    id: 'health_potion_s',
-    name: 'Small Health Potion',
-    type: 'consumable',
-    itemId: 'health-potion',
-    basePrice: 50,
-    rarity: RARITY.COMMON,
-    description: 'Restores 50 HP.',
-    effect: { healAmount: 50 },
-  },
-  health_potion_m: {
-    id: 'health_potion_m',
-    name: 'Medium Health Potion',
-    type: 'consumable',
-    itemId: 'health-potion-m',
-    basePrice: 120,
-    rarity: RARITY.UNCOMMON,
-    description: 'Restores 100 HP.',
-    effect: { healAmount: 100 },
-  },
-  health_potion_l: {
-    id: 'health_potion_l',
-    name: 'Large Health Potion',
-    type: 'consumable',
-    itemId: 'health-potion-l',
-    basePrice: 250,
-    rarity: RARITY.RARE,
-    description: 'Restores 200 HP.',
-    effect: { healAmount: 200 },
-  },
-  stamina_potion: {
-    id: 'stamina_potion',
-    name: 'Stamina Potion',
-    type: 'consumable',
-    itemId: 'stamina-potion',
-    basePrice: 40,
-    rarity: RARITY.COMMON,
-    description: 'Restores 75 Stamina.',
-    effect: { staminaAmount: 75 },
-  },
-  antidote: {
-    id: 'antidote',
-    name: 'Antidote',
-    type: 'consumable',
-    itemId: 'antidote',
-    basePrice: 75,
-    rarity: RARITY.COMMON,
-    description: 'Cures poison effects.',
-    effect: { curePoison: true },
-  },
-  
-  // === MISC ===
-  torch: {
-    id: 'torch',
-    name: 'Torch',
-    type: 'misc',
-    itemId: 'torch',
-    basePrice: 15,
-    rarity: RARITY.COMMON,
-    description: 'Lights the way in dark places.',
-  },
-  rope: {
-    id: 'rope',
-    name: 'Rope',
-    type: 'misc',
-    itemId: 'rope',
-    basePrice: 25,
-    rarity: RARITY.COMMON,
-    description: 'Useful for climbing and exploration.',
-  },
-  map_fragment: {
-    id: 'map_fragment',
-    name: 'Map Fragment',
-    type: 'misc',
-    itemId: 'map-fragment',
-    basePrice: 100,
-    rarity: RARITY.UNCOMMON,
-    description: 'Reveals a section of the world map.',
-  },
-  rusty_key: {
-    id: 'rusty_key',
-    name: 'Rusty Key',
-    type: 'misc',
-    itemId: 'rusty-key',
-    basePrice: 150,
-    rarity: RARITY.UNCOMMON,
-    description: 'Opens old locks. Consumable.',
-  },
-};
-
-// ========== MERCHANT INVENTORIES ==========
-export const MERCHANT_INVENTORIES = {
-  blacksmith: {
-    title: 'Blacksmith',
-    greeting: 'Need something forged? I have the finest steel.',
-    items: ['iron_sword', 'steel_sword', 'knight_blade', 'leather_armor', 'chainmail_armor', 'iron_shield'],
-  },
-  healer: {
-    title: 'Healer',
-    greeting: 'Rest your weary soul. I have remedies for all ailments.',
-    items: ['health_potion_s', 'health_potion_m', 'health_potion_l', 'stamina_potion', 'antidote'],
-  },
-  merchant: {
-    title: 'General Merchant',
-    greeting: 'Welcome, traveler! I have all manner of goods.',
-    items: ['health_potion_s', 'stamina_potion', 'torch', 'rope', 'map_fragment', 'rusty_key', 'leather_armor'],
-  },
-};
-
-// Price multipliers by rarity
-const RARITY_PRICE_MULT = {
-  common: 1.0,
-  uncommon: 1.5,
-  rare: 2.5,
-  epic: 4.0,
-};
-
-// Sell price ratio (50% of buy price)
-const SELL_RATIO = 0.5;
+// Note: Shop items and merchant inventories are now defined in ../data/MerchantData.js
+// This file focuses on UI and transaction logic.
 
 export class ShopManager {
   constructor(gameManager, lootManager, equipmentManager, audioManager) {
@@ -446,14 +271,26 @@ export class ShopManager {
   }
   
   /**
+   * Get player's current level
+   */
+  getPlayerLevel() {
+    return this.gm?.currentLevel || 1;
+  }
+  
+  /**
+   * Get available items for current merchant, filtered by player level
+   */
+  getAvailableItems() {
+    const type = this.currentNPC?.type || 'merchant';
+    const playerLevel = this.getPlayerLevel();
+    return getAvailableItems(type, playerLevel);
+  }
+  
+  /**
    * Calculate item price (with rarity multiplier)
    */
   getItemPrice(item, forSale = false) {
-    const basePrice = item.basePrice || 100;
-    const rarityMult = RARITY_PRICE_MULT[item.rarity?.id || 'common'] || 1.0;
-    const price = Math.round(basePrice * rarityMult);
-    
-    return forSale ? Math.round(price * SELL_RATIO) : price;
+    return getMerchantItemPrice(item, forSale);
   }
   
   /**
@@ -773,8 +610,11 @@ export class ShopManager {
    * Render buy tab content
    */
   _renderBuyTab(merchant) {
-    const items = merchant.items.map(id => SHOP_ITEMS[id]).filter(Boolean);
+    // Get level-filtered items
+    const availableItemIds = this.getAvailableItems();
+    const items = availableItemIds.map(id => SHOP_ITEMS[id]).filter(Boolean);
     const gold = this.getPlayerGold();
+    const playerLevel = this.getPlayerLevel();
     
     if (items.length === 0) {
       return '<p style="color: #666; text-align: center;">No items available</p>';
