@@ -29,6 +29,7 @@ import { ManaManager } from './systems/ManaManager.js';
 import { SpellManager } from './systems/SpellManager.js';
 import { SpellCaster } from './systems/SpellCaster.js';
 import { SpellEffects } from './systems/SpellEffects.js';
+import { BossUI } from './ui/BossUI.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -319,6 +320,10 @@ hud.setStatsUI(statsUI);
 hud.setManaManager(manaManager);
 hud.setSpellManager(spellManager);
 
+// --- Boss UI System (Phase 21) ---
+const bossUI = new BossUI(gameManager);
+gameManager.bossUI = bossUI;
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -504,6 +509,7 @@ function animate() {
   spellManager.update(delta); // Phase 20: Spell cooldowns and buffs
   spellCaster.update(delta); // Phase 20: Spell casting, projectiles, effects
   spellEffects.update(delta); // Phase 20: Visual spell effects (auras, trails)
+  bossUI.update(delta); // Phase 21: Boss health bar and phase indicators
   audioManager.updateListener();
   floatingText.update(delta);
 
@@ -631,6 +637,7 @@ window.weaponManager = weaponManager;
 window.manaManager = manaManager;
 window.spellManager = spellManager;
 window.spellCaster = spellCaster;
+window.bossUI = bossUI;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
