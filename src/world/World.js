@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { TerrainGenerator } from './TerrainGenerator.js';
+import { FoliageManager } from './FoliageManager.js';
 
 /**
  * World - Open World Environment
- * Phase 12: Procedural terrain + starting castle
+ * Phase 12: Procedural terrain + starting castle + foliage
  * 
  * Replaces the cathedral dungeon with open world terrain.
  */
@@ -33,6 +34,7 @@ export class World {
     this._createSkybox();
     this.terrain = new TerrainGenerator(scene);
     this._createStartingCastle();
+    this.foliage = new FoliageManager(scene, this.terrain);
     this._createLighting();
     
     // Update bonfire position to be on terrain
@@ -127,6 +129,48 @@ export class World {
     }
     
     return collided ? pushOut : null;
+  }
+  
+  /**
+   * Check collision with trees (foliage system)
+   * Returns push-out vector if colliding
+   */
+  checkTreeCollision(position, radius = 0.4) {
+    if (!this.foliage) return null;
+    return this.foliage.checkTreeCollision(position, radius);
+  }
+  
+  /**
+   * Combined collision check - walls + trees
+   * Returns object { collides: boolean, pushVector: Vector3 }
+   */
+  checkCollision(position, radius = 0.4) {
+    const pushVector = new THREE.Vector3();
+    let collides = false;
+    
+    // Check wall collision
+    const wallPush = this.checkWallCollision(position, radius);
+    if (wallPush) {
+      pushVector.add(wallPush);
+      collides = true;
+    }
+    
+    // Check tree collision
+    const treePush = this.checkTreeCollision(position, radius);
+    if (treePush) {
+      pushVector.add(treePush);
+      collides = true;
+    }
+    
+    return { collides, pushVector };
+  }
+  
+  /**
+   * Check if position is near a tree (for spawn validation)
+   */
+  isNearTree(x, z, minDistance = 3) {
+    if (!this.foliage) return false;
+    return this.foliage.isNearTree(x, z, minDistance);
   }
   
   // ========================================
@@ -450,6 +494,9 @@ export class World {
   dispose() {
     if (this.terrain) {
       this.terrain.dispose();
+    }
+    if (this.foliage) {
+      this.foliage.dispose();
     }
   }
 }

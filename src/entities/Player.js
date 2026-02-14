@@ -371,9 +371,10 @@ export class Player {
   _applyWallCollision() {
     if (!this.world) return;
     
-    const pushOut = this.world.checkWallCollision(this.mesh.position, this.collisionRadius);
-    if (pushOut) {
-      this.mesh.position.add(pushOut);
+    // Use checkCollision which includes walls + trees
+    const result = this.world.checkCollision(this.mesh.position, this.collisionRadius);
+    if (result && result.collides && result.pushVector) {
+      this.mesh.position.add(result.pushVector);
     }
   }
   
