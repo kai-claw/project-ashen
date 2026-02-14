@@ -837,7 +837,7 @@ export class VillageManager {
         if (station.type === 'forge') {
           const worldX = village.x + station.localX * cos - station.localZ * sin;
           const worldZ = village.z + station.localX * sin + station.localZ * cos;
-          const y = this.terrain ? this.terrain.getHeightAt(worldX, worldZ) : 0;
+          const y = this.terrain && this.terrain.getTerrainHeight ? this.terrain.getTerrainHeight(worldX, worldZ) : 0;
           
           fires.push({
             position: new THREE.Vector3(worldX, y + 0.5, worldZ),
