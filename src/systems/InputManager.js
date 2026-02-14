@@ -120,6 +120,10 @@ export class InputManager {
   get warCryAbility() { return this.consumeBuffer('KeyG'); }
   get chargedAttack() { return this.consumeBuffer('chargedAttack'); }
   
+  // --- Potion Hotkeys ---
+  get useHealthPotion() { return this.consumeBuffer('Digit1'); }
+  get useStaminaPotion() { return this.consumeBuffer('Digit2'); }
+  
   // Check if LMB is being held (for charge indicator)
   get isChargingAttack() { 
     return this.mouseButtons[0] && this.lmbHoldStart > 0; 

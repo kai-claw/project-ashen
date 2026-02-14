@@ -9,6 +9,7 @@ import { EnemyManager } from './entities/EnemyManager.js';
 import { World } from './world/World.js';
 import { InputManager } from './systems/InputManager.js';
 import { ItemManager } from './systems/ItemManager.js';
+import { LootManager } from './systems/LootManager.js';
 import { HUD } from './ui/HUD.js';
 import { CrucibleUI } from './ui/CrucibleUI.js';
 import { StatsUI } from './ui/StatsUI.js';
@@ -156,13 +157,16 @@ const world = new World(scene);
 const itemManager = new ItemManager(scene, gameManager);
 itemManager.initItems(world.getItemSpawns());
 
+// --- Loot System ---
+const lootManager = new LootManager(scene, gameManager);
+
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
 player.setWorld(world); // Enable collision detection
 const cameraController = new CameraController(camera, player.mesh, inputManager);
 player.setCameraController(cameraController);
 
-const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager);
+const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager, lootManager);
 
 // --- Floating Text (XP gains, level ups) ---
 const floatingText = new FloatingText(camera);
@@ -177,6 +181,7 @@ gameManager.hud = hud;
 gameManager.cameraController = cameraController;
 gameManager.itemManager = itemManager;  // For boss reward drops
 gameManager.floatingText = floatingText; // For XP gain text
+gameManager.lootManager = lootManager;  // For inventory/potions
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -205,6 +210,16 @@ function animate() {
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
   inputManager.update(delta);
+  
+  // Potion hotkeys (1 = Health, 2 = Stamina)
+  if (!gameManager.isDead) {
+    if (inputManager.useHealthPotion) {
+      lootManager.useItem('health-potion');
+    }
+    if (inputManager.useStaminaPotion) {
+      lootManager.useItem('stamina-potion');
+    }
+  }
   
   // Check hitstop - pause game entities during freeze frame
   const inHitstop = gameManager.updateHitstop(delta);
@@ -263,6 +278,7 @@ function animate() {
   // These always update regardless of hitstop
   cameraController.update(delta);
   itemManager.update(player.mesh.position);
+  lootManager.update(player.mesh.position);
   hud.update();
   crucibleUI.update();
   statsUI.update();
@@ -381,5 +397,6 @@ window.gameManager = gameManager;
 window.player = player;
 window.world = world;
 window.itemManager = itemManager;
+window.lootManager = lootManager;
 window.audioManager = audioManager;
 window.particleManager = particleManager;

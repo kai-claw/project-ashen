@@ -67,12 +67,13 @@ function distanceFromCastle(x, z) {
 }
 
 export class EnemyManager {
-  constructor(scene, gameManager, player, world = null, particleManager = null) {
+  constructor(scene, gameManager, player, world = null, particleManager = null, lootManager = null) {
     this.scene = scene;
     this.gm = gameManager;
     this.player = player;
     this.world = world;
     this.particleManager = particleManager;
+    this.lootManager = lootManager;
     this.enemies = [];
     this.boss = null;
     this.cryptLord = null;  // Second boss - The Crypt Lord
@@ -472,6 +473,10 @@ export class EnemyManager {
             // Spawn death particles
             if (this.particleManager) {
               this.particleManager.spawnDeathBurst(enemy.mesh.position.clone());
+            }
+            // Drop loot
+            if (this.lootManager) {
+              this.lootManager.rollLoot(enemy, enemy.mesh.position.clone());
             }
             // Respawn after delay with same scaling
             setTimeout(() => {
