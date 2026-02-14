@@ -34,6 +34,8 @@ import { createBossSpawner } from './systems/BossSpawner.js';
 import { bossRenderer } from './systems/BossRenderer.js';
 import { createDungeonManager, getDungeonManager } from './systems/DungeonManager.js';
 import { GatheringManager } from './systems/GatheringManager.js';
+import { CraftingManager } from './systems/CraftingManager.js';
+import { CraftingUI } from './ui/CraftingUI.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -229,6 +231,12 @@ const gatheringManager = new GatheringManager(
   particleManager,
   audioManager
 );
+
+// --- Crafting System (Phase 23) ---
+const craftingManager = new CraftingManager(gameManager, inventoryUI);
+gameManager.craftingManager = craftingManager;
+gameManager.gatheringManager = gatheringManager;
+const craftingUI = new CraftingUI(gameManager, craftingManager, inputManager);
 
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
@@ -581,12 +589,12 @@ function animate() {
   
   // NPC interaction system (prompts, facing, labels)
   // Don't show interaction prompts if any UI is open
-  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !craftingUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
     interactionManager.update(player.mesh.position, delta);
   }
   
   // Gathering system (Phase 23) - update nodes and interaction
-  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !craftingUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
     gatheringManager.update(player.mesh.position.x, player.mesh.position.z, delta);
   }
   
@@ -599,6 +607,7 @@ function animate() {
   }
   
   inventoryUI.update();
+  craftingUI.update();
   hud.update();
   crucibleUI.update();
   statsUI.update();

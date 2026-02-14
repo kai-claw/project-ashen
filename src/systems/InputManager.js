@@ -137,6 +137,8 @@ export class InputManager {
   
   // --- Equipment/Inventory UI ---
   get openEquipment() { return this.consumeBuffer('KeyI'); }
+  get craftingToggle() { return this.consumeBuffer('KeyC'); }
+  get escape() { return this.consumeBuffer('Escape'); }
   
   // --- Spell Casting (F key to cast selected spell, F1-F6 for hotbar slots) ---
   get castSpell() { return this.consumeBuffer('KeyF'); }
