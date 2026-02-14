@@ -50,6 +50,8 @@ export class SpellManager {
     this.onHotbarChanged = null;      // (slots) => void
     this.onBuffsChanged = null;       // (activeBuffs) => void
     this.onSpellCast = null;          // (spellId, spell) => void
+    this.onBuffExpired = null;        // (spellId) => void
+    this.onShieldExpired = null;      // (spellId) => void
     
     // Load saved state
     this._loadState();
@@ -498,6 +500,7 @@ export class SpellManager {
    */
   absorbDamage(damage) {
     let remaining = damage;
+    const brokenShields = [];
     
     for (const [spellId, shield] of Object.entries(this.activeShields)) {
       if (shield.remainingShield > 0 && remaining > 0) {
@@ -508,10 +511,16 @@ export class SpellManager {
         console.log(`[SpellManager] Shield absorbed ${absorbed} damage`);
         
         if (shield.remainingShield <= 0) {
+          brokenShields.push(spellId);
           delete this.activeShields[spellId];
-          console.log(`[SpellManager] Shield expired: ${shield.spell.name}`);
+          console.log(`[SpellManager] Shield broken: ${SPELL_DATA[spellId]?.name}`);
         }
       }
+    }
+    
+    // Fire callbacks for broken shields (for visual cleanup)
+    for (const spellId of brokenShields) {
+      if (this.onShieldExpired) this.onShieldExpired(spellId);
     }
     
     if (this.onBuffsChanged) {
@@ -610,25 +619,37 @@ export class SpellManager {
     
     // Update buffs
     let buffsChanged = false;
+    const expiredBuffs = [];
     for (const spellId in this.activeBuffs) {
       this.activeBuffs[spellId].timeRemaining -= delta;
       
       if (this.activeBuffs[spellId].timeRemaining <= 0) {
         console.log(`[SpellManager] Buff expired: ${SPELL_DATA[spellId]?.name}`);
+        expiredBuffs.push(spellId);
         delete this.activeBuffs[spellId];
         buffsChanged = true;
       }
     }
     
     // Update shields
+    const expiredShields = [];
     for (const spellId in this.activeShields) {
       this.activeShields[spellId].timeRemaining -= delta;
       
       if (this.activeShields[spellId].timeRemaining <= 0) {
         console.log(`[SpellManager] Shield timed out: ${SPELL_DATA[spellId]?.name}`);
+        expiredShields.push(spellId);
         delete this.activeShields[spellId];
         buffsChanged = true;
       }
+    }
+    
+    // Fire expired callbacks for visual cleanup
+    for (const spellId of expiredBuffs) {
+      if (this.onBuffExpired) this.onBuffExpired(spellId);
+    }
+    for (const spellId of expiredShields) {
+      if (this.onShieldExpired) this.onShieldExpired(spellId);
     }
     
     if (buffsChanged && this.onBuffsChanged) {
@@ -688,6 +709,14 @@ export class SpellManager {
    * Clear all buffs and cooldowns (on death)
    */
   clearAllEffects() {
+    // Fire expiration callbacks for visual cleanup
+    for (const spellId of Object.keys(this.activeBuffs)) {
+      if (this.onBuffExpired) this.onBuffExpired(spellId);
+    }
+    for (const spellId of Object.keys(this.activeShields)) {
+      if (this.onShieldExpired) this.onShieldExpired(spellId);
+    }
+    
     this.activeBuffs = {};
     this.activeShields = {};
     this.activeEffects = {};

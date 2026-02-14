@@ -40,7 +40,7 @@ export class SpellCaster {
     this.castTimer = 0;
     this.castDuration = 0;
     
-    // Active projectiles: { id, mesh, velocity, spell, damage, distanceTraveled, maxDistance }
+    // Active projectiles: { id, mesh, effectId, velocity, spell, damage, distanceTraveled, maxDistance }
     this.projectiles = [];
     this.projectileIdCounter = 0;
     
@@ -48,8 +48,12 @@ export class SpellCaster {
     this.activeAOEs = [];
     this.aoeIdCounter = 0;
     
-    // Casting visual (hands glow)
+    // Casting visual (hands glow) - now managed by SpellEffects
     this.castingGlow = null;
+    this.castingEffectId = null;
+    
+    // SpellEffects manager reference (set via spellEffects property)
+    this.spellEffects = null;
     
     // Events
     this.onCastStart = null;      // (spell) => void
@@ -253,8 +257,10 @@ export class SpellCaster {
         const healAmount = calculateSpellHealing(spell, intStat, wisStat);
         this.gm.heal(healAmount);
         
-        // Healing particles
-        if (this.particleManager) {
+        // Healing particles - use SpellEffects if available
+        if (this.spellEffects) {
+          this.spellEffects.spawnHealingEffect(this.player.mesh.position, 1);
+        } else if (this.particleManager) {
           this._spawnHealingParticles(this.player.mesh.position);
         }
         
@@ -264,8 +270,11 @@ export class SpellCaster {
         const healPerSec = calculateSpellHealing(spell, intStat, wisStat);
         this.spellManager.applyRegen(healPerSec, spell.duration);
         
-        // Regen visual
-        if (this.particleManager) {
+        // Regen visual - create buff aura
+        if (this.spellEffects) {
+          this.spellEffects.createBuffAura('regeneration', 0x66ff99, 'Regeneration');
+          this.spellEffects.spawnHealingEffect(this.player.mesh.position, 0.5);
+        } else if (this.particleManager) {
           this._spawnRegenParticles(this.player.mesh.position);
         }
       }
@@ -276,12 +285,20 @@ export class SpellCaster {
       if (spell.shieldAmount) {
         this.spellManager.applyShield(spell.id);
         
-        // Shield visual
-        if (this.particleManager) {
+        // Shield visual - use SpellEffects for persistent aura
+        if (this.spellEffects) {
+          const shieldColor = spell.id === 'barrier' ? 0xaa66ff : 0x66aaff;
+          this.spellEffects.createShieldAura(shieldColor, 0.3);
+        } else if (this.particleManager) {
           this._spawnShieldParticles(this.player.mesh.position);
         }
       } else if (spell.damageReduction) {
         this.spellManager.applyBuff(spell.id);
+        
+        // Damage reduction buff visual
+        if (this.spellEffects) {
+          this.spellEffects.createBuffAura(spell.id, 0x8888ff, spell.name);
+        }
       }
     }
     
@@ -289,8 +306,17 @@ export class SpellCaster {
     if (spell.category === SPELL_CATEGORIES.BUFF) {
       this.spellManager.applyBuff(spell.id);
       
-      // Buff visual
-      if (this.particleManager) {
+      // Buff visual - create buff aura
+      let buffColor = 0xffff66;
+      if (spell.speedBonus) buffColor = 0x66ffff;
+      if (spell.damageBonus) buffColor = 0xff6666;
+      if (spell.spellDamageBonus) buffColor = 0xaa66ff;
+      if (spell.damageReduction) buffColor = 0x888888;
+      
+      if (this.spellEffects) {
+        this.spellEffects.createBuffAura(spell.id, buffColor, spell.name);
+        this._spawnBuffParticles(this.player.mesh.position, spell);
+      } else if (this.particleManager) {
         this._spawnBuffParticles(this.player.mesh.position, spell);
       }
     }
@@ -371,11 +397,6 @@ export class SpellCaster {
   _createProjectile(spell, position, direction) {
     const id = ++this.projectileIdCounter;
     
-    // Create projectile mesh based on spell type
-    const mesh = this._createProjectileMesh(spell);
-    mesh.position.copy(position);
-    this.scene.add(mesh);
-    
     // Calculate damage
     const intStat = this.gm.stats?.intelligence || 0;
     let damage = calculateSpellDamage(spell, intStat);
@@ -383,9 +404,48 @@ export class SpellCaster {
     // Apply spell damage bonus from buffs
     damage *= this.spellManager.getSpellDamageBonus();
     
+    let mesh = null;
+    let effectId = null;
+    
+    // Use SpellEffects for enhanced visuals if available
+    if (this.spellEffects) {
+      let effectResult = null;
+      
+      switch (spell.id) {
+        case 'fireball':
+          effectResult = this.spellEffects.createFireballEffect(position, direction);
+          break;
+        case 'iceShard':
+          effectResult = this.spellEffects.createIceShardEffect(position, direction);
+          break;
+        case 'lightningBolt':
+          effectResult = this.spellEffects.createLightningEffect(position, direction);
+          break;
+        case 'arcaneMissile':
+          effectResult = this.spellEffects.createArcaneMissileEffect(position);
+          break;
+        default:
+          // Fallback to simple mesh for other spells
+          mesh = this._createProjectileMesh(spell);
+          mesh.position.copy(position);
+          this.scene.add(mesh);
+      }
+      
+      if (effectResult) {
+        mesh = effectResult.mesh;
+        effectId = effectResult.id;
+      }
+    } else {
+      // No SpellEffects - use simple mesh
+      mesh = this._createProjectileMesh(spell);
+      mesh.position.copy(position);
+      this.scene.add(mesh);
+    }
+    
     const projectile = {
       id,
       mesh,
+      effectId,
       velocity: direction.clone().multiplyScalar(spell.projectileSpeed),
       spell,
       damage: Math.floor(damage),
@@ -396,7 +456,7 @@ export class SpellCaster {
     
     this.projectiles.push(projectile);
     
-    console.log(`[SpellCaster] Projectile created: ${spell.name} (${damage} damage)`);
+    console.log(`[SpellCaster] Projectile created: ${spell.name} (${Math.floor(damage)} damage)`);
   }
   
   /**
@@ -500,12 +560,17 @@ export class SpellCaster {
       proj.mesh.position.add(movement);
       proj.distanceTraveled += movement.length();
       
-      // Rotate projectile for visual effect
-      proj.mesh.rotation.z += delta * 5;
-      
-      // Add trail particles
-      if (this.particleManager && Math.random() < 0.3) {
-        this._spawnProjectileTrail(proj);
+      // If using SpellEffects, update the effect position
+      if (this.spellEffects && proj.effectId) {
+        this.spellEffects.updateEffectPosition(proj.effectId, proj.mesh.position);
+      } else {
+        // Rotate simple projectile mesh for visual effect
+        proj.mesh.rotation.z += delta * 5;
+        
+        // Add trail particles for simple projectiles only
+        if (this.particleManager && Math.random() < 0.3) {
+          this._spawnProjectileTrail(proj);
+        }
       }
       
       // Check for collision with enemies
@@ -523,7 +588,11 @@ export class SpellCaster {
         // Expire without hitting - still do AOE if applicable
         if (proj.aoeRadius > 0) {
           this._dealAOEDamage(proj.spell, proj.mesh.position, proj.damage);
-          this._spawnAOEParticles(proj.mesh.position, proj.spell);
+          if (this.spellEffects) {
+            this.spellEffects.spawnAOERingEffect(proj.mesh.position, proj.spell.aoeRadius, proj.spell);
+          } else {
+            this._spawnAOEParticles(proj.mesh.position, proj.spell);
+          }
         }
         toRemove.push(proj.id);
       }
@@ -533,7 +602,11 @@ export class SpellCaster {
         if (proj.aoeRadius > 0) {
           proj.mesh.position.y = 0;
           this._dealAOEDamage(proj.spell, proj.mesh.position, proj.damage);
-          this._spawnAOEParticles(proj.mesh.position, proj.spell);
+          if (this.spellEffects) {
+            this.spellEffects.spawnAOERingEffect(proj.mesh.position, proj.spell.aoeRadius, proj.spell);
+          } else {
+            this._spawnAOEParticles(proj.mesh.position, proj.spell);
+          }
         }
         toRemove.push(proj.id);
       }
@@ -543,7 +616,18 @@ export class SpellCaster {
     for (const id of toRemove) {
       const index = this.projectiles.findIndex(p => p.id === id);
       if (index !== -1) {
-        this.scene.remove(this.projectiles[index].mesh);
+        const proj = this.projectiles[index];
+        
+        // Remove effect from SpellEffects if applicable
+        if (this.spellEffects && proj.effectId) {
+          this.spellEffects._removeEffect(proj.effectId);
+        } else {
+          // Remove simple mesh from scene
+          this.scene.remove(proj.mesh);
+          if (proj.mesh.geometry) proj.mesh.geometry.dispose();
+          if (proj.mesh.material) proj.mesh.material.dispose();
+        }
+        
         this.projectiles.splice(index, 1);
       }
     }
@@ -591,7 +675,9 @@ export class SpellCaster {
       const healAmount = calculateSpellHealing(proj.spell, intStat, wisStat);
       this.gm.heal(healAmount);
       
-      if (this.particleManager && this.player) {
+      if (this.spellEffects && this.player) {
+        this.spellEffects.spawnHealingEffect(this.player.mesh.position, 0.5);
+      } else if (this.particleManager && this.player) {
         this._spawnHealingParticles(this.player.mesh.position);
       }
     }
@@ -599,10 +685,15 @@ export class SpellCaster {
     // AOE damage if applicable
     if (proj.aoeRadius > 0) {
       this._dealAOEDamage(proj.spell, proj.mesh.position, proj.damage, enemy);
+      if (this.spellEffects) {
+        this.spellEffects.spawnAOERingEffect(proj.mesh.position, proj.spell.aoeRadius, proj.spell);
+      }
     }
     
-    // Impact particles
-    if (this.particleManager) {
+    // Impact particles - use SpellEffects if available
+    if (this.spellEffects) {
+      this.spellEffects.spawnImpactEffect(proj.mesh.position, proj.spell);
+    } else if (this.particleManager) {
       this._spawnImpactParticles(proj.mesh.position, proj.spell);
     }
     
@@ -666,7 +757,16 @@ export class SpellCaster {
   _startCastingVisual() {
     if (!this.player) return;
     
-    // Create glowing effect on player hands
+    // Use SpellEffects for enhanced casting glow if available
+    if (this.spellEffects && this.currentCastSpell) {
+      const effect = this.spellEffects.createCastingEffect(this.currentCastSpell);
+      if (effect) {
+        this.castingEffectId = effect.id;
+        return;
+      }
+    }
+    
+    // Fallback: create simple glowing effect on player hands
     const geometry = new THREE.SphereGeometry(0.2, 8, 8);
     const material = new THREE.MeshBasicMaterial({
       color: 0x66aaff,
@@ -684,6 +784,9 @@ export class SpellCaster {
   }
   
   _updateCastingVisual(delta) {
+    // SpellEffects handles its own updates
+    if (this.castingEffectId) return;
+    
     if (!this.castingGlow) return;
     
     // Pulse effect
@@ -714,7 +817,14 @@ export class SpellCaster {
     this.castTimer = 0;
     this.castDuration = 0;
     
-    // Remove casting visual
+    // Remove SpellEffects casting effect if used
+    if (this.spellEffects && this.castingEffectId) {
+      this.spellEffects.removeCastingEffect(this.castingEffectId);
+      this.castingEffectId = null;
+      return;
+    }
+    
+    // Remove simple casting visual
     if (this.castingGlow && this.player) {
       this.player.mesh.remove(this.castingGlow);
       this.castingGlow.geometry.dispose();

@@ -240,6 +240,14 @@ spellEffects.setPlayer(player);
 gameManager.spellEffects = spellEffects;
 spellCaster.spellEffects = spellEffects; // For enhanced projectile visuals
 
+// Hook SpellManager expiration callbacks to SpellEffects for visual cleanup
+spellManager.onBuffExpired = (spellId) => {
+  spellEffects.removeBuffAura(spellId);
+};
+spellManager.onShieldExpired = (spellId) => {
+  spellEffects.removeShieldAura();
+};
+
 // --- NPC Interaction System ---
 const interactionManager = new InteractionManager(
   scene,
