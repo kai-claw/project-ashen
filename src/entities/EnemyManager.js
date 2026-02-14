@@ -424,6 +424,9 @@ export class EnemyManager {
 
           if (result === 'died') {
             this.gm.addRemnant(enemy.config.remnantDrop);
+            // Grant XP for the kill
+            const xpReward = this.gm.calculateEnemyXP(enemy);
+            this.gm.gainXP(xpReward, enemy.mesh.position);
             // Spawn death particles
             if (this.particleManager) {
               this.particleManager.spawnDeathBurst(enemy.mesh.position.clone());
@@ -527,6 +530,8 @@ export class EnemyManager {
               // Epic death burst for boss
               this.particleManager.spawnDeathBurst(hitPos);
               this.particleManager.spawnDeathBurst(hitPos); // Double for boss
+              // Grant XP for boss kill (large reward!)
+              this.gm.gainXP(200, hitPos);
             }
           }
         }

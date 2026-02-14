@@ -23,6 +23,119 @@ export class HUD {
     
     // Stamina depleted warning
     this.staminaWarningActive = false;
+    
+    // Create XP bar UI
+    this._createXPBar();
+    
+    // Level up flash
+    this.levelUpFlashActive = false;
+  }
+  
+  _createXPBar() {
+    // Create XP bar container at bottom of screen
+    this.xpContainer = document.createElement('div');
+    this.xpContainer.id = 'xp-container';
+    this.xpContainer.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      z-index: 100;
+      pointer-events: none;
+    `;
+    
+    // Level label
+    this.levelLabel = document.createElement('div');
+    this.levelLabel.id = 'level-label';
+    this.levelLabel.style.cssText = `
+      font-family: 'Cinzel', serif;
+      font-size: 14px;
+      color: #ffdd88;
+      text-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(255,200,0,0.3);
+      letter-spacing: 2px;
+    `;
+    this.levelLabel.textContent = 'LEVEL 1';
+    this.xpContainer.appendChild(this.levelLabel);
+    
+    // XP bar background
+    this.xpBarBg = document.createElement('div');
+    this.xpBarBg.style.cssText = `
+      width: 100%;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 200, 100, 0.3);
+      border-radius: 3px;
+      overflow: hidden;
+    `;
+    
+    // XP bar fill
+    this.xpBar = document.createElement('div');
+    this.xpBar.id = 'xp-bar';
+    this.xpBar.style.cssText = `
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #aa8800, #ffcc44);
+      box-shadow: 0 0 6px rgba(255, 200, 0, 0.5);
+      transition: width 0.3s ease-out;
+    `;
+    
+    this.xpBarBg.appendChild(this.xpBar);
+    this.xpContainer.appendChild(this.xpBarBg);
+    
+    document.body.appendChild(this.xpContainer);
+  }
+  
+  flashLevelUp() {
+    if (this.levelUpFlashActive) return;
+    this.levelUpFlashActive = true;
+    
+    // Flash the level label gold
+    this.levelLabel.style.color = '#ffffff';
+    this.levelLabel.style.textShadow = '0 0 20px rgba(255,220,0,1), 0 0 40px rgba(255,200,0,0.8)';
+    this.levelLabel.style.fontSize = '18px';
+    this.levelLabel.style.transition = 'all 0.2s ease-out';
+    
+    // Flash the XP bar
+    this.xpBar.style.background = 'linear-gradient(90deg, #ffff88, #ffffff)';
+    this.xpBar.style.boxShadow = '0 0 20px rgba(255, 255, 200, 1)';
+    
+    // Screen flash
+    if (!this.levelUpFlash) {
+      this.levelUpFlash = document.createElement('div');
+      this.levelUpFlash.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(ellipse at center, rgba(255, 220, 100, 0.4) 0%, transparent 70%);
+        pointer-events: none;
+        z-index: 997;
+        opacity: 0;
+        transition: opacity 0.1s ease-out;
+      `;
+      document.body.appendChild(this.levelUpFlash);
+    }
+    this.levelUpFlash.style.opacity = '1';
+    
+    // Fade out effects
+    setTimeout(() => {
+      this.levelUpFlash.style.opacity = '0';
+    }, 200);
+    
+    setTimeout(() => {
+      this.levelLabel.style.color = '#ffdd88';
+      this.levelLabel.style.textShadow = '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(255,200,0,0.3)';
+      this.levelLabel.style.fontSize = '14px';
+      this.xpBar.style.background = 'linear-gradient(90deg, #aa8800, #ffcc44)';
+      this.xpBar.style.boxShadow = '0 0 6px rgba(255, 200, 0, 0.5)';
+      this.levelUpFlashActive = false;
+    }, 800);
   }
   
   _createDamageVignette() {
@@ -125,8 +238,35 @@ export class HUD {
       }
     }
     
+    // Update XP bar
+    this._updateXPBar();
+    
     // Boss health bar
     this._updateBossUI();
+  }
+  
+  _updateXPBar() {
+    if (this.levelLabel) {
+      const level = this.gm.currentLevel || 1;
+      const maxLevel = this.gm.maxLevel || 20;
+      if (level >= maxLevel) {
+        this.levelLabel.textContent = `LEVEL ${level} (MAX)`;
+      } else {
+        this.levelLabel.textContent = `LEVEL ${level}`;
+      }
+    }
+    
+    if (this.xpBar) {
+      const progress = this.gm.getXPProgress ? this.gm.getXPProgress() : 0;
+      this.xpBar.style.width = `${progress * 100}%`;
+      
+      // Glow effect when close to leveling
+      if (progress > 0.8) {
+        this.xpBar.style.boxShadow = '0 0 12px rgba(255, 255, 100, 0.8)';
+      } else {
+        this.xpBar.style.boxShadow = '0 0 6px rgba(255, 200, 0, 0.5)';
+      }
+    }
   }
   
   _updateBossUI() {

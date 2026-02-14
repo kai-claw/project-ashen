@@ -14,6 +14,7 @@ import { CrucibleUI } from './ui/CrucibleUI.js';
 import { CameraController } from './systems/CameraController.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { ParticleManager } from './systems/ParticleManager.js';
+import { FloatingText } from './ui/FloatingText.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -162,6 +163,9 @@ player.setCameraController(cameraController);
 
 const enemyManager = new EnemyManager(scene, gameManager, player, world, particleManager);
 
+// --- Floating Text (XP gains, level ups) ---
+const floatingText = new FloatingText(camera);
+
 // --- Wire Up GameManager ---
 gameManager.setCheckpoint(world.bonfirePosition.clone());
 gameManager.setEntities(player, enemyManager, scene, camera);
@@ -171,6 +175,7 @@ gameManager.particleManager = particleManager;
 gameManager.hud = hud;
 gameManager.cameraController = cameraController;
 gameManager.itemManager = itemManager;  // For boss reward drops
+gameManager.floatingText = floatingText; // For XP gain text
 
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
@@ -230,6 +235,7 @@ function animate() {
   crucibleUI.update();
   gameManager.update(delta);
   audioManager.updateListener();
+  floatingText.update(delta);
 
   // Check for bloodstain collection
   gameManager.collectBloodstain();

@@ -117,6 +117,44 @@ export class AudioManager {
     
     // Stamina depleted warning
     this.soundBuffers.staminaDepleted = this.createStaminaDepletedBuffer(0.15);
+    
+    // Level up fanfare (ascending chime)
+    this.soundBuffers.levelUp = this.createLevelUpBuffer(0.8);
+  }
+  
+  /**
+   * Create level up fanfare (triumphant ascending chime)
+   */
+  createLevelUpBuffer(duration) {
+    const sampleRate = this.context.sampleRate;
+    const length = sampleRate * duration;
+    const buffer = this.context.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    // Ascending chord progression: C5 -> E5 -> G5 -> C6
+    const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
+    const noteLength = length / notes.length;
+    
+    for (let i = 0; i < length; i++) {
+      const noteIndex = Math.min(Math.floor(i / noteLength), notes.length - 1);
+      const t = (i % noteLength) / noteLength;
+      const globalT = i / length;
+      
+      // Envelope for each note
+      const noteEnvelope = Math.sin(t * Math.PI) * 0.8;
+      // Global envelope (fade out at end)
+      const globalEnvelope = 1 - Math.pow(globalT, 3) * 0.5;
+      
+      // Play current note + shimmer
+      const freq = notes[noteIndex];
+      const tone = Math.sin(2 * Math.PI * freq * (i / sampleRate));
+      const octave = Math.sin(2 * Math.PI * freq * 2 * (i / sampleRate)) * 0.3;
+      const shimmer = Math.sin(2 * Math.PI * freq * 3 * (i / sampleRate)) * 0.15;
+      
+      data[i] = (tone + octave + shimmer) * noteEnvelope * globalEnvelope * 0.4;
+    }
+    
+    return { buffer, filterType: null, filterFreq: null };
   }
   
   /**

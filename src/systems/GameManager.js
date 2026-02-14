@@ -1,7 +1,34 @@
 import * as THREE from 'three';
 
+// XP thresholds: exponential curve - L2=100, L3=250, L4=500, etc.
+// Formula: level N requires sum of (75 * 1.5^(n-2)) from n=2 to N
+function getXPForLevel(level) {
+  if (level <= 1) return 0;
+  let total = 0;
+  for (let n = 2; n <= level; n++) {
+    total += Math.floor(75 * Math.pow(1.5, n - 2));
+  }
+  return total;
+}
+
+// Pre-calculate XP thresholds for levels 1-20
+const XP_THRESHOLDS = [];
+for (let i = 0; i <= 20; i++) {
+  XP_THRESHOLDS[i] = getXPForLevel(i);
+}
+// Results: [0, 0, 75, 187, 356, 609, 989, 1559, 2413, 3695, 5617, 8501, 12827, 19315, 29048, 43647, 65545, 98393, 147664, 221571, 332431]
+
 export class GameManager {
   constructor() {
+    // === XP & LEVELING SYSTEM ===
+    this.currentXP = 0;
+    this.currentLevel = 1;
+    this.maxLevel = 20;
+    this.xpThresholds = XP_THRESHOLDS;
+    
+    // Floating text queue for XP gains
+    this.floatingTexts = [];
+    
     // Progression
     this.remnant = 0;
     this.heldRemnant = 0;
@@ -60,6 +87,165 @@ export class GameManager {
     
     // Camera controller reference for shake (set via main.js)
     this.cameraController = null;
+    
+    // Load saved progression from localStorage
+    this._loadProgression();
+  }
+  
+  // === XP & LEVELING METHODS ===
+  
+  /**
+   * Load saved XP/Level from localStorage
+   */
+  _loadProgression() {
+    try {
+      const saved = localStorage.getItem('ashen_progression');
+      if (saved) {
+        const data = JSON.parse(saved);
+        this.currentXP = data.currentXP || 0;
+        this.currentLevel = data.currentLevel || 1;
+        console.log(`[GameManager] Loaded progression: Level ${this.currentLevel}, XP ${this.currentXP}`);
+      }
+    } catch (e) {
+      console.warn('[GameManager] Failed to load progression:', e);
+    }
+  }
+  
+  /**
+   * Save XP/Level to localStorage
+   */
+  _saveProgression() {
+    try {
+      const data = {
+        currentXP: this.currentXP,
+        currentLevel: this.currentLevel,
+      };
+      localStorage.setItem('ashen_progression', JSON.stringify(data));
+    } catch (e) {
+      console.warn('[GameManager] Failed to save progression:', e);
+    }
+  }
+  
+  /**
+   * Gain XP from killing an enemy
+   * @param {number} amount - XP amount
+   * @param {THREE.Vector3} position - World position for floating text
+   */
+  gainXP(amount, position = null) {
+    if (this.currentLevel >= this.maxLevel) return; // Maxed out
+    
+    const previousLevel = this.currentLevel;
+    this.currentXP += amount;
+    
+    // Spawn floating XP text
+    if (position && this.player) {
+      this._spawnFloatingText(`+${amount} XP`, position.clone(), 0x00ff88);
+    }
+    
+    // Check for level up(s)
+    while (this.currentLevel < this.maxLevel && 
+           this.currentXP >= this.xpThresholds[this.currentLevel + 1]) {
+      this._levelUp();
+    }
+    
+    this._saveProgression();
+  }
+  
+  /**
+   * Handle level up
+   */
+  _levelUp() {
+    this.currentLevel++;
+    
+    console.log(`[GameManager] LEVEL UP! Now level ${this.currentLevel}`);
+    
+    // Full health restore
+    this.health = this.maxHealth;
+    this.stamina = this.maxStamina;
+    this.posture = 0;
+    
+    // Play level up sound
+    if (this.audioManager) {
+      this.audioManager.play('levelUp', { volume: 0.8 });
+    }
+    
+    // Spawn level up particles at player
+    if (this.particleManager && this.player) {
+      this.particleManager.spawnLevelUpEffect(this.player.mesh.position.clone());
+    }
+    
+    // Spawn floating level up text
+    if (this.player) {
+      this._spawnFloatingText(`LEVEL ${this.currentLevel}!`, 
+        this.player.mesh.position.clone().add(new THREE.Vector3(0, 2.5, 0)), 
+        0xffdd00, true);
+    }
+    
+    // Flash HUD
+    if (this.hud && this.hud.flashLevelUp) {
+      this.hud.flashLevelUp();
+    }
+  }
+  
+  /**
+   * Spawn floating text in world space
+   */
+  _spawnFloatingText(text, position, color = 0xffffff, isLevelUp = false) {
+    // Use floatingText renderer if available
+    if (this.floatingText) {
+      // Convert hex color to CSS
+      const cssColor = typeof color === 'number' 
+        ? '#' + color.toString(16).padStart(6, '0')
+        : color;
+      
+      this.floatingText.spawn(text, position, {
+        color: cssColor,
+        isLevelUp,
+        duration: isLevelUp ? 2.5 : 1.5,
+      });
+    }
+  }
+  
+  /**
+   * Get XP progress towards next level (0-1)
+   */
+  getXPProgress() {
+    if (this.currentLevel >= this.maxLevel) return 1;
+    
+    const currentLevelXP = this.xpThresholds[this.currentLevel];
+    const nextLevelXP = this.xpThresholds[this.currentLevel + 1];
+    const xpIntoLevel = this.currentXP - currentLevelXP;
+    const xpNeeded = nextLevelXP - currentLevelXP;
+    
+    return xpIntoLevel / xpNeeded;
+  }
+  
+  /**
+   * Get XP needed for next level
+   */
+  getXPToNextLevel() {
+    if (this.currentLevel >= this.maxLevel) return 0;
+    return this.xpThresholds[this.currentLevel + 1] - this.currentXP;
+  }
+  
+  /**
+   * Calculate XP reward for an enemy based on type and distance scaling
+   */
+  calculateEnemyXP(enemy) {
+    // Base XP from enemy config remnant (XP = remnant * 0.5)
+    let baseXP = Math.floor((enemy.config?.remnantDrop || 25) * 0.5);
+    
+    // Elite bonus
+    if (enemy.config?.isElite) {
+      baseXP = Math.floor(baseXP * 1.5);
+    }
+    
+    // Boss bonus
+    if (enemy.isBoss) {
+      baseXP = 200; // Bosses give flat 200 XP
+    }
+    
+    return baseXP;
   }
   
   // Hitstop - brief game freeze on impact (makes hits feel powerful)

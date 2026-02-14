@@ -824,6 +824,91 @@ export class ParticleManager {
   }
 
   /**
+   * Spawn level up effect - golden burst with rising particles
+   */
+  spawnLevelUpEffect(position) {
+    // Golden sparks burst outward
+    for (let i = 0; i < 20; i++) {
+      const mesh = this._getFromPool(this.sparkPool);
+      if (!mesh) continue;
+      
+      mesh.userData.isLevelUp = true; // Mark for golden color
+      
+      const angle = (i / 20) * Math.PI * 2;
+      mesh.position.copy(position);
+      mesh.position.y += 1.0;
+      
+      const speed = 3 + Math.random() * 4;
+      const upSpeed = 3 + Math.random() * 4;
+      
+      this.particles.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * speed,
+          upSpeed,
+          Math.sin(angle) * speed
+        ),
+        gravity: -8,
+        life: 0,
+        maxLife: 0.8 + Math.random() * 0.4,
+        type: 'spark',
+        isLevelUp: true,
+        pool: this.sparkPool,
+      });
+    }
+    
+    // Rising golden wisps
+    for (let i = 0; i < 8; i++) {
+      const mesh = this._getFromPool(this.wispPool);
+      if (!mesh) continue;
+      
+      mesh.position.copy(position);
+      mesh.position.y += 0.2;
+      mesh.position.x += (Math.random() - 0.5) * 1.5;
+      mesh.position.z += (Math.random() - 0.5) * 1.5;
+      
+      this.particles.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.5,
+          4 + Math.random() * 2,
+          (Math.random() - 0.5) * 0.5
+        ),
+        gravity: 0,
+        life: 0,
+        maxLife: 1.5 + Math.random() * 0.5,
+        type: 'wisp',
+        isLevelUp: true,
+        pool: this.wispPool,
+      });
+    }
+    
+    // Expanding golden ring (shockwave)
+    const ring = this._getFromPool(this.ringPool);
+    if (ring) {
+      ring.position.copy(position);
+      ring.position.y += 0.1;
+      ring.rotation.x = -Math.PI / 2;
+      ring.scale.set(0.5, 0.5, 1);
+      
+      // Override ring color for level up
+      ring.userData.isLevelUp = true;
+      
+      this.particles.push({
+        mesh: ring,
+        velocity: new THREE.Vector3(0, 0, 0),
+        gravity: 0,
+        life: 0,
+        maxLife: 0.8,
+        type: 'ring',
+        expandRate: 12,
+        isLevelUp: true,
+        pool: this.ringPool,
+      });
+    }
+  }
+
+  /**
    * Cleanup all particles (for scene reset)
    */
   dispose() {
