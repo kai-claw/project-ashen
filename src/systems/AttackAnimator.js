@@ -278,9 +278,12 @@ export class AttackAnimator {
     this.trailMesh = null;
     this.trailPositions = [];
     
-    // Trail effect settings
-    this.maxTrailPoints = 12;
-    this.trailFadeSpeed = 8;
+    // Trail effect settings - upgraded ribbon system
+    this.maxTrailPoints = 32;  // More points for smoother curves
+    this.trailFadeSpeed = 4;   // Slower fade for better visibility
+    this.trailWidth = 0.15;    // Width of ribbon trail
+    this.trailSampleRate = 0.016; // Sample every ~16ms
+    this.lastSampleTime = 0;
     
     // Multi-stab tracking (for daggers)
     this.stabIndex = 0;
@@ -579,10 +582,11 @@ export class AttackAnimator {
     target.z = THREE.MathUtils.lerp(start.z, end.z, t);
   }
   
-  // ========== TRAIL EFFECTS ==========
+  // ========== TRAIL EFFECTS (RIBBON SYSTEM) ==========
   
   /**
    * Create trail mesh for attack visuals
+   * Uses a ribbon mesh for smooth, stylized trails
    */
   _createTrail() {
     if (this.trailMesh) {
@@ -592,47 +596,95 @@ export class AttackAnimator {
     const anim = ATTACK_ANIMATIONS[this.currentWeaponType]?.[this.currentAttackType];
     if (!anim) return;
     
-    // Create line geometry for trail
+    // Create ribbon geometry - 2 vertices per trail point (top and bottom of ribbon)
     const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(this.maxTrailPoints * 3);
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const vertCount = this.maxTrailPoints * 2;
     
-    const material = new THREE.LineBasicMaterial({
-      color: anim.trailColor || 0xffffff,
+    const positions = new Float32Array(vertCount * 3);
+    const colors = new Float32Array(vertCount * 4); // RGBA for per-vertex alpha
+    const indices = [];
+    
+    // Build triangle strip indices for ribbon
+    for (let i = 0; i < this.maxTrailPoints - 1; i++) {
+      const base = i * 2;
+      // Two triangles per quad segment
+      indices.push(base, base + 1, base + 2);
+      indices.push(base + 1, base + 3, base + 2);
+    }
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+    geometry.setIndex(indices);
+    
+    // Parse trail color
+    const color = new THREE.Color(anim.trailColor || 0xffffff);
+    this.trailColor = color;
+    
+    // Material with vertex colors for smooth alpha gradient
+    const material = new THREE.MeshBasicMaterial({
+      vertexColors: true,
       transparent: true,
-      opacity: 0.6,
-      linewidth: 2,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending, // Glowing effect
     });
     
-    this.trailMesh = new THREE.Line(geometry, material);
+    this.trailMesh = new THREE.Mesh(geometry, material);
+    this.trailMesh.frustumCulled = false;
+    this.trailMesh.renderOrder = 999; // Render on top
     
-    // Add to scene
+    // Add to scene root (world space)
     const playerMesh = this.equipmentManager?.gameManager?.playerMesh;
     if (playerMesh && playerMesh.parent) {
       playerMesh.parent.add(this.trailMesh);
     }
+    
+    this.lastSampleTime = 0;
   }
   
   /**
-   * Add current weapon tip position to trail
+   * Add current weapon tip position to trail with direction
    */
   _addTrailPoint() {
-    if (!this.weaponMesh || !this.trailMesh) return;
+    if (!this.weaponMesh) return;
     
-    // Get weapon tip world position
-    const weaponTip = new THREE.Vector3(0, 0.5, 0); // Tip offset in local space
-    this.weaponMesh.localToWorld(weaponTip);
+    // Rate limit sampling for consistent spacing
+    const now = performance.now() / 1000;
+    if (now - this.lastSampleTime < this.trailSampleRate) return;
+    this.lastSampleTime = now;
     
-    // Get player mesh to convert to world space properly
+    // Get weapon mesh world position and direction
     const playerMesh = this.equipmentManager?.gameManager?.playerMesh;
-    if (playerMesh) {
-      // Transform through player's world matrix
-      const worldPos = weaponTip.clone();
-      playerMesh.localToWorld(worldPos);
-      this.trailPositions.push(worldPos.clone());
-    } else {
-      this.trailPositions.push(weaponTip.clone());
+    if (!playerMesh) return;
+    
+    // Calculate weapon tip in world space
+    // Weapon is child of player, get its world matrix
+    const tipLocal = new THREE.Vector3(0, 0.5, 0); // Tip in weapon local space
+    const baseLocal = new THREE.Vector3(0, 0, 0);  // Handle in weapon local space
+    
+    // Get weapon world matrix (player * weapon)
+    const weaponWorldMatrix = new THREE.Matrix4();
+    weaponWorldMatrix.multiplyMatrices(playerMesh.matrixWorld, this.weaponMesh.matrix);
+    
+    const tipWorld = tipLocal.clone().applyMatrix4(weaponWorldMatrix);
+    const baseWorld = baseLocal.clone().applyMatrix4(weaponWorldMatrix);
+    
+    // Calculate perpendicular direction for ribbon width
+    const forward = new THREE.Vector3().subVectors(tipWorld, baseWorld).normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const perpendicular = new THREE.Vector3().crossVectors(forward, up).normalize();
+    
+    // If perpendicular is zero (sword pointing up), use camera-relative
+    if (perpendicular.lengthSq() < 0.01) {
+      perpendicular.set(1, 0, 0);
     }
+    
+    // Store position with perpendicular for ribbon building
+    this.trailPositions.push({
+      center: tipWorld.clone(),
+      perp: perpendicular.clone(),
+      time: now,
+    });
     
     // Limit trail length
     while (this.trailPositions.length > this.maxTrailPoints) {
@@ -644,58 +696,133 @@ export class AttackAnimator {
   }
   
   /**
-   * Update trail geometry from positions
+   * Update ribbon geometry from positions with smooth alpha gradient
    */
   _updateTrailGeometry() {
     if (!this.trailMesh || this.trailPositions.length < 2) return;
     
     const positions = this.trailMesh.geometry.attributes.position.array;
+    const colors = this.trailMesh.geometry.attributes.color.array;
+    const color = this.trailColor || new THREE.Color(0xffffff);
+    
+    // Dynamic width: starts wide, tapers to tip
+    const baseWidth = this.trailWidth;
     
     for (let i = 0; i < this.maxTrailPoints; i++) {
+      const vertIdx = i * 2;
+      
       if (i < this.trailPositions.length) {
-        const pos = this.trailPositions[i];
-        positions[i * 3] = pos.x;
-        positions[i * 3 + 1] = pos.y;
-        positions[i * 3 + 2] = pos.z;
+        const point = this.trailPositions[i];
+        const t = i / (this.trailPositions.length - 1); // 0 at tail, 1 at tip
+        
+        // Width tapers: thick at recent (tip), thin at old (tail)
+        // Use smoothstep for organic feel
+        const taper = this._smoothstep(0, 1, t);
+        const width = baseWidth * (0.2 + 0.8 * taper);
+        
+        // Calculate ribbon edge positions
+        const offset = point.perp.clone().multiplyScalar(width * 0.5);
+        
+        // Top edge
+        positions[vertIdx * 3] = point.center.x + offset.x;
+        positions[vertIdx * 3 + 1] = point.center.y + offset.y;
+        positions[vertIdx * 3 + 2] = point.center.z + offset.z;
+        
+        // Bottom edge
+        positions[(vertIdx + 1) * 3] = point.center.x - offset.x;
+        positions[(vertIdx + 1) * 3 + 1] = point.center.y - offset.y;
+        positions[(vertIdx + 1) * 3 + 2] = point.center.z - offset.z;
+        
+        // Alpha gradient: fade from tail to tip
+        // Tail (old) is transparent, tip (new) is opaque
+        const alpha = this._smoothstep(0, 0.7, t) * this.trailOpacity;
+        
+        // Top edge color (RGBA)
+        colors[vertIdx * 4] = color.r;
+        colors[vertIdx * 4 + 1] = color.g;
+        colors[vertIdx * 4 + 2] = color.b;
+        colors[vertIdx * 4 + 3] = alpha;
+        
+        // Bottom edge color (RGBA)
+        colors[(vertIdx + 1) * 4] = color.r;
+        colors[(vertIdx + 1) * 4 + 1] = color.g;
+        colors[(vertIdx + 1) * 4 + 2] = color.b;
+        colors[(vertIdx + 1) * 4 + 3] = alpha;
       } else {
-        // Empty points
-        const lastPos = this.trailPositions[this.trailPositions.length - 1];
-        if (lastPos) {
-          positions[i * 3] = lastPos.x;
-          positions[i * 3 + 1] = lastPos.y;
-          positions[i * 3 + 2] = lastPos.z;
+        // Collapse unused vertices to last point
+        const lastPoint = this.trailPositions[this.trailPositions.length - 1];
+        if (lastPoint) {
+          positions[vertIdx * 3] = lastPoint.center.x;
+          positions[vertIdx * 3 + 1] = lastPoint.center.y;
+          positions[vertIdx * 3 + 2] = lastPoint.center.z;
+          positions[(vertIdx + 1) * 3] = lastPoint.center.x;
+          positions[(vertIdx + 1) * 3 + 1] = lastPoint.center.y;
+          positions[(vertIdx + 1) * 3 + 2] = lastPoint.center.z;
         }
+        // Zero alpha for unused
+        colors[vertIdx * 4 + 3] = 0;
+        colors[(vertIdx + 1) * 4 + 3] = 0;
       }
     }
     
     this.trailMesh.geometry.attributes.position.needsUpdate = true;
-    this.trailMesh.geometry.setDrawRange(0, this.trailPositions.length);
+    this.trailMesh.geometry.attributes.color.needsUpdate = true;
+    this.trailMesh.geometry.computeBoundingSphere();
   }
   
   /**
-   * Update trail fade
+   * Smoothstep interpolation for organic easing
+   */
+  _smoothstep(edge0, edge1, x) {
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  }
+  
+  /**
+   * Update trail fade and cleanup
    */
   _updateTrail(delta) {
     if (!this.trailMesh) return;
     
-    // Fade out when not in active state
-    if (this.state !== ANIM_STATE.ACTIVE) {
-      this.trailMesh.material.opacity -= delta * this.trailFadeSpeed;
-      if (this.trailMesh.material.opacity <= 0) {
+    // Initialize opacity if not set
+    if (this.trailOpacity === undefined) {
+      this.trailOpacity = 0.8;
+    }
+    
+    // During active state, keep full opacity
+    if (this.state === ANIM_STATE.ACTIVE) {
+      this.trailOpacity = 0.8;
+    } else {
+      // Smooth fade out after attack
+      this.trailOpacity -= delta * this.trailFadeSpeed;
+      
+      // Also gradually remove old points for shrinking effect
+      if (this.trailPositions.length > 0) {
+        const removeCount = Math.ceil(delta * 20); // Remove ~20 points/sec
+        for (let i = 0; i < removeCount && this.trailPositions.length > 0; i++) {
+          this.trailPositions.shift();
+        }
+        if (this.trailPositions.length >= 2) {
+          this._updateTrailGeometry();
+        }
+      }
+      
+      if (this.trailOpacity <= 0 || this.trailPositions.length < 2) {
         this._removeTrail();
       }
     }
   }
   
   /**
-   * Fade trail out
+   * Fade trail out smoothly
    */
   _fadeTrail() {
-    // Trail will fade in update loop
+    // Fade handled in _updateTrail
+    this.trailOpacity = this.trailOpacity || 0.8;
   }
   
   /**
-   * Remove trail from scene
+   * Remove trail from scene and cleanup
    */
   _removeTrail() {
     if (this.trailMesh) {
@@ -707,6 +834,7 @@ export class AttackAnimator {
       this.trailMesh = null;
     }
     this.trailPositions = [];
+    this.trailOpacity = 0.8;
   }
   
   // ========== GETTERS ==========
