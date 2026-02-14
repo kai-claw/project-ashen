@@ -17,6 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "@types/three": "^0.182.0",
+    "simplex-noise": "^4.0.3",
     "three": "^0.182.0",
     "vite": "^7.3.1"
   },
