@@ -71,6 +71,7 @@ export const ENEMY_TYPES = {
     canChainAttacks: false,
     maxPosture: 60,
     hasShield: false,
+    canRetreat: false,     // Basic melee - stands ground
     // GLTF settings - use relative path, BASE_URL added at load time
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.5,
@@ -96,6 +97,7 @@ export const ENEMY_TYPES = {
     maxChainAttacks: 3,
     maxPosture: 40,
     hasShield: false,
+    canRetreat: false,     // Aggressive berserker - never retreats
     // GLTF settings - use relative path, BASE_URL added at load time
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.55,
@@ -121,6 +123,7 @@ export const ENEMY_TYPES = {
     maxPosture: 100,
     hasShield: true,
     shieldBlockChance: 0.4,
+    canRetreat: false,     // Tank with shield - stands ground
     // GLTF settings - use relative path, BASE_URL added at load time
     modelPath: 'assets/models/soldier.glb',
     modelScale: 0.9,
@@ -149,6 +152,7 @@ export const ENEMY_TYPES = {
     maxPosture: 150,       // Hard to stagger
     hasShield: false,      // No shield, pure aggression
     isElite: true,         // Flag for special behaviors
+    canRetreat: false,     // Elite guardian - never retreats
     // GLTF settings
     modelPath: 'assets/models/soldier.glb',
     modelScale: 1.2,       // Larger than normal
@@ -177,6 +181,9 @@ export const ENEMY_TYPES = {
     maxPosture: 45,
     hasShield: false,
     isAmbush: true,        // Flag for dormant start
+    canRetreat: true,      // Fast, fragile - retreats when hurt
+    retreatHealthThreshold: 0.25,  // Retreat at 25% HP
+    retreatDistance: 12,   // Retreat 12 units before re-engaging
     // GLTF settings
     modelPath: 'assets/models/robot_expressive.glb',
     modelScale: 0.45,      // Slightly smaller
@@ -303,6 +310,15 @@ export class Enemy {
     this.unstuckAttempts = 0;        // Counter for pathfinding retries
     this.avoidanceDir = null;        // Current avoidance direction
     this.avoidanceTimer = 0;         // Time spent avoiding
+    
+    // ========== RETREAT BEHAVIOR ==========
+    this.canRetreat = this.config.canRetreat || false;
+    this.retreatHealthThreshold = this.config.retreatHealthThreshold || 0.25; // 25% HP
+    this.retreatDistance = this.config.retreatDistance || 12; // Units to retreat
+    this.retreatReengageThreshold = 0.40; // Re-engage if health recovers to 40%
+    this.retreatStartPos = null;     // Position when retreat started
+    this.isRetreating = false;       // Active retreat flag
+    this.retreatWallHits = 0;        // Count wall collisions during retreat
     
     // ========== BOSS-SPECIFIC INITIALIZATION ==========
     if (this.config.isBoss) {
@@ -641,7 +657,14 @@ export class Enemy {
           break;
         }
         
-        if (!this.isBoss && healthPercent < 0.3 && !this.config.canChainAttacks && Math.random() < 0.01) {
+        // Retreat behavior for eligible enemies (ranged/fast types, not tanks)
+        if (!this.isBoss && this.canRetreat && 
+            healthPercent < this.retreatHealthThreshold && 
+            !this.isRetreating) {
+          // Start retreat - store starting position
+          this.retreatStartPos = this.mesh.position.clone();
+          this.isRetreating = true;
+          this.retreatWallHits = 0;
           this._changeState(STATES.RETREAT);
           break;
         }
@@ -686,15 +709,63 @@ export class Enemy {
         break;
         
       case STATES.RETREAT:
-        if (this.stateTimer > 2.0 || distToPlayer > this.config.detectionRange) {
-          this._changeState(STATES.CHASE);
+        // Calculate retreat distance traveled
+        const retreatDistTraveled = this.retreatStartPos 
+          ? this.mesh.position.distanceTo(this.retreatStartPos) 
+          : 0;
+        
+        // Check re-engage conditions:
+        // 1. Retreated far enough (10-15 units based on config)
+        // 2. Health recovered above 40%
+        // 3. Hit too many walls (stuck)
+        // 4. Lost sight of player
+        const healthRecovered = healthPercent >= this.retreatReengageThreshold;
+        const retreatedEnough = retreatDistTraveled >= this.retreatDistance;
+        const tooManyWallHits = this.retreatWallHits >= 3;
+        const lostPlayer = distToPlayer > this.config.detectionRange * 1.5;
+        
+        if (retreatedEnough || healthRecovered || tooManyWallHits || lostPlayer) {
+          // End retreat, re-engage
+          this.isRetreating = false;
+          this.retreatStartPos = null;
+          this.retreatWallHits = 0;
+          
+          if (lostPlayer) {
+            this._changeState(STATES.IDLE);
+            this.healthBarGroup.visible = false;
+          } else {
+            this._changeState(STATES.CHASE);
+          }
           break;
         }
+        
+        // Calculate retreat direction (away from player)
         const awayDir = new THREE.Vector3().subVectors(this.mesh.position, player.mesh.position);
         awayDir.y = 0;
         awayDir.normalize();
+        
+        // Retreat target is 3 units away in opposite direction
         const retreatTarget = this.mesh.position.clone().add(awayDir.multiplyScalar(3));
-        this._moveToward(retreatTarget, this.config.moveSpeed * 0.8, delta);
+        
+        // Store position before move to detect wall collisions
+        const preRetreatPos = this.mesh.position.clone();
+        
+        // Move away at 70% speed (slower than normal)
+        this._moveToward(retreatTarget, this.config.moveSpeed * 0.7, delta);
+        
+        // Check if we hit a wall (didn't move much)
+        const moveDistance = this.mesh.position.distanceTo(preRetreatPos);
+        if (moveDistance < this.config.moveSpeed * 0.7 * delta * 0.5) {
+          this.retreatWallHits++;
+          
+          // Try lateral movement to avoid obstacle
+          const lateral = new THREE.Vector3(-awayDir.z, 0, awayDir.x);
+          const lateralDir = (this.retreatWallHits % 2 === 0) ? lateral : lateral.negate();
+          const lateralTarget = this.mesh.position.clone().add(lateralDir.multiplyScalar(2));
+          this._moveToward(lateralTarget, this.config.moveSpeed * 0.5, delta);
+        }
+        
+        // Face player while retreating (keep eyes on threat)
         this._faceTarget(player.mesh.position, delta);
         break;
 
@@ -2277,6 +2348,11 @@ export class Enemy {
     this.unstuckAttempts = 0;
     this.avoidanceDir = null;
     this.avoidanceTimer = 0;
+    
+    // Reset retreat state
+    this.isRetreating = false;
+    this.retreatStartPos = null;
+    this.retreatWallHits = 0;
     
     // Find valid spawn position (not inside walls)
     let spawnPosition = this.spawnPos.clone();
