@@ -15,6 +15,7 @@ import { ChestManager } from './world/ChestManager.js';
 import { HUD } from './ui/HUD.js';
 import { CrucibleUI } from './ui/CrucibleUI.js';
 import { StatsUI } from './ui/StatsUI.js';
+import { InventoryUI } from './ui/InventoryUI.js';
 import { CameraController } from './systems/CameraController.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { ParticleManager } from './systems/ParticleManager.js';
@@ -177,6 +178,9 @@ const chestManager = new ChestManager(
   inputManager
 );
 
+// --- Inventory UI (unified items + equipment) ---
+const inventoryUI = new InventoryUI(gameManager, lootManager, equipmentManager, inputManager);
+
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
 player.setWorld(world); // Enable collision detection
@@ -239,10 +243,7 @@ function animate() {
     }
   }
   
-  // Equipment UI toggle (I key)
-  if (inputManager.openEquipment) {
-    equipmentManager.toggleUI();
-  }
+  // Inventory UI toggle (I key) - handled in inventoryUI.update()
   
   // Check hitstop - pause game entities during freeze frame
   const inHitstop = gameManager.updateHitstop(delta);
@@ -308,6 +309,7 @@ function animate() {
   itemManager.update(player.mesh.position);
   lootManager.update(player.mesh.position);
   equipmentManager.updateEquipmentDrops(player.mesh.position, delta);
+  inventoryUI.update();
   hud.update();
   crucibleUI.update();
   statsUI.update();
@@ -428,6 +430,7 @@ window.world = world;
 window.itemManager = itemManager;
 window.lootManager = lootManager;
 window.equipmentManager = equipmentManager;
+window.inventoryUI = inventoryUI;
 window.audioManager = audioManager;
 window.particleManager = particleManager;
 
