@@ -22,6 +22,7 @@ import { ParticleManager } from './systems/ParticleManager.js';
 import { FloatingText } from './ui/FloatingText.js';
 import { InteractionManager } from './systems/InteractionManager.js';
 import { ShopManager } from './systems/ShopManager.js';
+import { DialogueManager } from './systems/DialogueManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -204,9 +205,28 @@ const interactionManager = new InteractionManager(
 // --- Shop/Trading System ---
 const shopManager = new ShopManager(gameManager, lootManager, equipmentManager, audioManager);
 
-// Hook shop to interaction manager
-interactionManager.setShopCallback((npc) => {
+// --- Dialogue System ---
+const dialogueManager = new DialogueManager(scene, camera, inputManager, gameManager, audioManager);
+
+// Hook dialogue to shop (when player chooses "trade" in dialogue)
+dialogueManager.setShopCallback((npc) => {
   shopManager.open(npc);
+});
+
+// Hook dialogue end to clear interaction state
+dialogueManager.setEndCallback(() => {
+  interactionManager.closeInteraction();
+});
+
+// Hook interaction manager: merchants go to dialogue first, then can open shop
+interactionManager.setShopCallback((npc) => {
+  // Merchants/blacksmiths/healers start dialogue which can lead to shop
+  dialogueManager.startDialogue(npc);
+});
+
+// Hook dialogue for non-shop NPCs
+interactionManager.setDialogueCallback((npc) => {
+  dialogueManager.startDialogue(npc);
 });
 
 // --- Floating Text (XP gains, level ups) ---
@@ -271,7 +291,7 @@ function animate() {
   if (!inHitstop) {
     // Normal game update when not in hitstop
     // Don't update player movement when any UI is open
-    if (!shopManager.isShopOpen() && !inventoryUI.isOpen) {
+    if (!shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive()) {
       player.update(delta);
     }
     enemyManager.update(delta, player);
@@ -335,9 +355,12 @@ function animate() {
   
   // NPC interaction system (prompts, facing, labels)
   // Don't show interaction prompts if any UI is open
-  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !shopManager.isShopOpen()) {
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
     interactionManager.update(player.mesh.position, delta);
   }
+  
+  // Update dialogue manager
+  dialogueManager.update(delta);
   
   // Close interaction mode when shop closes
   if (!shopManager.isShopOpen() && interactionManager.interactionMode === 'shop') {
@@ -470,6 +493,7 @@ window.audioManager = audioManager;
 window.particleManager = particleManager;
 window.interactionManager = interactionManager;
 window.shopManager = shopManager;
+window.dialogueManager = dialogueManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
