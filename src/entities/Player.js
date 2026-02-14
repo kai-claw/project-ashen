@@ -144,11 +144,20 @@ export class Player {
       metalness: 0.85,
     });
     
-    // Darker material for joints/extremities
+    // Darker material for joints/extremities (feet, etc.)
     const jointMat = new THREE.MeshStandardMaterial({
       color: 0x3a3a45,
       roughness: 0.4,
       metalness: 0.8,
+    });
+    
+    // Brighter gauntlet material for hands - visible in dark areas
+    const gauntletMat = new THREE.MeshStandardMaterial({
+      color: 0x7a7a8c,        // Brighter than armor
+      roughness: 0.3,
+      metalness: 0.9,
+      emissive: 0x1a1a22,     // Subtle glow for visibility
+      emissiveIntensity: 0.4,
     });
 
     // Body capsule (torso)
@@ -211,31 +220,44 @@ export class Player {
     this.mesh.add(rightForearm);
     
     // === HANDS ===
-    // Left hand - slightly stylized gauntlet shape
-    const handGeo = new THREE.BoxGeometry(0.1, 0.08, 0.14);
-    const leftHand = new THREE.Mesh(handGeo, jointMat);
-    leftHand.position.set(-0.56, 0.6, 0.08);
+    // Larger, more visible gauntlets with glow
+    const handGeo = new THREE.BoxGeometry(0.2, 0.16, 0.26);
+    const leftHand = new THREE.Mesh(handGeo, gauntletMat);
+    leftHand.position.set(-0.56, 0.58, 0.1);
     leftHand.castShadow = true;
     this.mesh.add(leftHand);
     
-    // Left fingers (simplified as a plate)
-    const fingerGeo = new THREE.BoxGeometry(0.08, 0.04, 0.1);
-    const leftFingers = new THREE.Mesh(fingerGeo, jointMat);
-    leftFingers.position.set(-0.56, 0.55, 0.14);
+    // Left fingers - larger finger plates
+    const fingerGeo = new THREE.BoxGeometry(0.18, 0.1, 0.18);
+    const leftFingers = new THREE.Mesh(fingerGeo, gauntletMat);
+    leftFingers.position.set(-0.56, 0.5, 0.18);
     leftFingers.castShadow = true;
     this.mesh.add(leftFingers);
     
+    // Knuckle detail for left hand
+    const knuckleGeo = new THREE.BoxGeometry(0.16, 0.06, 0.06);
+    const leftKnuckles = new THREE.Mesh(knuckleGeo, gauntletMat);
+    leftKnuckles.position.set(-0.56, 0.54, 0.24);
+    leftKnuckles.castShadow = true;
+    this.mesh.add(leftKnuckles);
+    
     // Right hand
-    const rightHand = new THREE.Mesh(handGeo, jointMat);
-    rightHand.position.set(0.56, 0.6, 0.08);
+    const rightHand = new THREE.Mesh(handGeo, gauntletMat);
+    rightHand.position.set(0.56, 0.58, 0.1);
     rightHand.castShadow = true;
     this.mesh.add(rightHand);
     
     // Right fingers
-    const rightFingers = new THREE.Mesh(fingerGeo, jointMat);
-    rightFingers.position.set(0.56, 0.55, 0.14);
+    const rightFingers = new THREE.Mesh(fingerGeo, gauntletMat);
+    rightFingers.position.set(0.56, 0.5, 0.18);
     rightFingers.castShadow = true;
     this.mesh.add(rightFingers);
+    
+    // Knuckle detail for right hand
+    const rightKnuckles = new THREE.Mesh(knuckleGeo, gauntletMat);
+    rightKnuckles.position.set(0.56, 0.54, 0.24);
+    rightKnuckles.castShadow = true;
+    this.mesh.add(rightKnuckles);
     
     // Store hand references for weapon positioning
     this.fallbackRightHand = rightHand;
@@ -289,7 +311,7 @@ export class Player {
     this.fallbackParts = [
       this.fallbackBody, this.fallbackHead, this.visor,
       leftUpperArm, rightUpperArm, leftForearm, rightForearm,
-      leftHand, leftFingers, rightHand, rightFingers,
+      leftHand, leftFingers, leftKnuckles, rightHand, rightFingers, rightKnuckles,
       leftUpperLeg, rightUpperLeg, leftLowerLeg, rightLowerLeg,
       leftFoot, rightFoot
     ];
