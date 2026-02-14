@@ -387,6 +387,10 @@ function animate() {
     attackAnimator.update(delta);
   }
   
+  // Weapon glow animation update
+  const elapsedTime = clock.elapsedTime;
+  equipmentManager.updateWeaponGlow(delta, elapsedTime);
+  
   // Weapon switching hotkeys (when not in UI)
   if (!gameManager.isDead && !shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive()) {
     if (inputManager.cycleWeapon) {

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { getWeaponRenderer } from './WeaponRenderer.js';
+import { WEAPON_RARITY } from '../data/WeaponData.js';
 
 // ========== EQUIPMENT RARITY TIERS ==========
 export const RARITY = {
@@ -603,6 +605,7 @@ export class EquipmentManager {
   
   /**
    * Update the player's weapon visual based on equipped weapon
+   * Now uses WeaponRenderer for detailed procedural weapon meshes
    */
   updateWeaponVisual() {
     const weapon = this.equipped[EQUIPMENT_SLOTS.WEAPON];
@@ -612,42 +615,45 @@ export class EquipmentManager {
     // Remove existing weapon mesh
     if (this.weaponMesh) {
       this.gameManager.playerMesh.remove(this.weaponMesh);
-      this.weaponMesh.geometry?.dispose();
-      this.weaponMesh.material?.dispose();
+      // Use WeaponRenderer to properly dispose
+      const renderer = getWeaponRenderer();
+      renderer.disposeWeapon(this.weaponMesh);
       this.weaponMesh = null;
     }
     
     if (!weapon) return;
     
-    // Create weapon mesh based on type
-    const weaponGeometry = this.createWeaponGeometry(weapon.weaponModel || 'sword');
-    const weaponMaterial = new THREE.MeshStandardMaterial({
-      color: weapon.rarity.hexColor,
-      metalness: 0.8,
-      roughness: 0.3,
-      emissive: weapon.rarity.hexColor,
-      emissiveIntensity: 0.1,
-    });
+    // Map equipment rarity to weapon data rarity
+    const rarityMap = {
+      'common': WEAPON_RARITY.COMMON,
+      'uncommon': WEAPON_RARITY.UNCOMMON,
+      'rare': WEAPON_RARITY.RARE,
+      'epic': WEAPON_RARITY.EPIC,
+      'legendary': WEAPON_RARITY.LEGENDARY,
+    };
+    const weaponRarity = rarityMap[weapon.rarity?.id] || WEAPON_RARITY.COMMON;
     
-    this.weaponMesh = new THREE.Mesh(weaponGeometry, weaponMaterial);
-    this.weaponMesh.position.set(0.5, 0.2, 0.3);
-    this.weaponMesh.rotation.set(0, 0, -Math.PI / 6);
-    this.weaponMesh.castShadow = true;
+    // Use WeaponRenderer to create detailed weapon mesh
+    const renderer = getWeaponRenderer();
+    this.weaponMesh = renderer.createWeapon(
+      weapon.weaponModel || 'sword',
+      weaponRarity,
+      { name: weapon.name }
+    );
     
+    // Add to player mesh
     this.gameManager.playerMesh.add(this.weaponMesh);
+    
+    console.log(`[EquipmentManager] Updated weapon visual: ${weapon.name} (${weapon.weaponModel || 'sword'})`);
   }
   
-  createWeaponGeometry(weaponModel) {
-    switch (weaponModel) {
-      case 'dagger':
-        return new THREE.BoxGeometry(0.08, 0.4, 0.03);
-      case 'longsword':
-        return new THREE.BoxGeometry(0.1, 1.0, 0.04);
-      case 'greatsword':
-        return new THREE.BoxGeometry(0.15, 1.4, 0.05);
-      case 'sword':
-      default:
-        return new THREE.BoxGeometry(0.08, 0.7, 0.03);
+  /**
+   * Update weapon glow animation (call from game loop)
+   */
+  updateWeaponGlow(delta, time) {
+    if (this.weaponMesh) {
+      const renderer = getWeaponRenderer();
+      renderer.updateGlow(this.weaponMesh, delta, time);
     }
   }
   
