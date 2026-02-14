@@ -1,1165 +1,1311 @@
 /**
- * DungeonManager.js - World-to-Dungeon Instance Management
+ * DungeonManager.js - World-to-Dungeon Transition System
  * Phase 22: Dungeon Instances
  * 
- * Manages transitions between the open world and dungeon instances:
- * - Detects player entering cave/dungeon entrances
- * - Transition effects (fade to black, loading screen)
- * - Generates or loads dungeon instances
- * - Teleports player to dungeon spawn points
- * - Tracks dungeon state (rooms cleared, chests looted)
- * - Exit portal returns player to overworld
- * - Saves/loads dungeon progress
- * - Entrance prompts with dungeon info
+ * Handles detection of dungeon entrances, transition effects,
+ * dungeon generation/loading, player teleportation, state tracking,
+ * exit portals, and save/load persistence.
  */
 
 import * as THREE from 'three';
-import { DungeonGenerator, createDungeon } from '../world/DungeonGenerator.js';
+import { DungeonGenerator } from '../world/DungeonGenerator.js';
 import { dungeonRenderer } from '../world/DungeonRenderer.js';
-import { getDungeonForCave, getDungeonById, listAllDungeons, DUNGEON_MODIFIER } from '../data/DungeonData.js';
+import { getDungeonById, DUNGEONS, DUNGEON_MODIFIER } from '../data/DungeonData.js';
 
-// ========== CONSTANTS ==========
-const ENTRANCE_INTERACTION_RANGE = 4;
-const EXIT_PORTAL_RANGE = 2;
-const TRANSITION_DURATION = 1000; // ms
-const SAVE_KEY = 'ashen_dungeon_progress';
+// ========== DUNGEON STATE ==========
+const DUNGEON_STATE = {
+  OVERWORLD: 'overworld',
+  ENTERING: 'entering',
+  LOADING: 'loading',
+  IN_DUNGEON: 'in_dungeon',
+  EXITING: 'exiting',
+};
+
+// ========== ENTRANCE DETECTION SETTINGS ==========
+const ENTRANCE_SETTINGS = {
+  promptDistance: 5,          // Distance to show "Enter" prompt
+  triggerDistance: 2.5,       // Auto-enter if player walks this close
+  interactCooldown: 0.5,      // Seconds between interact attempts
+};
+
+// ========== TRANSITION SETTINGS ==========
+const TRANSITION = {
+  fadeInDuration: 0.8,        // Seconds for fade to black
+  loadingMinTime: 0.5,        // Minimum loading screen time
+  fadeOutDuration: 0.6,       // Seconds for fade from black
+};
 
 /**
- * DungeonManager - Handles all dungeon instance management
+ * DungeonManager - Manages dungeon instance lifecycle
  */
 export class DungeonManager {
-  constructor(gameManager) {
-    this.game = gameManager;
-    this.scene = gameManager.scene;
-    this.player = gameManager.player;
+  constructor(scene, world, player, gameManager, inputManager, audioManager = null) {
+    this.scene = scene;
+    this.world = world;
+    this.player = player;
+    this.gameManager = gameManager;
+    this.inputManager = inputManager;
+    this.audioManager = audioManager;
     
-    // Current state
-    this.isInDungeon = false;
-    this.currentDungeon = null;
-    this.currentRoomId = null;
-    this.dungeonEntryPoint = null; // World position to return to
+    // Core state
+    this.state = DUNGEON_STATE.OVERWORLD;
+    this.currentDungeon = null;       // Active dungeon instance
+    this.currentDungeonId = null;     // ID of current dungeon type
+    this.currentModifier = 'none';    // Current dungeon modifier
+    
+    // Dungeon generator
+    this.generator = new DungeonGenerator();
+    
+    // Save overworld state when entering dungeon
+    this.overworldState = null;
+    
+    // Nearby entrance tracking
+    this.nearestEntrance = null;
+    this.entranceDistance = Infinity;
+    this.interactCooldown = 0;
     
     // Dungeon progress tracking
-    this.dungeonProgress = new Map(); // dungeonInstanceId -> progress data
+    this.dungeonProgress = new Map();  // dungeonId -> progress data
     
-    // Transition state
-    this.isTransitioning = false;
+    // Exit portal
+    this.exitPortal = null;
+    this.exitPortalMesh = null;
+    
+    // Transition overlay
     this.transitionOverlay = null;
+    this.transitionProgress = 0;
+    this.transitionCallback = null;
     
-    // Entrance prompt UI
-    this.entrancePrompt = null;
-    this.nearestEntrance = null;
+    // UI elements
+    this.promptElement = null;
+    this.loadingElement = null;
     
-    // World state storage (to restore when exiting dungeon)
-    this.worldState = null;
-    
-    // Cave entrances from CaveManager
-    this.caveEntrances = [];
+    // Create UI
+    this._createUI();
     
     // Load saved progress
-    this.loadProgress();
-    
-    // Create UI elements
-    this.createTransitionOverlay();
-    this.createEntrancePrompt();
+    this._loadProgress();
     
     console.log('[DungeonManager] Initialized');
   }
-
+  
+  // ========================================
+  // UI CREATION
+  // ========================================
+  
   /**
-   * Initialize with references to other managers
+   * Create dungeon prompt and loading screen UI
    */
-  init(caveManager, enemyManager, worldManager) {
-    this.caveManager = caveManager;
-    this.enemyManager = enemyManager;
-    this.worldManager = worldManager;
-    
-    // Initialize dungeon renderer
-    if (this.scene) {
-      dungeonRenderer.init(this.scene);
-    }
-    
-    console.log('[DungeonManager] Linked to CaveManager and initialized renderer');
-  }
-
-  /**
-   * Create the transition overlay (fade to black)
-   */
-  createTransitionOverlay() {
-    // Create a full-screen overlay div
-    this.transitionOverlay = document.createElement('div');
-    this.transitionOverlay.id = 'dungeon-transition-overlay';
-    this.transitionOverlay.style.cssText = `
+  _createUI() {
+    // Create dungeon entrance prompt
+    this.promptElement = document.createElement('div');
+    this.promptElement.id = 'dungeon-prompt';
+    this.promptElement.innerHTML = `
+      <div class="dungeon-prompt-inner">
+        <div class="dungeon-name">Forgotten Catacombs</div>
+        <div class="dungeon-level">Recommended Lv. <span class="level-num">10</span></div>
+        <div class="dungeon-modifier"></div>
+        <div class="dungeon-action">[E] Enter Dungeon</div>
+      </div>
+    `;
+    this.promptElement.style.cssText = `
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      opacity: 0;
-      pointer-events: none;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      transition: opacity ${TRANSITION_DURATION / 2}ms ease-in-out;
-    `;
-    
-    // Loading text
-    const loadingText = document.createElement('div');
-    loadingText.id = 'dungeon-loading-text';
-    loadingText.style.cssText = `
-      color: #aa8866;
-      font-family: 'Cinzel', serif;
-      font-size: 28px;
-      text-transform: uppercase;
-      letter-spacing: 4px;
-      opacity: 0;
-      transition: opacity 300ms ease-in-out;
-    `;
-    loadingText.textContent = 'Entering...';
-    this.transitionOverlay.appendChild(loadingText);
-    
-    // Dungeon name
-    const dungeonName = document.createElement('div');
-    dungeonName.id = 'dungeon-name-display';
-    dungeonName.style.cssText = `
-      color: #cc9966;
-      font-family: 'Cinzel', serif;
-      font-size: 48px;
-      text-transform: uppercase;
-      letter-spacing: 6px;
-      margin-top: 20px;
-      opacity: 0;
-      transition: opacity 300ms ease-in-out 200ms;
-    `;
-    this.transitionOverlay.appendChild(dungeonName);
-    
-    // Subtext (recommended level)
-    const subtext = document.createElement('div');
-    subtext.id = 'dungeon-subtext';
-    subtext.style.cssText = `
-      color: #886644;
-      font-family: 'Cinzel', serif;
-      font-size: 18px;
-      margin-top: 10px;
-      opacity: 0;
-      transition: opacity 300ms ease-in-out 400ms;
-    `;
-    this.transitionOverlay.appendChild(subtext);
-    
-    document.body.appendChild(this.transitionOverlay);
-  }
-
-  /**
-   * Create the entrance prompt UI
-   */
-  createEntrancePrompt() {
-    this.entrancePrompt = document.createElement('div');
-    this.entrancePrompt.id = 'dungeon-entrance-prompt';
-    this.entrancePrompt.style.cssText = `
-      position: fixed;
-      bottom: 200px;
+      bottom: 180px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.85);
-      border: 2px solid #aa8866;
+      background: linear-gradient(180deg, rgba(20,15,25,0.95) 0%, rgba(10,8,15,0.98) 100%);
+      border: 2px solid rgba(160, 120, 80, 0.7);
       border-radius: 8px;
-      padding: 20px 30px;
+      padding: 16px 24px;
       text-align: center;
-      z-index: 1000;
+      font-family: 'Times New Roman', serif;
+      color: #e8dcc8;
       display: none;
-      min-width: 350px;
+      z-index: 100;
+      box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(160,120,80,0.1);
+      min-width: 220px;
     `;
+    document.body.appendChild(this.promptElement);
     
-    // Dungeon name
-    const nameDiv = document.createElement('div');
-    nameDiv.id = 'entrance-dungeon-name';
-    nameDiv.style.cssText = `
-      color: #cc9966;
-      font-family: 'Cinzel', serif;
-      font-size: 24px;
-      text-transform: uppercase;
-      letter-spacing: 3px;
-      margin-bottom: 8px;
-    `;
-    this.entrancePrompt.appendChild(nameDiv);
-    
-    // Description
-    const descDiv = document.createElement('div');
-    descDiv.id = 'entrance-description';
-    descDiv.style.cssText = `
-      color: #888;
-      font-family: 'Georgia', serif;
-      font-size: 14px;
-      font-style: italic;
-      margin-bottom: 12px;
-      max-width: 400px;
-    `;
-    this.entrancePrompt.appendChild(descDiv);
-    
-    // Level recommendation
-    const levelDiv = document.createElement('div');
-    levelDiv.id = 'entrance-level';
-    levelDiv.style.cssText = `
-      color: #aa8866;
-      font-family: 'Georgia', serif;
-      font-size: 16px;
-      margin-bottom: 15px;
-    `;
-    this.entrancePrompt.appendChild(levelDiv);
-    
-    // Enter prompt
-    const enterDiv = document.createElement('div');
-    enterDiv.id = 'entrance-key-prompt';
-    enterDiv.style.cssText = `
-      color: #ffcc88;
-      font-family: 'Courier New', monospace;
-      font-size: 16px;
-    `;
-    enterDiv.innerHTML = 'Press <span style="color: #ffdd99; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">E</span> to Enter';
-    this.entrancePrompt.appendChild(enterDiv);
-    
-    document.body.appendChild(this.entrancePrompt);
-  }
-
-  /**
-   * Update dungeon manager - call each frame
-   */
-  update(delta, playerPosition) {
-    if (this.isTransitioning) return;
-    
-    if (this.isInDungeon) {
-      this.updateDungeonState(delta, playerPosition);
-    } else {
-      this.checkEntranceProximity(playerPosition);
-    }
-  }
-
-  /**
-   * Check if player is near a dungeon entrance
-   */
-  checkEntranceProximity(playerPosition) {
-    // Get cave entrances from CaveManager
-    if (this.caveManager) {
-      this.caveEntrances = this.caveManager.caves || [];
-    }
-    
-    let nearestCave = null;
-    let nearestDistance = ENTRANCE_INTERACTION_RANGE;
-    
-    for (const cave of this.caveEntrances) {
-      const dx = playerPosition.x - cave.x;
-      const dz = playerPosition.z - cave.z;
-      const distance = Math.sqrt(dx * dx + dz * dz);
+    // Style inner elements
+    const style = document.createElement('style');
+    style.textContent = `
+      #dungeon-prompt .dungeon-name {
+        font-size: 22px;
+        font-weight: bold;
+        color: #d4a055;
+        text-shadow: 0 0 10px rgba(212,160,85,0.5);
+        margin-bottom: 6px;
+      }
+      #dungeon-prompt .dungeon-level {
+        font-size: 14px;
+        color: #aaa;
+        margin-bottom: 4px;
+      }
+      #dungeon-prompt .dungeon-level .level-num {
+        color: #ff9944;
+        font-weight: bold;
+      }
+      #dungeon-prompt .dungeon-modifier {
+        font-size: 13px;
+        color: #cc66ff;
+        font-style: italic;
+        margin-bottom: 8px;
+      }
+      #dungeon-prompt .dungeon-modifier.elite { color: #ff6644; }
+      #dungeon-prompt .dungeon-modifier.cursed { color: #aa44ff; }
+      #dungeon-prompt .dungeon-modifier.blessed { color: #44ff88; }
+      #dungeon-prompt .dungeon-modifier.timed { color: #44aaff; }
+      #dungeon-prompt .dungeon-action {
+        font-size: 16px;
+        color: #88cc88;
+        margin-top: 10px;
+      }
+      #dungeon-prompt.in-progress .dungeon-action::after {
+        content: ' (Resume)';
+        color: #ffcc44;
+      }
       
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestCave = cave;
+      #dungeon-loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+      }
+      #dungeon-loading.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #dungeon-loading .loading-title {
+        font-family: 'Times New Roman', serif;
+        font-size: 36px;
+        color: #d4a055;
+        text-shadow: 0 0 20px rgba(212,160,85,0.6);
+        margin-bottom: 20px;
+      }
+      #dungeon-loading .loading-subtitle {
+        font-family: 'Times New Roman', serif;
+        font-size: 18px;
+        color: #888;
+        font-style: italic;
+        margin-bottom: 40px;
+      }
+      #dungeon-loading .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid rgba(160,120,80,0.3);
+        border-top: 4px solid #d4a055;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      #dungeon-transition {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        z-index: 999;
+        opacity: 0;
+        pointer-events: none;
+        transition: none;
+      }
+      
+      #dungeon-exit-prompt {
+        position: fixed;
+        bottom: 150px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(15,12,20,0.9);
+        border: 2px solid rgba(100,180,255,0.6);
+        border-radius: 6px;
+        padding: 12px 20px;
+        font-family: 'Times New Roman', serif;
+        color: #88ccff;
+        text-align: center;
+        display: none;
+        z-index: 100;
+        box-shadow: 0 0 20px rgba(100,180,255,0.3);
+      }
+      #dungeon-exit-prompt .exit-title {
+        font-size: 18px;
+        margin-bottom: 4px;
+      }
+      #dungeon-exit-prompt .exit-action {
+        font-size: 14px;
+        color: #88cc88;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Create loading screen
+    this.loadingElement = document.createElement('div');
+    this.loadingElement.id = 'dungeon-loading';
+    this.loadingElement.innerHTML = `
+      <div class="loading-title">Entering Dungeon</div>
+      <div class="loading-subtitle">Prepare yourself...</div>
+      <div class="loading-spinner"></div>
+    `;
+    document.body.appendChild(this.loadingElement);
+    
+    // Create transition overlay (black screen)
+    this.transitionOverlay = document.createElement('div');
+    this.transitionOverlay.id = 'dungeon-transition';
+    document.body.appendChild(this.transitionOverlay);
+    
+    // Create exit portal prompt
+    this.exitPromptElement = document.createElement('div');
+    this.exitPromptElement.id = 'dungeon-exit-prompt';
+    this.exitPromptElement.innerHTML = `
+      <div class="exit-title">Exit Portal</div>
+      <div class="exit-action">[E] Return to Overworld</div>
+    `;
+    document.body.appendChild(this.exitPromptElement);
+  }
+  
+  // ========================================
+  // ENTRANCE DETECTION
+  // ========================================
+  
+  /**
+   * Check for nearby dungeon entrances and update prompt
+   */
+  _checkEntrances() {
+    if (!this.world.caveManager) return;
+    
+    const playerPos = this.player.mesh.position;
+    const caves = this.world.caveManager.caves;
+    
+    this.nearestEntrance = null;
+    this.entranceDistance = Infinity;
+    
+    // Find nearest cave entrance
+    for (const cave of caves) {
+      const dx = playerPos.x - cave.x;
+      const dz = playerPos.z - cave.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      
+      if (dist < this.entranceDistance) {
+        this.entranceDistance = dist;
+        this.nearestEntrance = cave;
       }
     }
     
-    if (nearestCave) {
-      this.showEntrancePrompt(nearestCave);
-      this.nearestEntrance = nearestCave;
+    // Update prompt visibility
+    if (this.nearestEntrance && this.entranceDistance < ENTRANCE_SETTINGS.promptDistance) {
+      this._showEntrancePrompt();
     } else {
-      this.hideEntrancePrompt();
-      this.nearestEntrance = null;
+      this._hideEntrancePrompt();
     }
   }
-
+  
   /**
-   * Show the entrance prompt with dungeon info
+   * Show entrance prompt with dungeon details
    */
-  showEntrancePrompt(cave) {
-    const dungeonData = getDungeonForCave(cave.x, cave.z);
-    if (!dungeonData) return;
+  _showEntrancePrompt() {
+    if (!this.nearestEntrance) return;
     
-    const nameEl = this.entrancePrompt.querySelector('#entrance-dungeon-name');
-    const descEl = this.entrancePrompt.querySelector('#entrance-description');
-    const levelEl = this.entrancePrompt.querySelector('#entrance-level');
+    // Determine dungeon type based on cave location/properties
+    const dungeonId = this._getDungeonIdForCave(this.nearestEntrance);
+    const dungeon = getDungeonById(dungeonId);
     
-    nameEl.textContent = dungeonData.name;
-    descEl.textContent = dungeonData.description;
-    
-    // Color level recommendation based on player level
-    const playerLevel = this.player?.level || 1;
-    const recLevel = dungeonData.recommendedLevel;
-    let levelColor = '#88cc88'; // Green - appropriate level
-    
-    if (playerLevel < recLevel - 3) {
-      levelColor = '#ff6644'; // Red - too hard
-    } else if (playerLevel < recLevel) {
-      levelColor = '#ffcc44'; // Yellow - challenging
-    } else if (playerLevel > recLevel + 5) {
-      levelColor = '#888888'; // Gray - too easy
-    }
-    
-    levelEl.innerHTML = `Recommended Level: <span style="color: ${levelColor}">${recLevel}</span>`;
-    
-    this.entrancePrompt.style.display = 'block';
-  }
-
-  /**
-   * Hide the entrance prompt
-   */
-  hideEntrancePrompt() {
-    this.entrancePrompt.style.display = 'none';
-  }
-
-  /**
-   * Handle interaction key press (E)
-   */
-  handleInteract() {
-    if (this.isTransitioning) return false;
-    
-    if (this.isInDungeon) {
-      // Check for exit portal interaction
-      return this.checkExitPortalInteraction();
-    } else if (this.nearestEntrance) {
-      // Enter dungeon
-      this.enterDungeon(this.nearestEntrance);
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * Enter a dungeon from a cave entrance
-   */
-  async enterDungeon(cave, modifier = 'none') {
-    if (this.isTransitioning || this.isInDungeon) return;
-    
-    const dungeonData = getDungeonForCave(cave.x, cave.z);
-    if (!dungeonData) {
-      console.error('[DungeonManager] No dungeon data for cave at', cave.x, cave.z);
+    if (!dungeon) {
+      this.promptElement.style.display = 'none';
       return;
     }
     
-    console.log(`[DungeonManager] Entering ${dungeonData.name}`);
+    // Check for in-progress
+    const progress = this.dungeonProgress.get(dungeonId);
+    const inProgress = progress && !progress.completed;
     
-    // Store entry point for return
-    this.dungeonEntryPoint = {
-      x: cave.x,
-      y: this.player?.mesh?.position.y || 0,
-      z: cave.z + 5, // Slightly behind the entrance
-    };
+    // Update prompt content
+    const nameEl = this.promptElement.querySelector('.dungeon-name');
+    const levelEl = this.promptElement.querySelector('.level-num');
+    const modifierEl = this.promptElement.querySelector('.dungeon-modifier');
     
-    // Start transition
-    await this.transitionToDungeon(dungeonData, modifier);
-  }
-
-  /**
-   * Transition to dungeon with fade effect
-   */
-  async transitionToDungeon(dungeonData, modifier) {
-    this.isTransitioning = true;
-    this.hideEntrancePrompt();
+    nameEl.textContent = dungeon.name;
+    levelEl.textContent = dungeon.recommendedLevel;
     
-    // Set up transition overlay
-    const nameEl = this.transitionOverlay.querySelector('#dungeon-name-display');
-    const subtextEl = this.transitionOverlay.querySelector('#dungeon-subtext');
-    const loadingEl = this.transitionOverlay.querySelector('#dungeon-loading-text');
-    
-    nameEl.textContent = dungeonData.name;
-    subtextEl.textContent = `Recommended Level ${dungeonData.recommendedLevel}`;
-    loadingEl.textContent = 'Entering...';
-    
-    // Fade to black
-    this.transitionOverlay.style.opacity = '1';
-    this.transitionOverlay.style.pointerEvents = 'auto';
-    
-    await this.sleep(TRANSITION_DURATION / 2);
-    
-    // Show loading text
-    loadingEl.style.opacity = '1';
-    nameEl.style.opacity = '1';
-    subtextEl.style.opacity = '1';
-    
-    // Store world state
-    this.saveWorldState();
-    
-    // Generate or load dungeon
-    const instanceId = `${dungeonData.id}_${Date.now()}`;
-    let dungeonInstance;
-    
-    // Check for saved progress
-    const savedProgress = this.getProgress(dungeonData.id);
-    if (savedProgress && savedProgress.instance) {
-      dungeonInstance = savedProgress.instance;
-      console.log('[DungeonManager] Resuming saved dungeon');
+    // Show modifier if applicable
+    if (this.currentModifier !== 'none') {
+      const mod = DUNGEON_MODIFIER[this.currentModifier.toUpperCase()];
+      modifierEl.textContent = mod ? mod.name : '';
+      modifierEl.className = `dungeon-modifier ${this.currentModifier}`;
     } else {
-      dungeonInstance = createDungeon(dungeonData.id, modifier);
+      modifierEl.textContent = '';
+      modifierEl.className = 'dungeon-modifier';
     }
     
-    this.currentDungeon = dungeonInstance;
-    
-    // Hide world geometry
-    this.hideWorld();
-    
-    // Render dungeon
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.renderDungeon(dungeonInstance);
+    // Show in-progress indicator
+    if (inProgress) {
+      this.promptElement.classList.add('in-progress');
+    } else {
+      this.promptElement.classList.remove('in-progress');
     }
     
-    // Teleport player to entrance room
-    this.teleportToRoom(dungeonInstance.entranceRoom);
-    
-    // Mark entrance room as explored
-    this.markRoomExplored(dungeonInstance.entranceRoom.id);
-    
-    await this.sleep(800);
-    
-    // Update loading text
-    loadingEl.textContent = 'Prepare yourself...';
-    
-    await this.sleep(600);
-    
-    // Fade in
-    loadingEl.style.opacity = '0';
-    nameEl.style.opacity = '0';
-    subtextEl.style.opacity = '0';
-    
-    await this.sleep(300);
-    
-    this.transitionOverlay.style.opacity = '0';
-    this.transitionOverlay.style.pointerEvents = 'none';
-    
-    this.isInDungeon = true;
-    this.isTransitioning = false;
-    
-    // Initialize dungeon progress tracking
-    this.initDungeonProgress(dungeonInstance);
-    
-    console.log('[DungeonManager] Dungeon entry complete');
+    this.promptElement.style.display = 'block';
   }
-
+  
   /**
-   * Initialize progress tracking for a dungeon instance
+   * Hide entrance prompt
    */
-  initDungeonProgress(dungeonInstance) {
-    const progress = {
-      instanceId: dungeonInstance.id,
-      dungeonId: dungeonInstance.dungeonId,
-      instance: dungeonInstance,
-      enteredAt: Date.now(),
-      roomsExplored: new Set([dungeonInstance.entranceRoom.id]),
-      roomsCleared: new Set([dungeonInstance.entranceRoom.id]),
-      chestsLooted: new Set(),
-      enemiesKilled: 0,
-      bossDefeated: false,
-      puzzlesSolved: new Set(),
-      currentRoomId: dungeonInstance.entranceRoom.id,
+  _hideEntrancePrompt() {
+    this.promptElement.style.display = 'none';
+  }
+  
+  /**
+   * Get dungeon ID based on cave properties/location
+   */
+  _getDungeonIdForCave(cave) {
+    // Use cave position as seed to consistently assign dungeon type
+    const seed = Math.floor(cave.x * 7 + cave.z * 13);
+    const dungeonIds = Object.keys(DUNGEONS);
+    const index = Math.abs(seed) % dungeonIds.length;
+    
+    // Convert key to dungeon ID
+    const dungeonKey = dungeonIds[index];
+    const dungeon = DUNGEONS[dungeonKey];
+    return dungeon ? dungeon.id : 'forgotten_catacombs';
+  }
+  
+  // ========================================
+  // DUNGEON TRANSITIONS
+  // ========================================
+  
+  /**
+   * Begin entering a dungeon
+   */
+  enterDungeon(dungeonId, modifier = 'none') {
+    if (this.state !== DUNGEON_STATE.OVERWORLD) {
+      console.warn('[DungeonManager] Cannot enter dungeon - not in overworld');
+      return;
+    }
+    
+    const dungeon = getDungeonById(dungeonId);
+    if (!dungeon) {
+      console.error(`[DungeonManager] Unknown dungeon: ${dungeonId}`);
+      return;
+    }
+    
+    console.log(`[DungeonManager] Entering ${dungeon.name} (${modifier})`);
+    
+    this.state = DUNGEON_STATE.ENTERING;
+    this.currentDungeonId = dungeonId;
+    this.currentModifier = modifier;
+    
+    // Hide entrance prompt
+    this._hideEntrancePrompt();
+    
+    // Play sound
+    if (this.audioManager) {
+      this.audioManager.play('doorOpen', { volume: 0.6 });
+    }
+    
+    // Save overworld state
+    this._saveOverworldState();
+    
+    // Start fade transition
+    this._startTransition('enter', () => {
+      this._loadDungeon(dungeonId, modifier);
+    });
+  }
+  
+  /**
+   * Exit current dungeon and return to overworld
+   */
+  exitDungeon() {
+    if (this.state !== DUNGEON_STATE.IN_DUNGEON) {
+      console.warn('[DungeonManager] Cannot exit - not in dungeon');
+      return;
+    }
+    
+    console.log('[DungeonManager] Exiting dungeon, returning to overworld');
+    
+    this.state = DUNGEON_STATE.EXITING;
+    
+    // Hide exit prompt
+    this.exitPromptElement.style.display = 'none';
+    
+    // Play sound
+    if (this.audioManager) {
+      this.audioManager.play('teleport', { volume: 0.6 });
+    }
+    
+    // Save dungeon progress
+    this._saveDungeonProgress();
+    
+    // Start fade transition
+    this._startTransition('exit', () => {
+      this._unloadDungeon();
+      this._restoreOverworldState();
+    });
+  }
+  
+  /**
+   * Start fade transition
+   */
+  _startTransition(type, callback) {
+    this.transitionProgress = 0;
+    this.transitionCallback = callback;
+    
+    const duration = type === 'enter' ? TRANSITION.fadeInDuration : TRANSITION.fadeOutDuration;
+    
+    // Update loading screen title
+    const titleEl = this.loadingElement.querySelector('.loading-title');
+    const subtitleEl = this.loadingElement.querySelector('.loading-subtitle');
+    
+    if (type === 'enter') {
+      const dungeon = getDungeonById(this.currentDungeonId);
+      titleEl.textContent = dungeon ? `Entering ${dungeon.name}` : 'Entering Dungeon';
+      subtitleEl.textContent = 'Prepare yourself...';
+    } else {
+      titleEl.textContent = 'Returning to Overworld';
+      subtitleEl.textContent = 'The light awaits...';
+    }
+    
+    // Animate fade
+    const startTime = performance.now();
+    
+    const animateFade = () => {
+      const elapsed = (performance.now() - startTime) / 1000;
+      this.transitionProgress = Math.min(elapsed / duration, 1);
+      
+      this.transitionOverlay.style.opacity = this.transitionProgress;
+      
+      if (this.transitionProgress >= 1) {
+        // Fade complete, show loading screen
+        this.loadingElement.classList.add('active');
+        
+        // Call callback after minimum loading time
+        setTimeout(() => {
+          if (this.transitionCallback) {
+            this.transitionCallback();
+          }
+        }, TRANSITION.loadingMinTime * 1000);
+      } else {
+        requestAnimationFrame(animateFade);
+      }
     };
     
-    this.dungeonProgress.set(dungeonInstance.id, progress);
-    this.currentRoomId = dungeonInstance.entranceRoom.id;
+    requestAnimationFrame(animateFade);
   }
-
+  
   /**
-   * Save world state before entering dungeon
+   * Fade out from black (after load complete)
    */
-  saveWorldState() {
-    this.worldState = {
-      playerPosition: this.player?.mesh?.position.clone(),
-      cameraPosition: this.game?.camera?.position.clone(),
-      fogSettings: this.scene?.fog ? {
-        color: this.scene.fog.color.getHex(),
-        density: this.scene.fog.density,
-      } : null,
+  _endTransition() {
+    const duration = TRANSITION.fadeOutDuration;
+    const startTime = performance.now();
+    
+    // Hide loading screen
+    this.loadingElement.classList.remove('active');
+    
+    const animateFade = () => {
+      const elapsed = (performance.now() - startTime) / 1000;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      this.transitionOverlay.style.opacity = 1 - progress;
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateFade);
+      } else {
+        this.transitionOverlay.style.opacity = 0;
+      }
     };
     
-    console.log('[DungeonManager] World state saved');
+    requestAnimationFrame(animateFade);
   }
-
+  
+  // ========================================
+  // DUNGEON LOADING / UNLOADING
+  // ========================================
+  
   /**
-   * Hide world geometry
+   * Save overworld state before entering dungeon
    */
-  hideWorld() {
-    if (!this.scene) return;
+  _saveOverworldState() {
+    this.overworldState = {
+      playerPosition: this.player.mesh.position.clone(),
+      playerRotation: this.player.mesh.rotation.y,
+      // Store any other relevant state
+      worldVisible: true,
+    };
     
-    // Find and hide world objects
-    const worldObjects = ['Terrain', 'Foliage', 'Villages', 'Ruins', 'Caves', 'World'];
-    
-    this.scene.traverse(child => {
-      if (worldObjects.some(name => child.name?.includes(name))) {
-        child.visible = false;
-      }
-    });
-    
-    // Hide enemies
-    if (this.enemyManager) {
-      this.enemyManager.hideAllEnemies?.();
-    }
-    
-    console.log('[DungeonManager] World hidden');
+    console.log('[DungeonManager] Saved overworld state');
   }
-
+  
   /**
-   * Show world geometry
+   * Restore overworld state after exiting dungeon
    */
-  showWorld() {
-    if (!this.scene) return;
+  _restoreOverworldState() {
+    if (!this.overworldState) return;
     
-    const worldObjects = ['Terrain', 'Foliage', 'Villages', 'Ruins', 'Caves', 'World'];
-    
-    this.scene.traverse(child => {
-      if (worldObjects.some(name => child.name?.includes(name))) {
-        child.visible = true;
-      }
-    });
-    
-    // Show enemies
-    if (this.enemyManager) {
-      this.enemyManager.showAllEnemies?.();
-    }
-    
-    console.log('[DungeonManager] World shown');
-  }
-
-  /**
-   * Teleport player to a room
-   */
-  teleportToRoom(room) {
-    if (!this.player?.mesh || !room) return;
-    
-    // Position player at room center
-    this.player.mesh.position.set(
-      room.position.x,
-      room.position.y + 1, // Slightly above floor
-      room.position.z
+    // Restore player position (near cave entrance)
+    this.player.mesh.position.copy(this.overworldState.playerPosition);
+    this.player.mesh.position.y = this.world.terrain.getTerrainHeight(
+      this.overworldState.playerPosition.x,
+      this.overworldState.playerPosition.z
     );
     
-    // Reset player velocity if needed
-    if (this.player.velocity) {
+    this.player.mesh.rotation.y = this.overworldState.playerRotation + Math.PI; // Face away from cave
+    this.player.velocity.set(0, 0, 0);
+    
+    // Re-enable overworld rendering
+    this._setOverworldVisible(true);
+    
+    // Clear dungeon state
+    this.currentDungeon = null;
+    this.currentDungeonId = null;
+    this.currentModifier = 'none';
+    this.state = DUNGEON_STATE.OVERWORLD;
+    
+    // End transition
+    this._endTransition();
+    
+    console.log('[DungeonManager] Restored overworld state');
+  }
+  
+  /**
+   * Load and generate dungeon instance
+   */
+  _loadDungeon(dungeonId, modifier) {
+    this.state = DUNGEON_STATE.LOADING;
+    
+    // Check for existing progress
+    const progress = this.dungeonProgress.get(dungeonId);
+    let seed = null;
+    
+    if (progress && !progress.completed) {
+      // Resume existing dungeon
+      seed = progress.seed;
+      console.log(`[DungeonManager] Resuming dungeon with seed ${seed}`);
+    }
+    
+    // Generate dungeon layout
+    this.generator = new DungeonGenerator(seed);
+    this.currentDungeon = this.generator.generate(dungeonId, modifier);
+    
+    if (!this.currentDungeon) {
+      console.error('[DungeonManager] Failed to generate dungeon');
+      this._restoreOverworldState();
+      return;
+    }
+    
+    // Hide overworld
+    this._setOverworldVisible(false);
+    
+    // Render dungeon geometry
+    dungeonRenderer.initialize(this.scene);
+    dungeonRenderer.renderDungeon(this.currentDungeon);
+    
+    // Set up dungeon lighting
+    this._setupDungeonLighting();
+    
+    // Find entrance room and spawn player there
+    const entranceRoom = this.currentDungeon.rooms.find(r => r.type === 'entrance');
+    if (entranceRoom) {
+      const spawnX = entranceRoom.worldX + entranceRoom.width / 2;
+      const spawnZ = entranceRoom.worldZ + entranceRoom.depth / 2;
+      const spawnY = 0.5; // Dungeon floor level
+      
+      this.player.mesh.position.set(spawnX, spawnY, spawnZ);
+      this.player.mesh.rotation.y = 0;
       this.player.velocity.set(0, 0, 0);
     }
     
-    this.currentRoomId = room.id;
+    // Create exit portal in boss room
+    this._createExitPortal();
     
-    console.log(`[DungeonManager] Teleported to room ${room.id}`);
+    // Initialize or restore progress
+    if (!progress || progress.completed) {
+      // New dungeon run
+      this.dungeonProgress.set(dungeonId, {
+        seed: this.generator.seed,
+        modifier: modifier,
+        roomsCleared: new Set(),
+        chestsLooted: new Set(),
+        puzzlesSolved: new Set(),
+        minibossDefeated: false,
+        bossDefeated: false,
+        completed: false,
+        startedAt: Date.now(),
+        timeSpent: 0,
+        enemiesKilled: 0,
+      });
+    }
+    
+    // Update state
+    this.state = DUNGEON_STATE.IN_DUNGEON;
+    
+    // End transition (fade in)
+    this._endTransition();
+    
+    console.log(`[DungeonManager] Dungeon loaded - ${this.currentDungeon.rooms.length} rooms`);
+    
+    // Play dungeon ambient
+    if (this.audioManager) {
+      this.audioManager.stopAmbientMusic();
+      this.audioManager.play('dungeonAmbient', { volume: 0.4, loop: true });
+    }
   }
-
+  
   /**
-   * Update dungeon state while in dungeon
+   * Unload current dungeon
    */
-  updateDungeonState(delta, playerPosition) {
+  _unloadDungeon() {
     if (!this.currentDungeon) return;
     
-    // Update dungeon renderer effects
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.update(delta);
+    // Clear dungeon geometry
+    dungeonRenderer.clearDungeon();
+    
+    // Remove exit portal
+    if (this.exitPortalMesh) {
+      this.scene.remove(this.exitPortalMesh);
+      if (this.exitPortalMesh.geometry) this.exitPortalMesh.geometry.dispose();
+      this.exitPortalMesh = null;
+    }
+    this.exitPortal = null;
+    
+    // Restore dungeon lighting (remove dungeon lights)
+    this._removeDungeonLighting();
+    
+    // Resume overworld ambient
+    if (this.audioManager) {
+      this.audioManager.stop('dungeonAmbient');
+      this.audioManager.startAmbientMusic();
     }
     
-    // Check which room player is in
-    this.updateCurrentRoom(playerPosition);
-    
-    // Check for exit portal proximity
-    this.checkExitPortalProximity(playerPosition);
+    console.log('[DungeonManager] Dungeon unloaded');
   }
-
+  
   /**
-   * Update current room based on player position
+   * Set overworld visibility (hide/show during dungeon)
    */
-  updateCurrentRoom(playerPosition) {
-    for (const room of this.currentDungeon.rooms) {
-      const dx = Math.abs(playerPosition.x - room.position.x);
-      const dz = Math.abs(playerPosition.z - room.position.z);
+  _setOverworldVisible(visible) {
+    // Hide terrain chunks
+    if (this.world.terrain && this.world.terrain.chunkGroup) {
+      this.world.terrain.chunkGroup.visible = visible;
+    }
+    
+    // Hide foliage
+    if (this.world.foliage && this.world.foliage.foliageGroup) {
+      this.world.foliage.foliageGroup.visible = visible;
+    }
+    
+    // Hide villages
+    if (this.world.villages && this.world.villages.regions) {
+      this.world.villages.regions.forEach(region => {
+        region.meshes.forEach(mesh => mesh.visible = visible);
+      });
+    }
+    
+    // Hide caves
+    if (this.world.caveManager && this.world.caveManager.regions) {
+      this.world.caveManager.regions.forEach(region => {
+        region.meshes.forEach(mesh => mesh.visible = visible);
+      });
+    }
+    
+    // Hide ruins
+    if (this.world.ruinsManager && this.world.ruinsManager.regions) {
+      this.world.ruinsManager.regions.forEach(region => {
+        region.meshes.forEach(mesh => mesh.visible = visible);
+      });
+    }
+    
+    // Update skybox / background
+    if (visible) {
+      this.scene.background = new THREE.Color(0x87CEEB); // Sky blue
+      this.scene.fog = null;
+    } else {
+      // Dark dungeon background
+      this.scene.background = new THREE.Color(0x050508);
+      this.scene.fog = new THREE.FogExp2(0x050508, 0.04);
+    }
+  }
+  
+  /**
+   * Set up dungeon lighting
+   */
+  _setupDungeonLighting() {
+    const dungeon = getDungeonById(this.currentDungeonId);
+    if (!dungeon) return;
+    
+    // Store reference to dungeon lights for cleanup
+    this.dungeonLights = [];
+    
+    // Dim ambient light for dungeon
+    const ambient = new THREE.AmbientLight(dungeon.ambientColor || 0x151520, 0.3);
+    ambient.name = 'dungeon-ambient';
+    this.scene.add(ambient);
+    this.dungeonLights.push(ambient);
+    
+    // Add point lights at key locations (torch positions from DungeonRenderer)
+    // These will be handled by DungeonRenderer
+  }
+  
+  /**
+   * Remove dungeon lighting
+   */
+  _removeDungeonLighting() {
+    if (!this.dungeonLights) return;
+    
+    for (const light of this.dungeonLights) {
+      this.scene.remove(light);
+    }
+    this.dungeonLights = [];
+  }
+  
+  // ========================================
+  // EXIT PORTAL
+  // ========================================
+  
+  /**
+   * Create exit portal in boss room
+   */
+  _createExitPortal() {
+    if (!this.currentDungeon) return;
+    
+    // Find boss room
+    const bossRoom = this.currentDungeon.rooms.find(r => r.type === 'boss');
+    if (!bossRoom) {
+      console.warn('[DungeonManager] No boss room found for exit portal');
+      return;
+    }
+    
+    // Position portal at back of boss room
+    const portalX = bossRoom.worldX + bossRoom.width / 2;
+    const portalZ = bossRoom.worldZ + bossRoom.depth - 2;
+    const portalY = 0;
+    
+    this.exitPortal = {
+      x: portalX,
+      y: portalY,
+      z: portalZ,
+      active: false, // Only active after boss defeat
+    };
+    
+    // Create portal mesh
+    const portalGroup = new THREE.Group();
+    portalGroup.position.set(portalX, portalY, portalZ);
+    
+    // Portal ring
+    const ringGeom = new THREE.TorusGeometry(1.5, 0.15, 16, 32);
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: 0x4488ff,
+      emissive: 0x2244aa,
+      emissiveIntensity: 0.8,
+      roughness: 0.3,
+      metalness: 0.7,
+    });
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 1.8;
+    portalGroup.add(ring);
+    
+    // Portal surface (initially inactive - dark)
+    const surfaceGeom = new THREE.CircleGeometry(1.4, 32);
+    const surfaceMat = new THREE.MeshBasicMaterial({
+      color: 0x1a1a30,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+    });
+    const surface = new THREE.Mesh(surfaceGeom, surfaceMat);
+    surface.rotation.x = Math.PI / 2;
+    surface.position.y = 1.8;
+    surface.name = 'portal-surface';
+    portalGroup.add(surface);
+    
+    // Portal base pedestal
+    const baseGeom = new THREE.CylinderGeometry(0.8, 1.0, 0.3, 16);
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x3a3a50,
+      roughness: 0.8,
+      metalness: 0.2,
+    });
+    const base = new THREE.Mesh(baseGeom, baseMat);
+    base.position.y = 0.15;
+    portalGroup.add(base);
+    
+    // Point light (dim until active)
+    const light = new THREE.PointLight(0x4488ff, 0.3, 5);
+    light.position.y = 2;
+    light.name = 'portal-light';
+    portalGroup.add(light);
+    
+    this.exitPortalMesh = portalGroup;
+    this.scene.add(portalGroup);
+  }
+  
+  /**
+   * Activate exit portal (called when boss defeated)
+   */
+  activateExitPortal() {
+    if (!this.exitPortal || !this.exitPortalMesh) return;
+    
+    this.exitPortal.active = true;
+    
+    // Update portal visuals
+    const surface = this.exitPortalMesh.getObjectByName('portal-surface');
+    if (surface) {
+      surface.material.color.setHex(0x44aaff);
+      surface.material.opacity = 0.9;
+    }
+    
+    // Brighten light
+    const light = this.exitPortalMesh.getObjectByName('portal-light');
+    if (light) {
+      light.intensity = 2;
+    }
+    
+    console.log('[DungeonManager] Exit portal activated');
+  }
+  
+  /**
+   * Check if player is near exit portal
+   */
+  _checkExitPortal() {
+    if (!this.exitPortal || !this.exitPortal.active) {
+      this.exitPromptElement.style.display = 'none';
+      return;
+    }
+    
+    const playerPos = this.player.mesh.position;
+    const dx = playerPos.x - this.exitPortal.x;
+    const dz = playerPos.z - this.exitPortal.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    
+    if (dist < 3) {
+      this.exitPromptElement.style.display = 'block';
       
-      if (dx < room.width / 2 && dz < room.depth / 2) {
-        if (room.id !== this.currentRoomId) {
-          this.onEnterRoom(room);
-        }
-        return;
+      // Check for interact
+      if (this.inputManager.interact && this.interactCooldown <= 0) {
+        this.interactCooldown = ENTRANCE_SETTINGS.interactCooldown;
+        this.exitDungeon();
       }
+    } else {
+      this.exitPromptElement.style.display = 'none';
     }
   }
-
+  
+  // ========================================
+  // PROGRESS TRACKING
+  // ========================================
+  
   /**
-   * Handle entering a new room
-   */
-  onEnterRoom(room) {
-    const previousRoomId = this.currentRoomId;
-    this.currentRoomId = room.id;
-    
-    // Mark as explored
-    this.markRoomExplored(room.id);
-    
-    // Trigger room events
-    this.triggerRoomEvents(room);
-    
-    console.log(`[DungeonManager] Entered room ${room.id} (${room.type})`);
-  }
-
-  /**
-   * Trigger events when entering a room
-   */
-  triggerRoomEvents(room) {
-    const progress = this.dungeonProgress.get(this.currentDungeon.id);
-    if (!progress) return;
-    
-    // Spawn enemies if room not cleared
-    if (!progress.roomsCleared.has(room.id)) {
-      if (room.enemies && room.enemies.length > 0) {
-        this.spawnRoomEnemies(room);
-      }
-      
-      if (room.miniboss) {
-        this.spawnMiniboss(room);
-      }
-      
-      if (room.boss) {
-        this.spawnBoss(room);
-      }
-    }
-    
-    // Close doors for combat rooms (arena fights)
-    if (room.type === 'combat' || room.type === 'miniboss' || room.type === 'boss') {
-      this.lockRoomDoors(room);
-    }
-  }
-
-  /**
-   * Spawn enemies in a room
-   */
-  spawnRoomEnemies(room) {
-    if (!this.enemyManager) return;
-    
-    const dungeonData = this.currentDungeon.dungeonData;
-    const modifier = this.currentDungeon.modifier;
-    const modEffects = DUNGEON_MODIFIER[modifier.toUpperCase()]?.effects || {};
-    
-    for (const enemyData of room.enemies) {
-      // Calculate spawn position (relative to room)
-      const spawnPos = new THREE.Vector3(
-        room.position.x + (enemyData.spawnPosition?.x || 0),
-        room.position.y + 0.5,
-        room.position.z + (enemyData.spawnPosition?.z || 0)
-      );
-      
-      // Determine enemy level
-      const levelRange = enemyData.levelRange || dungeonData.enemyLevelRange;
-      const level = Math.floor(
-        levelRange.min + Math.random() * (levelRange.max - levelRange.min)
-      );
-      
-      // Spawn via enemy manager
-      // Note: Actual spawning depends on EnemyManager implementation
-      console.log(`[DungeonManager] Would spawn ${enemyData.type} at ${spawnPos.x}, ${spawnPos.z} (level ${level})`);
-    }
-  }
-
-  /**
-   * Spawn miniboss in a room
-   */
-  spawnMiniboss(room) {
-    if (!room.miniboss) return;
-    
-    const spawnPos = new THREE.Vector3(
-      room.position.x + (room.miniboss.spawnPosition?.x || 0),
-      room.position.y + 0.5,
-      room.position.z + (room.miniboss.spawnPosition?.z || 0)
-    );
-    
-    console.log(`[DungeonManager] Would spawn miniboss ${room.miniboss.name} at ${spawnPos.x}, ${spawnPos.z}`);
-  }
-
-  /**
-   * Spawn boss in a room
-   */
-  spawnBoss(room) {
-    if (!room.boss) return;
-    
-    const spawnPos = new THREE.Vector3(
-      room.position.x + (room.boss.spawnPosition?.x || 0),
-      room.position.y + 0.5,
-      room.position.z + (room.boss.spawnPosition?.z || 0)
-    );
-    
-    console.log(`[DungeonManager] Would spawn boss ${room.boss.name} at ${spawnPos.x}, ${spawnPos.z}`);
-  }
-
-  /**
-   * Lock doors for a room (combat arena)
-   */
-  lockRoomDoors(room) {
-    const renderer = dungeonRenderer.get();
-    if (!renderer) return;
-    
-    for (const connId of room.connections) {
-      const doorKey = `${room.id}_${connId}`;
-      const reverseDoorKey = `${connId}_${room.id}`;
-      
-      renderer.lockDoor(doorKey);
-      renderer.lockDoor(reverseDoorKey);
-    }
-  }
-
-  /**
-   * Unlock doors for a room (after clearing)
-   */
-  unlockRoomDoors(room) {
-    const renderer = dungeonRenderer.get();
-    if (!renderer) return;
-    
-    for (const connId of room.connections) {
-      const doorKey = `${room.id}_${connId}`;
-      const reverseDoorKey = `${connId}_${room.id}`;
-      
-      renderer.unlockDoor(doorKey);
-      renderer.openDoor(doorKey);
-      renderer.unlockDoor(reverseDoorKey);
-      renderer.openDoor(reverseDoorKey);
-    }
-  }
-
-  /**
-   * Mark a room as cleared (all enemies defeated)
+   * Mark a room as cleared
    */
   markRoomCleared(roomId) {
-    const progress = this.dungeonProgress.get(this.currentDungeon?.id);
-    if (!progress) return;
+    if (!this.currentDungeonId) return;
     
-    progress.roomsCleared.add(roomId);
-    
-    // Update renderer
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.markRoomCleared(roomId);
-    }
-    
-    // Find room and unlock doors
-    const room = this.currentDungeon.rooms.find(r => r.id === roomId);
-    if (room) {
-      this.unlockRoomDoors(room);
-    }
-    
-    // Save progress
-    this.saveProgress();
-    
-    console.log(`[DungeonManager] Room ${roomId} cleared`);
-  }
-
-  /**
-   * Mark a room as explored
-   */
-  markRoomExplored(roomId) {
-    const progress = this.dungeonProgress.get(this.currentDungeon?.id);
-    if (!progress) return;
-    
-    progress.roomsExplored.add(roomId);
-    
-    // Update renderer
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.markRoomExplored(roomId);
+    const progress = this.dungeonProgress.get(this.currentDungeonId);
+    if (progress) {
+      progress.roomsCleared.add(roomId);
+      this._saveProgress();
     }
   }
-
-  /**
-   * Mark boss as defeated
-   */
-  markBossDefeated() {
-    const progress = this.dungeonProgress.get(this.currentDungeon?.id);
-    if (!progress) return;
-    
-    progress.bossDefeated = true;
-    
-    // Mark boss room as cleared
-    if (this.currentDungeon.bossRoom) {
-      this.markRoomCleared(this.currentDungeon.bossRoom.id);
-    }
-    
-    // Activate exit portal
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.activateExitPortal();
-    }
-    
-    // Save progress
-    this.saveProgress();
-    
-    console.log('[DungeonManager] Boss defeated! Exit portal activated.');
-  }
-
+  
   /**
    * Mark a chest as looted
    */
   markChestLooted(chestId) {
-    const progress = this.dungeonProgress.get(this.currentDungeon?.id);
-    if (!progress) return;
+    if (!this.currentDungeonId) return;
     
-    progress.chestsLooted.add(chestId);
-    this.saveProgress();
+    const progress = this.dungeonProgress.get(this.currentDungeonId);
+    if (progress) {
+      progress.chestsLooted.add(chestId);
+      this._saveProgress();
+    }
   }
-
+  
   /**
    * Mark a puzzle as solved
    */
   markPuzzleSolved(puzzleId) {
-    const progress = this.dungeonProgress.get(this.currentDungeon?.id);
-    if (!progress) return;
+    if (!this.currentDungeonId) return;
     
-    progress.puzzlesSolved.add(puzzleId);
-    this.saveProgress();
-  }
-
-  /**
-   * Check exit portal proximity
-   */
-  checkExitPortalProximity(playerPosition) {
-    if (!this.currentDungeon?.bossRoom) return;
-    
-    const progress = this.dungeonProgress.get(this.currentDungeon.id);
-    if (!progress?.bossDefeated) return;
-    
-    const bossRoom = this.currentDungeon.bossRoom;
-    
-    // Exit portal is at the back of boss room
-    const portalX = bossRoom.position.x;
-    const portalZ = bossRoom.position.z - bossRoom.depth / 2 + 1;
-    
-    const dx = playerPosition.x - portalX;
-    const dz = playerPosition.z - portalZ;
-    const distance = Math.sqrt(dx * dx + dz * dz);
-    
-    if (distance < EXIT_PORTAL_RANGE) {
-      this.showExitPrompt();
-    } else {
-      this.hideExitPrompt();
+    const progress = this.dungeonProgress.get(this.currentDungeonId);
+    if (progress) {
+      progress.puzzlesSolved.add(puzzleId);
+      this._saveProgress();
     }
   }
-
+  
   /**
-   * Show exit prompt
+   * Mark miniboss as defeated
    */
-  showExitPrompt() {
-    if (!this.entrancePrompt) return;
+  markMinibossDefeated() {
+    if (!this.currentDungeonId) return;
     
-    const nameEl = this.entrancePrompt.querySelector('#entrance-dungeon-name');
-    const descEl = this.entrancePrompt.querySelector('#entrance-description');
-    const levelEl = this.entrancePrompt.querySelector('#entrance-level');
-    const keyEl = this.entrancePrompt.querySelector('#entrance-key-prompt');
-    
-    nameEl.textContent = 'Exit Portal';
-    descEl.textContent = 'Return to the overworld.';
-    levelEl.textContent = '';
-    keyEl.innerHTML = 'Press <span style="color: #ffdd99; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">E</span> to Exit';
-    
-    this.entrancePrompt.style.display = 'block';
-  }
-
-  /**
-   * Hide exit prompt
-   */
-  hideExitPrompt() {
-    // Only hide if we're showing exit prompt (not entrance prompt)
-    const nameEl = this.entrancePrompt?.querySelector('#entrance-dungeon-name');
-    if (nameEl?.textContent === 'Exit Portal') {
-      this.entrancePrompt.style.display = 'none';
+    const progress = this.dungeonProgress.get(this.currentDungeonId);
+    if (progress) {
+      progress.minibossDefeated = true;
+      this._saveProgress();
     }
   }
-
+  
   /**
-   * Check for exit portal interaction
+   * Mark boss as defeated (enables exit portal)
    */
-  checkExitPortalInteraction() {
-    const progress = this.dungeonProgress.get(this.currentDungeon?.id);
-    if (!progress?.bossDefeated) return false;
+  markBossDefeated() {
+    if (!this.currentDungeonId) return;
     
-    const playerPos = this.player?.mesh?.position;
-    if (!playerPos) return false;
-    
-    const bossRoom = this.currentDungeon.bossRoom;
-    const portalX = bossRoom.position.x;
-    const portalZ = bossRoom.position.z - bossRoom.depth / 2 + 1;
-    
-    const dx = playerPos.x - portalX;
-    const dz = playerPos.z - portalZ;
-    const distance = Math.sqrt(dx * dx + dz * dz);
-    
-    if (distance < EXIT_PORTAL_RANGE) {
-      this.exitDungeon();
-      return true;
+    const progress = this.dungeonProgress.get(this.currentDungeonId);
+    if (progress) {
+      progress.bossDefeated = true;
+      progress.completed = true;
+      progress.completedAt = Date.now();
+      this._saveProgress();
     }
     
-    return false;
+    // Activate exit portal
+    this.activateExitPortal();
   }
-
+  
   /**
-   * Exit the dungeon and return to overworld
+   * Increment enemy kill count
    */
-  async exitDungeon() {
-    if (this.isTransitioning || !this.isInDungeon) return;
+  incrementEnemyKills() {
+    if (!this.currentDungeonId) return;
     
-    console.log('[DungeonManager] Exiting dungeon');
-    
-    this.isTransitioning = true;
-    this.hideEntrancePrompt();
-    
-    // Set up transition
-    const loadingEl = this.transitionOverlay.querySelector('#dungeon-loading-text');
-    const nameEl = this.transitionOverlay.querySelector('#dungeon-name-display');
-    const subtextEl = this.transitionOverlay.querySelector('#dungeon-subtext');
-    
-    loadingEl.textContent = 'Returning...';
-    nameEl.textContent = 'Overworld';
-    subtextEl.textContent = '';
-    
-    // Fade to black
-    this.transitionOverlay.style.opacity = '1';
-    this.transitionOverlay.style.pointerEvents = 'auto';
-    
-    await this.sleep(TRANSITION_DURATION / 2);
-    
-    loadingEl.style.opacity = '1';
-    nameEl.style.opacity = '1';
-    
-    // Clear dungeon
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.clearDungeon();
+    const progress = this.dungeonProgress.get(this.currentDungeonId);
+    if (progress) {
+      progress.enemiesKilled++;
     }
-    
-    // Restore world
-    this.showWorld();
-    this.restoreWorldState();
-    
-    // Teleport player back to entry point
-    if (this.player?.mesh && this.dungeonEntryPoint) {
-      this.player.mesh.position.set(
-        this.dungeonEntryPoint.x,
-        this.dungeonEntryPoint.y,
-        this.dungeonEntryPoint.z
-      );
-    }
-    
-    await this.sleep(600);
-    
-    // Fade in
-    loadingEl.style.opacity = '0';
-    nameEl.style.opacity = '0';
-    
-    await this.sleep(300);
-    
-    this.transitionOverlay.style.opacity = '0';
-    this.transitionOverlay.style.pointerEvents = 'none';
-    
-    // Reset state
-    this.isInDungeon = false;
-    this.currentDungeon = null;
-    this.currentRoomId = null;
-    this.isTransitioning = false;
-    
-    console.log('[DungeonManager] Exit complete, back in overworld');
   }
-
+  
   /**
-   * Restore world state after dungeon exit
+   * Get current dungeon progress
    */
-  restoreWorldState() {
-    if (!this.worldState) return;
-    
-    // Restore fog
-    if (this.worldState.fogSettings && this.scene) {
-      this.scene.fog = new THREE.FogExp2(
-        this.worldState.fogSettings.color,
-        this.worldState.fogSettings.density || 0.015
-      );
-    }
-    
-    console.log('[DungeonManager] World state restored');
+  getProgress() {
+    if (!this.currentDungeonId) return null;
+    return this.dungeonProgress.get(this.currentDungeonId);
   }
-
+  
   /**
    * Save dungeon progress to localStorage
    */
-  saveProgress() {
+  _saveDungeonProgress() {
+    if (!this.currentDungeonId) return;
+    
+    const progress = this.dungeonProgress.get(this.currentDungeonId);
+    if (progress) {
+      // Update time spent
+      const now = Date.now();
+      progress.timeSpent += (now - (progress.lastUpdateTime || progress.startedAt));
+      progress.lastUpdateTime = now;
+    }
+    
+    this._saveProgress();
+  }
+  
+  /**
+   * Save all progress to localStorage
+   */
+  _saveProgress() {
     try {
-      const saveData = {};
+      const data = {};
       
-      for (const [id, progress] of this.dungeonProgress) {
-        saveData[id] = {
-          dungeonId: progress.dungeonId,
-          roomsExplored: Array.from(progress.roomsExplored),
+      this.dungeonProgress.forEach((progress, dungeonId) => {
+        data[dungeonId] = {
+          ...progress,
           roomsCleared: Array.from(progress.roomsCleared),
           chestsLooted: Array.from(progress.chestsLooted),
           puzzlesSolved: Array.from(progress.puzzlesSolved),
-          bossDefeated: progress.bossDefeated,
-          // Note: We don't save the full instance to avoid huge saves
         };
-      }
+      });
       
-      localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+      localStorage.setItem('ashen_dungeon_progress', JSON.stringify(data));
     } catch (e) {
       console.warn('[DungeonManager] Failed to save progress:', e);
     }
   }
-
+  
   /**
-   * Load dungeon progress from localStorage
+   * Load progress from localStorage
    */
-  loadProgress() {
+  _loadProgress() {
     try {
-      const saveData = localStorage.getItem(SAVE_KEY);
-      if (!saveData) return;
-      
-      const parsed = JSON.parse(saveData);
-      
-      for (const [id, data] of Object.entries(parsed)) {
-        this.dungeonProgress.set(id, {
-          ...data,
-          roomsExplored: new Set(data.roomsExplored),
-          roomsCleared: new Set(data.roomsCleared),
-          chestsLooted: new Set(data.chestsLooted),
-          puzzlesSolved: new Set(data.puzzlesSolved),
-        });
+      const saved = localStorage.getItem('ashen_dungeon_progress');
+      if (saved) {
+        const data = JSON.parse(saved);
+        
+        for (const [dungeonId, progress] of Object.entries(data)) {
+          this.dungeonProgress.set(dungeonId, {
+            ...progress,
+            roomsCleared: new Set(progress.roomsCleared || []),
+            chestsLooted: new Set(progress.chestsLooted || []),
+            puzzlesSolved: new Set(progress.puzzlesSolved || []),
+          });
+        }
+        
+        console.log(`[DungeonManager] Loaded progress for ${this.dungeonProgress.size} dungeons`);
       }
-      
-      console.log(`[DungeonManager] Loaded progress for ${this.dungeonProgress.size} dungeons`);
     } catch (e) {
       console.warn('[DungeonManager] Failed to load progress:', e);
     }
   }
-
+  
+  // ========================================
+  // UPDATE LOOP
+  // ========================================
+  
   /**
-   * Get saved progress for a dungeon type
+   * Update dungeon manager - call every frame
    */
-  getProgress(dungeonId) {
-    for (const [id, progress] of this.dungeonProgress) {
-      if (progress.dungeonId === dungeonId && !progress.bossDefeated) {
-        return progress;
-      }
+  update(delta) {
+    // Update cooldown
+    if (this.interactCooldown > 0) {
+      this.interactCooldown -= delta;
     }
-    return null;
-  }
-
-  /**
-   * Get dungeon completion stats
-   */
-  getCompletionStats() {
-    if (!this.currentDungeon) return null;
     
-    const progress = this.dungeonProgress.get(this.currentDungeon.id);
-    if (!progress) return null;
+    switch (this.state) {
+      case DUNGEON_STATE.OVERWORLD:
+        this._updateOverworld(delta);
+        break;
+        
+      case DUNGEON_STATE.IN_DUNGEON:
+        this._updateInDungeon(delta);
+        break;
+        
+      case DUNGEON_STATE.ENTERING:
+      case DUNGEON_STATE.LOADING:
+      case DUNGEON_STATE.EXITING:
+        // Transitions handled by animation frames
+        break;
+    }
     
-    const totalRooms = this.currentDungeon.rooms.length;
-    const exploredRooms = progress.roomsExplored.size;
-    const clearedRooms = progress.roomsCleared.size;
+    // Animate exit portal
+    if (this.exitPortalMesh && this.exitPortal && this.exitPortal.active) {
+      this._animateExitPortal(delta);
+    }
+  }
+  
+  /**
+   * Update when in overworld
+   */
+  _updateOverworld(delta) {
+    // Check for nearby entrances
+    this._checkEntrances();
     
-    return {
-      dungeonName: this.currentDungeon.dungeonData.name,
-      roomsExplored: exploredRooms,
-      roomsCleared: clearedRooms,
-      totalRooms,
-      explorationPercent: Math.floor((exploredRooms / totalRooms) * 100),
-      clearPercent: Math.floor((clearedRooms / totalRooms) * 100),
-      chestsLooted: progress.chestsLooted.size,
-      puzzlesSolved: progress.puzzlesSolved.size,
-      bossDefeated: progress.bossDefeated,
-      elapsedTime: Date.now() - progress.enteredAt,
-    };
+    // Check for interaction
+    if (this.nearestEntrance && 
+        this.entranceDistance < ENTRANCE_SETTINGS.promptDistance &&
+        this.inputManager.interact &&
+        this.interactCooldown <= 0) {
+      
+      this.interactCooldown = ENTRANCE_SETTINGS.interactCooldown;
+      
+      // Enter dungeon
+      const dungeonId = this._getDungeonIdForCave(this.nearestEntrance);
+      this.enterDungeon(dungeonId, this.currentModifier);
+    }
   }
-
+  
   /**
-   * Get minimap data for UI
+   * Update when in dungeon
    */
-  getMinimapData() {
-    const renderer = dungeonRenderer.get();
-    return renderer?.getMinimapData() || null;
+  _updateInDungeon(delta) {
+    // Check exit portal proximity
+    this._checkExitPortal();
+    
+    // Update dungeon renderer (animations, particles)
+    dungeonRenderer.update(delta);
+    
+    // Update time tracking
+    const progress = this.getProgress();
+    if (progress) {
+      progress.lastUpdateTime = Date.now();
+    }
   }
-
+  
   /**
-   * Sleep utility for async transitions
+   * Animate exit portal
    */
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  _animateExitPortal(delta) {
+    if (!this.exitPortalMesh) return;
+    
+    const time = performance.now() * 0.001;
+    
+    // Rotate portal ring slowly
+    const ring = this.exitPortalMesh.children[0];
+    if (ring) {
+      ring.rotation.z = time * 0.5;
+    }
+    
+    // Pulse portal surface
+    const surface = this.exitPortalMesh.getObjectByName('portal-surface');
+    if (surface) {
+      const pulse = 0.7 + Math.sin(time * 3) * 0.2;
+      surface.material.opacity = pulse;
+    }
+    
+    // Pulse light
+    const light = this.exitPortalMesh.getObjectByName('portal-light');
+    if (light) {
+      light.intensity = 1.5 + Math.sin(time * 2) * 0.5;
+    }
   }
-
+  
+  // ========================================
+  // PUBLIC API
+  // ========================================
+  
   /**
-   * Check if player is currently in a dungeon
+   * Check if currently in a dungeon
    */
-  isPlayerInDungeon() {
-    return this.isInDungeon;
+  isInDungeon() {
+    return this.state === DUNGEON_STATE.IN_DUNGEON;
   }
-
+  
   /**
    * Get current dungeon data
    */
   getCurrentDungeon() {
     return this.currentDungeon;
   }
-
+  
   /**
-   * Get current room data
+   * Get current dungeon ID
    */
-  getCurrentRoom() {
-    if (!this.currentDungeon || !this.currentRoomId) return null;
-    return this.currentDungeon.rooms.find(r => r.id === this.currentRoomId);
+  getCurrentDungeonId() {
+    return this.currentDungeonId;
   }
-
+  
   /**
-   * Force exit (for debugging/emergencies)
+   * Get floor Y at position (dungeon floors are flat at y=0)
    */
-  forceExit() {
-    if (!this.isInDungeon) return;
+  getFloorY(x, z) {
+    if (this.state !== DUNGEON_STATE.IN_DUNGEON) return null;
     
-    // Immediately exit without transition
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.clearDungeon();
+    // Find which room the position is in
+    if (!this.currentDungeon) return 0;
+    
+    for (const room of this.currentDungeon.rooms) {
+      if (x >= room.worldX && x <= room.worldX + room.width &&
+          z >= room.worldZ && z <= room.worldZ + room.depth) {
+        return 0; // Dungeon floors at y=0
+      }
     }
     
-    this.showWorld();
-    this.restoreWorldState();
-    
-    if (this.player?.mesh && this.dungeonEntryPoint) {
-      this.player.mesh.position.set(
-        this.dungeonEntryPoint.x,
-        this.dungeonEntryPoint.y,
-        this.dungeonEntryPoint.z
-      );
+    // Check corridors
+    for (const conn of this.currentDungeon.connections || []) {
+      if (conn.corridor && 
+          x >= conn.corridor.worldX && x <= conn.corridor.worldX + conn.corridor.width &&
+          z >= conn.corridor.worldZ && z <= conn.corridor.worldZ + conn.corridor.depth) {
+        return 0;
+      }
     }
     
-    this.isInDungeon = false;
-    this.currentDungeon = null;
-    this.currentRoomId = null;
-    this.isTransitioning = false;
-    
-    console.log('[DungeonManager] Force exit complete');
+    return 0; // Default floor level
   }
-
+  
   /**
-   * Dispose of resources
+   * Check wall collision within dungeon
+   */
+  checkWallCollision(position, radius = 0.4) {
+    if (this.state !== DUNGEON_STATE.IN_DUNGEON || !this.currentDungeon) {
+      return null;
+    }
+    
+    // Simple boundary collision - keep player within rooms
+    const pushOut = new THREE.Vector3();
+    let collided = false;
+    
+    // Find current room
+    let inRoom = false;
+    for (const room of this.currentDungeon.rooms) {
+      const minX = room.worldX + radius;
+      const maxX = room.worldX + room.width - radius;
+      const minZ = room.worldZ + radius;
+      const maxZ = room.worldZ + room.depth - radius;
+      
+      if (position.x >= room.worldX && position.x <= room.worldX + room.width &&
+          position.z >= room.worldZ && position.z <= room.worldZ + room.depth) {
+        inRoom = true;
+        
+        // Check room boundaries
+        if (position.x < minX) {
+          pushOut.x = minX - position.x;
+          collided = true;
+        } else if (position.x > maxX) {
+          pushOut.x = maxX - position.x;
+          collided = true;
+        }
+        
+        if (position.z < minZ) {
+          pushOut.z = minZ - position.z;
+          collided = true;
+        } else if (position.z > maxZ) {
+          pushOut.z = maxZ - position.z;
+          collided = true;
+        }
+        
+        break;
+      }
+    }
+    
+    return collided ? pushOut : null;
+  }
+  
+  /**
+   * Dispose of all resources
    */
   dispose() {
     // Remove UI elements
-    if (this.transitionOverlay?.parentNode) {
-      this.transitionOverlay.parentNode.removeChild(this.transitionOverlay);
+    if (this.promptElement) {
+      this.promptElement.remove();
+    }
+    if (this.loadingElement) {
+      this.loadingElement.remove();
+    }
+    if (this.transitionOverlay) {
+      this.transitionOverlay.remove();
+    }
+    if (this.exitPromptElement) {
+      this.exitPromptElement.remove();
     }
     
-    if (this.entrancePrompt?.parentNode) {
-      this.entrancePrompt.parentNode.removeChild(this.entrancePrompt);
+    // Clear dungeon if active
+    if (this.currentDungeon) {
+      this._unloadDungeon();
     }
     
-    // Clear dungeon
-    const renderer = dungeonRenderer.get();
-    if (renderer) {
-      renderer.dispose();
-    }
-    
-    // Clear progress
-    this.dungeonProgress.clear();
-    
-    console.log('[DungeonManager] Disposed');
+    // Clear references
+    this.scene = null;
+    this.world = null;
+    this.player = null;
+    this.gameManager = null;
+    this.inputManager = null;
   }
 }
 
-// Factory function
-export function createDungeonManager(gameManager) {
-  return new DungeonManager(gameManager);
+// Create singleton for easy import
+let dungeonManagerInstance = null;
+
+export function createDungeonManager(scene, world, player, gameManager, inputManager, audioManager) {
+  dungeonManagerInstance = new DungeonManager(scene, world, player, gameManager, inputManager, audioManager);
+  return dungeonManagerInstance;
 }
+
+export function getDungeonManager() {
+  return dungeonManagerInstance;
+}
+
+export { DUNGEON_STATE };

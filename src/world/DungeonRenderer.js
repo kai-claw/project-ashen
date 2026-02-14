@@ -1782,18 +1782,83 @@ export class DungeonRenderer {
   }
 }
 
-// Singleton export
+// Singleton instance
+let dungeonRendererInstance = null;
+
+// Singleton export with passthrough methods
 export const dungeonRenderer = {
-  instance: null,
-  
-  init(scene) {
-    if (!this.instance) {
-      this.instance = new DungeonRenderer(scene);
+  initialize(scene) {
+    if (!dungeonRendererInstance) {
+      dungeonRendererInstance = new DungeonRenderer(scene);
     }
-    return this.instance;
+    return dungeonRendererInstance;
   },
   
-  get() {
-    return this.instance;
+  getInstance() {
+    return dungeonRendererInstance;
+  },
+  
+  renderDungeon(dungeonData) {
+    if (dungeonRendererInstance) {
+      return dungeonRendererInstance.renderDungeon(dungeonData);
+    }
+    console.warn('[DungeonRenderer] Not initialized');
+    return null;
+  },
+  
+  clearDungeon() {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.clearDungeon();
+    }
+  },
+  
+  update(delta) {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.update(delta);
+    }
+  },
+  
+  openDoor(doorKey) {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.openDoor(doorKey);
+    }
+  },
+  
+  unlockDoor(doorKey) {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.unlockDoor(doorKey);
+    }
+  },
+  
+  markRoomExplored(roomId) {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.markRoomExplored(roomId);
+    }
+  },
+  
+  markRoomCleared(roomId) {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.markRoomCleared(roomId);
+    }
+  },
+  
+  getMinimapData() {
+    if (dungeonRendererInstance) {
+      return dungeonRendererInstance.getMinimapData();
+    }
+    return null;
+  },
+  
+  activateExitPortal() {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.activateExitPortal();
+    }
+  },
+  
+  dispose() {
+    if (dungeonRendererInstance) {
+      dungeonRendererInstance.dispose();
+      dungeonRendererInstance = null;
+    }
   },
 };

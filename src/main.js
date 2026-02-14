@@ -32,6 +32,7 @@ import { SpellEffects } from './systems/SpellEffects.js';
 import { BossUI } from './ui/BossUI.js';
 import { createBossSpawner } from './systems/BossSpawner.js';
 import { bossRenderer } from './systems/BossRenderer.js';
+import { createDungeonManager, getDungeonManager } from './systems/DungeonManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -365,6 +366,10 @@ bossSpawner.onBossDefeated = (bossData, arena) => {
 // Initialize boss spawner after player is ready
 bossSpawner.initialize(player);
 
+// --- Dungeon Manager System (Phase 22) ---
+const dungeonManager = createDungeonManager(scene, world, player, gameManager, inputManager, audioManager);
+gameManager.dungeonManager = dungeonManager;
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -439,6 +444,11 @@ function animate() {
     // Update chests for infinite world (placement + interaction)
     if (chestManager && chestManager.update) {
       chestManager.update(player.mesh.position.x, player.mesh.position.z, delta);
+    }
+    
+    // Update dungeon manager (Phase 22) - handles dungeon transitions, entrance prompts
+    if (dungeonManager) {
+      dungeonManager.update(delta);
     }
     
     // Update boss spawner (Phase 21) - handles boss arenas, spawns, proximity triggers
@@ -699,6 +709,7 @@ window.manaManager = manaManager;
 window.spellManager = spellManager;
 window.spellCaster = spellCaster;
 window.bossUI = bossUI;
+window.dungeonManager = dungeonManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
