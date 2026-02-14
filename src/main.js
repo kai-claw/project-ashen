@@ -33,6 +33,7 @@ import { BossUI } from './ui/BossUI.js';
 import { createBossSpawner } from './systems/BossSpawner.js';
 import { bossRenderer } from './systems/BossRenderer.js';
 import { createDungeonManager, getDungeonManager } from './systems/DungeonManager.js';
+import { GatheringManager } from './systems/GatheringManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -207,6 +208,27 @@ const chestManager = new ChestManager(
 
 // --- Inventory UI (unified items + equipment) ---
 const inventoryUI = new InventoryUI(gameManager, lootManager, equipmentManager, inputManager);
+
+// --- Gathering System (Phase 23) ---
+const gatheringManager = new GatheringManager(
+  scene,
+  world.terrain,
+  inputManager,
+  { // InventoryManager interface for materials
+    addMaterial: (materialId, qty) => {
+      const materials = JSON.parse(localStorage.getItem('ashen-materials') || '{}');
+      materials[materialId] = (materials[materialId] || 0) + qty;
+      localStorage.setItem('ashen-materials', JSON.stringify(materials));
+    },
+    getMaterialCount: (materialId) => {
+      const materials = JSON.parse(localStorage.getItem('ashen-materials') || '{}');
+      return materials[materialId] || 0;
+    },
+    getAllMaterials: () => JSON.parse(localStorage.getItem('ashen-materials') || '{}'),
+  },
+  particleManager,
+  audioManager
+);
 
 // --- Entities ---
 const player = new Player(scene, gameManager, inputManager);
@@ -561,6 +583,11 @@ function animate() {
   // Don't show interaction prompts if any UI is open
   if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
     interactionManager.update(player.mesh.position, delta);
+  }
+  
+  // Gathering system (Phase 23) - update nodes and interaction
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
+    gatheringManager.update(player.mesh.position.x, player.mesh.position.z, delta);
   }
   
   // Update dialogue manager
