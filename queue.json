@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v12 (22fde12): AGGRESSIVE spawn safety - doubled/tripled all height offsets to guarantee no green blob. Camera initial: 100→200, Player initial: 100→150, spawnSafetyFrames: 60→90, SAFE_SPAWN_OFFSET: 25→50, MIN_SAFE_HEIGHT: 100→150, INIT_SAFE_OFFSET: 40→60, CameraController frames: 60→120, CameraController offset: 25→50, SaveManager offset: 30→60, SaveIntegration offset: 50→80, Player offset: 25→60. All positions now start very high and gravity brings them down safely. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v13 (84430b5): ROOT CAUSE FIX - safety functions were LOWERING positions when they should only RAISE them. Player: initial Y 150→300, _ensureSafeSpawnHeight() now only raises never lowers, _checkSpawnSafety() uses aggressive minimums (Y=200-250) for first 30 frames. Camera: far plane 200→500, initial Y 200→350, clampToTerrain() only raises. Main.js: initializeSpawnSafety() only raises positions, graduated safety minimums (aggressive early frames, relaxed later), safety period extended 90→180 frames. CameraController: offsets 50→80, safety frames 120→180. Principle: start VERY high and let gravity bring down naturally. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T18:00:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v12 complete (22fde12) - AGGRESSIVE fix: doubled/tripled all spawn safety offsets. Camera starts at Y=200, player at Y=150, safety frames extended to 90-120. All SAFE_SPAWN_OFFSET values now 50-80 instead of 25-50. This ensures first frame is ALWAYS well above terrain regardless of timing. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-15T18:20:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v13 complete (84430b5) - ROOT CAUSE FIX: Safety functions were LOWERING positions from initial high values when they should only RAISE. Now player starts Y=300, camera Y=350, and all safety code only raises positions, never lowers. Extended safety period to 180 frames with graduated minimums (aggressive first 60 frames). Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
