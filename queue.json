@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "ROOT CAUSE: In autostart mode, SaveIntegration.startNewGame() called distributeGameState() which set player Y=0 from default save data, overwriting the safe spawn height from Player.setWorld(). FIX: Modified SaveManager.distributeGameState() to calculate safe Y = max(saveY, terrainHeight + 5) before setting player position. Added terrain/world references to SaveManager.init() systems object. main.js now passes terrain/world to SaveManager. Fallback to Y=50 if terrain not available. Player.setWorld() fix remains in place as defense-in-depth."
+      "workerNotes": "ROOT CAUSE: In autostart mode, SaveIntegration.startNewGame() called distributeGameState() which set player Y position from default save data (Y=0), overwriting the safe spawn height from Player.setWorld(). FIX: (1) Added _ensureSafeSpawnHeight() method in Player.js with robust terrain height checks, NaN handling, and MIN_SAFE_HEIGHT=50 fallback, (2) Added recalculateSafeSpawn() public method for external callers, (3) Updated SaveIntegration.startNewGame() to call recalculateSafeSpawn() after distributeGameState(), (4) Improved SaveManager.distributeGameState() with better terrain validation and logging, (5) Updated default player Y from 0 to 5 in SaveDataSchema.js. Deployed and committed: 4d74932"
     }
   ],
   "subtasks": [
