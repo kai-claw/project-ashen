@@ -1347,17 +1347,16 @@ export class Player {
    * Called on setWorld and can be called again if position is reset.
    */
   _ensureSafeSpawnHeight() {
-    const SAFE_SPAWN_OFFSET = 5; // Spawn 5 units above terrain for safety
+    const SAFE_SPAWN_OFFSET = 8; // Spawn 8 units above terrain for safety (increased from 5)
     const MIN_SAFE_HEIGHT = 50;   // Absolute minimum if terrain isn't ready
     
     // If no world reference, use safe default
     if (!this.world) {
       console.warn('[Player] No world reference, using safe default spawn height');
-      if (this.mesh.position.y < MIN_SAFE_HEIGHT) {
-        this.mesh.position.y = MIN_SAFE_HEIGHT;
-      }
+      this.mesh.position.y = MIN_SAFE_HEIGHT;
       this.grounded = false;
       this.velocity.y = 0;
+      this._spawnSafetyFrames = 10;
       return;
     }
     
@@ -1379,25 +1378,23 @@ export class Player {
       this.mesh.position.y = MIN_SAFE_HEIGHT;
       this.grounded = false;
       this.velocity.y = 0;
+      this._spawnSafetyFrames = 10;
       return;
     }
     
-    // Calculate safe Y: ALWAYS terrain height + offset (don't use Math.max with current position
-    // because current position might be inside terrain)
+    // Calculate safe Y: ALWAYS terrain height + offset
     const safeY = terrainY + SAFE_SPAWN_OFFSET;
     
     // ALWAYS set Y to safe height on spawn - don't trust current position
     // This fixes the autostart bug where player spawns inside terrain
-    if (this.mesh.position.y < safeY) {
-      console.log(`[Player] Safe spawn height corrected: Y=${this.mesh.position.y} -> ${safeY} (terrain=${terrainY})`);
-      this.mesh.position.y = safeY;
-    }
+    console.log(`[Player] Safe spawn height: Y=${this.mesh.position.y} -> ${safeY} (terrain=${terrainY})`);
+    this.mesh.position.y = safeY;
     
     this.grounded = false; // Let gravity bring us down naturally
     this.velocity.y = 0;
     
     // Mark that we need additional spawn safety checks
-    this._spawnSafetyFrames = 5; // Check for 5 frames after spawn
+    this._spawnSafetyFrames = 10; // Check for 10 frames after spawn (increased from 5)
   }
   
   /**
@@ -1408,25 +1405,43 @@ export class Player {
     if (this._spawnSafetyFrames <= 0) return;
     this._spawnSafetyFrames--;
     
-    const SAFE_SPAWN_OFFSET = 5;
+    const SAFE_SPAWN_OFFSET = 5;  // Allow slightly closer to terrain after initial spawn
+    const MIN_SAFE_HEIGHT = 30;   // Absolute minimum
     
-    if (!this.world) return;
+    if (!this.world) {
+      // No world yet - ensure minimum safe height
+      if (this.mesh.position.y < MIN_SAFE_HEIGHT) {
+        console.warn(`[Player] Spawn safety (no world): Y ${this.mesh.position.y} -> ${MIN_SAFE_HEIGHT}`);
+        this.mesh.position.y = MIN_SAFE_HEIGHT;
+        this.velocity.y = 0;
+      }
+      return;
+    }
     
     let terrainY = 0;
+    let terrainValid = false;
+    
     if (this.world.terrain && this.world.terrain.getTerrainHeight) {
       terrainY = this.world.terrain.getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
+      terrainValid = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
     } else if (this.world.getFloorY) {
       terrainY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+      terrainValid = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
     }
     
     // Validate and fix if needed
-    if (!isNaN(terrainY) && isFinite(terrainY) && terrainY > -100) {
+    if (terrainValid) {
       const safeY = terrainY + SAFE_SPAWN_OFFSET;
       if (this.mesh.position.y < safeY) {
-        console.warn(`[Player] Spawn safety frame ${5 - this._spawnSafetyFrames}: Y ${this.mesh.position.y} -> ${safeY}`);
+        console.warn(`[Player] Spawn safety frame ${10 - this._spawnSafetyFrames}: Y ${this.mesh.position.y.toFixed(2)} -> ${safeY.toFixed(2)} (terrain=${terrainY.toFixed(2)})`);
         this.mesh.position.y = safeY;
         this.velocity.y = 0;
       }
+    } else if (this.mesh.position.y < MIN_SAFE_HEIGHT) {
+      // Terrain invalid but position seems unsafe - use fallback
+      console.warn(`[Player] Spawn safety (terrain invalid): Y ${this.mesh.position.y} -> ${MIN_SAFE_HEIGHT}`);
+      this.mesh.position.y = MIN_SAFE_HEIGHT;
+      this.velocity.y = 0;
     }
   }
   
