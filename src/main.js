@@ -286,6 +286,7 @@ const craftingUI = new CraftingUI(gameManager, craftingManager, inputManager);
 const player = new Player(scene, gameManager, inputManager);
 player.setWorld(world); // Enable collision detection
 const cameraController = new CameraController(camera, player.mesh, inputManager);
+cameraController.setTerrain(world.terrain); // Enable terrain height clamping (fixes autostart spawn bug)
 player.setCameraController(cameraController);
 
 // Initialize attack animator now that all dependencies exist

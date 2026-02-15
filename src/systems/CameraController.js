@@ -22,6 +22,13 @@ export class CameraController {
     this.currentPos = camera.position.clone();
     this.lockOnTarget = null;
     
+    // Terrain reference for height clamping (set via setTerrain)
+    this.terrain = null;
+    
+    // Skip lerp on first frame to prevent spawning inside terrain
+    this._firstFrame = true;
+    this._terrainClampOffset = 5; // Minimum units above terrain
+    
     // Smooth lock-on transition
     this.lockOnYaw = 0;
     this.lockOnTransition = 0; // 0 = free camera, 1 = fully locked
@@ -113,8 +120,19 @@ export class CameraController {
       targetPos.z + offsetZ
     );
 
-    // Smooth follow
-    this.currentPos.lerp(desiredPos, this.smoothing * delta);
+    // On first frame, snap directly to desired position (no lerp)
+    // This prevents camera spawning inside terrain due to lerp from bad initial position
+    if (this._firstFrame) {
+      this._firstFrame = false;
+      this.currentPos.copy(desiredPos);
+    } else {
+      // Smooth follow with lerp
+      this.currentPos.lerp(desiredPos, this.smoothing * delta);
+    }
+    
+    // CRITICAL: Clamp camera above terrain AFTER lerp
+    // This is the final safety check that prevents "green blob" bug
+    this.clampToTerrain();
     
     // Apply camera shake
     this._updateShake(delta);
@@ -174,6 +192,40 @@ export class CameraController {
   clearLockOn() {
     this.lockOnTarget = null;
     // Don't reset transition - let it smoothly return to free camera
+  }
+  
+  /**
+   * Set terrain reference for camera height clamping
+   * This prevents camera from going inside terrain mesh
+   */
+  setTerrain(terrain) {
+    this.terrain = terrain;
+  }
+  
+  /**
+   * Ensure camera position is above terrain
+   * Called internally and can be called externally for spawn safety
+   */
+  clampToTerrain() {
+    if (!this.terrain || !this.terrain.getTerrainHeight) return;
+    
+    const terrainY = this.terrain.getTerrainHeight(this.currentPos.x, this.currentPos.z);
+    if (isNaN(terrainY) || !isFinite(terrainY)) return;
+    
+    const minY = terrainY + this._terrainClampOffset;
+    if (this.currentPos.y < minY) {
+      this.currentPos.y = minY;
+    }
+  }
+  
+  /**
+   * Force camera to specific position (bypasses lerp)
+   * Use for spawn/teleport scenarios
+   */
+  forcePosition(x, y, z) {
+    this.currentPos.set(x, y, z);
+    this.camera.position.set(x, y, z);
+    this._firstFrame = false; // Already positioned
   }
 
   getForwardDirection() {
