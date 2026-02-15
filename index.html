@@ -5,24 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Ashen</title>
   <script>
-    // Autostart mode - hide menu immediately for testing/screenshots
+    // Autostart mode - hide menu and overlays for testing/screenshots
     (function() {
       const params = new URLSearchParams(window.location.search);
       if (params.get('autostart') === 'true' || params.get('autostart') === '1') {
         window.AUTOSTART_MODE = true;
-        // Inject style immediately and watch for menu element
+        // Inject styles to hide menu AND world map overlay
         const style = document.createElement('style');
-        style.textContent = '#main-menu-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }';
+        style.textContent = `
+          #main-menu-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+          .world-map-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+          #world-map-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+        `;
         document.head.appendChild(style);
-        // Also hide via MutationObserver in case element is added later
+        // Watch for overlays and hide them
         const observer = new MutationObserver(function(mutations) {
           const menu = document.getElementById('main-menu-overlay');
           if (menu) {
             menu.style.display = 'none';
             menu.style.visibility = 'hidden';
           }
+          // Also close world map if it's showing
+          const worldMap = document.querySelector('.world-map-overlay') || document.getElementById('world-map-overlay');
+          if (worldMap) {
+            worldMap.style.display = 'none';
+            worldMap.style.visibility = 'hidden';
+          }
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });
+        
+        // After game loads, ensure world map is closed
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            if (window.gameManager?.worldMapUI) {
+              window.gameManager.worldMapUI.hide();
+            }
+          }, 2000);
+        });
       }
     })();
   </script>

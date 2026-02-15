@@ -1024,6 +1024,12 @@ export class WorldMapUI {
   show() {
     if (this.visible) return;
     
+    // Prevent opening in autostart mode
+    if (window.AUTOSTART_MODE) {
+      console.log('[WorldMapUI] Blocked show() in autostart mode');
+      return;
+    }
+    
     this.visible = true;
     this.overlay.style.display = 'block';
     

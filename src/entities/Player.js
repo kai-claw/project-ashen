@@ -1319,6 +1319,16 @@ export class Player {
 
   setWorld(world) {
     this.world = world;
+    
+    // Immediately snap player to terrain height + safety offset
+    // This prevents spawning inside terrain (especially in autostart mode)
+    if (world && world.getFloorY) {
+      const terrainY = world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+      // Use terrain height + 5 for safe spawn above terrain
+      this.mesh.position.y = terrainY + 5;
+      this.grounded = false; // Let gravity bring us down naturally
+      this.velocity.y = 0;
+    }
   }
 
   _getCameraYaw() {
