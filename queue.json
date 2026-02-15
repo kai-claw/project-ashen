@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v9 (4f2af54): Multi-frame spawn safety with forceGenerateAt. Changes: (1) Added TerrainGenerator.forceGenerateAt() method for immediate chunk loading, (2) Added getHeightAt() alias for compatibility, (3) Changed spawn safety from single-frame to 5-frame check to catch race conditions, (4) Added post-cameraController.update() terrain safety check to prevent camera lerping into terrain, (5) Added CameraController._spawnSafetyFrames for increased terrain clamping during spawn period, (6) Reduced fallback heights to sensible values (offset=5, fallback=50). Root cause: race condition where camera lerp could pull camera into terrain during first frames. Build: vite 7.3.1, deployed to gh-pages."
+      "workerNotes": "FIX v10 (f6219c0): Aggressive spawn height increase to guarantee no green blob. Root cause: initial positions at Y=0-5 allowed first frame to render inside terrain before safety checks ran. Changes: (1) Player initial Y: 0→100, (2) Camera initial Y: 5→100, (3) Spawn safety frames: 30→60, (4) Player spawn offset: 15→50 units above terrain, (5) Camera terrain clamp offset: 10→25 units, (6) CameraController spawn safety offset: 15→40 units, (7) Pre-render camera safety: 10→25 units, (8) All fallback heights: 80-100 range, (9) SaveIntegration autostart offsets: player+50, camera+20 above player. First frame now ALWAYS renders with camera/player 100+ units above terrain, gravity brings player down naturally. Build: vite 7.3.1, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T17:00:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v9 complete (4f2af54) - Multi-frame spawn safety with forceGenerateAt(). Changes: (1) TerrainGenerator.forceGenerateAt() for immediate chunk loading, (2) 5-frame spawn safety check instead of single frame, (3) Post-cameraController.update() terrain safety clamp, (4) CameraController spawn safety frames for higher terrain offset. Root cause: camera lerp could pull it into terrain during first frames. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-15T17:30:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v10 complete (f6219c0) - Aggressive initial height increase. Changed initial player/camera Y from 0-5 to 100 to guarantee first frame renders above terrain. Increased all spawn safety offsets (player 15→50, camera 10→25, controller spawn 15→40) and extended safety frame checks 30→60. First frame now ALWAYS safe, gravity brings player down naturally. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
