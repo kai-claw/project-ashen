@@ -315,20 +315,13 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // DEBUG: Use MeshBasicMaterial to test if lighting is the issue
-    return new THREE.MeshBasicMaterial({
-      color: 0x4a6a40,
-      // map: texture, // Temporarily disabled
-    });
-    
-    /* ORIGINAL MATERIAL - restore after debug
+    // Terrain material with texture
     return new THREE.MeshStandardMaterial({
       map: texture,
       color: 0x6a8a50,
       roughness: 0.9,
       metalness: 0.0,
     });
-    */
   }
   
   /**
