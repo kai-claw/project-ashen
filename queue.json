@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v5 (e806ea5): COMPLETE CAMERA FIX - The 'green blob' issue was caused by camera lerping from bad position. Root cause: camera's currentPos was only updated on Y axis, causing lerp from wrong X/Z. Fix: (1) Calculate camera position based on FIXED player position using CameraController parameters, (2) Get terrain height at CALCULATED camera position (behind player), not initial position, (3) Set BOTH camera.position AND cameraController.currentPos to FULL safe position, (4) Camera now properly positioned behind player above terrain on first frame. Build: vite 7.3.1, deployed to gh-pages. Commit: e806ea5."
+      "workerNotes": "FIX v6 (1746696): Added PRE-RENDER camera safety check. Changes: (1) Added final camera terrain check RIGHT BEFORE composer.render() - catches any positioning issues that occurred during frame, (2) Increased safety margins from 5 to 8 units above terrain, (3) Added camera.updateProjectionMatrix() and updateMatrixWorld() after fixes, (4) Increased spawn safety frames from 5 to 10, (5) More aggressive Player._ensureSafeSpawnHeight() - always sets to safe height, (6) CameraController.currentPos synced to prevent rubber-banding. Pre-render check ensures camera can NEVER render from inside terrain. Build: vite 7.3.1, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -69,5 +69,5 @@
     }
   ],
   "lastUpdated": "2026-02-15T16:30:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v5 complete (e806ea5) - COMPLETE camera fix. Green blob caused by camera lerping from bad X/Z position. Now properly calculates camera position behind player, sets full currentPos. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v6 complete (1746696) - Added PRE-RENDER camera safety check. Camera is now validated above terrain RIGHT BEFORE every render, catching any positioning issues. Increased safety margins, added matrix updates, extended safety frame checks. Camera can never render from inside terrain. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
