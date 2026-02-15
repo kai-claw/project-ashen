@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v2 (b69187e): Increased spawn safety margins and added runtime recovery. Changes: (1) Player._ensureSafeSpawnHeight() now uses SAFE_SPAWN_OFFSET=10 instead of 5, (2) Always uses terrain+offset instead of Math.max with current Y (which could be inside terrain), (3) Added isFinite() validation alongside NaN checks, (4) Player.update() now includes runtime safety check - if player Y is 2+ units below terrain, immediately pops them above (catches any edge cases), (5) SaveManager.distributeGameState() also increased to 10 unit offset and always calculates from terrain height. Build: vite 7.3.1, deployed to gh-pages."
+      "workerNotes": "FIX v3 (b61456d): Comprehensive terrain spawn safety with multiple layers of protection. Changes: (1) Added first-frame spawn check in main.js animate() - catches any edge cases before first render, (2) Enhanced SaveIntegration.startNewGame() with direct terrain height fallback that accesses gameManager.player.world.terrain, (3) Improved Player._ensureSafeSpawnHeight() with better terrain method ordering and validation, (4) Three layers of protection: distributeGameState calculates safe Y, recalculateSafeSpawn verifies, first-frame check catches any remaining issues. Build: vite 7.3.1, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T15:50:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v2 complete (b69187e) - increased spawn offsets + runtime recovery check. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-15T16:02:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v3 complete (b61456d) - comprehensive multi-layer spawn protection with first-frame safety check. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
