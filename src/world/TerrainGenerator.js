@@ -74,6 +74,7 @@ export class TerrainGenerator {
   /**
    * Get terrain height at world position with castle flattening
    * This is the main collision function - works for ANY world position
+   * Alias: getHeightAt
    */
   getTerrainHeight(x, z) {
     const distFromOrigin = Math.sqrt(x * x + z * z);
@@ -417,6 +418,37 @@ export class TerrainGenerator {
     
     // Fallback to origin edge
     return new THREE.Vector3(60, this.getTerrainHeight(60, 0), 0);
+  }
+  
+  /**
+   * Alias for getTerrainHeight (for compatibility)
+   */
+  getHeightAt(x, z) {
+    return this.getTerrainHeight(x, z);
+  }
+  
+  /**
+   * Force-generate terrain chunk at a specific world position.
+   * Unlike update(), this doesn't check if player moved chunks - it always loads.
+   * Critical for autostart mode where we need terrain ready before first render.
+   */
+  forceGenerateAt(worldX, worldZ) {
+    const { chunkX, chunkZ } = this._worldToChunk(worldX, worldZ);
+    
+    // Force load this chunk and surrounding chunks
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const cx = chunkX + dx;
+        const cz = chunkZ + dz;
+        if (!this.chunks.has(this._chunkKey(cx, cz))) {
+          this._loadChunk(cx, cz);
+        }
+      }
+    }
+    
+    // Update tracking to prevent redundant updates
+    this.lastPlayerChunkX = chunkX;
+    this.lastPlayerChunkZ = chunkZ;
   }
   
   /**

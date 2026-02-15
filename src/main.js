@@ -653,126 +653,106 @@ window.addEventListener('resize', () => {
 });
 
 // --- Game Loop ---
-// Track first frame for spawn safety check
-let isFirstFrame = true;
+// Track spawn safety frames - check multiple frames to catch race conditions
+let spawnSafetyFramesRemaining = 5; // Check first 5 frames for safety
 
 function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
-  // CRITICAL: First-frame spawn safety check (fixes autostart terrain spawn bug)
-  // Ensures player AND camera are above terrain before first render
-  if (isFirstFrame) {
-    isFirstFrame = false;
+  // CRITICAL: Multi-frame spawn safety check (fixes autostart terrain spawn bug)
+  // Runs for first few frames to catch any race conditions with terrain loading
+  if (spawnSafetyFramesRemaining > 0) {
+    spawnSafetyFramesRemaining--;
     
-    const SAFE_SPAWN_OFFSET = 10;  // Units above terrain (increased for safety)
-    const MIN_SAFE_HEIGHT = 80;    // Higher fallback if terrain not ready (was 50)
+    const SAFE_SPAWN_OFFSET = 5;   // Units above terrain
+    const MIN_SAFE_HEIGHT = 50;    // Absolute minimum if terrain not ready
+    const isFirstFrame = (spawnSafetyFramesRemaining === 4); // First of 5 frames
     
     if (world.terrain && player.mesh) {
-      // 0. CRITICAL: Force terrain chunk generation at player position FIRST
-      // This ensures getTerrainHeight has valid data to return
-      // Without this, terrain chunks may not exist yet in autostart mode
-      if (world.terrain.update) {
+      // Force terrain chunk generation at player position
+      if (world.terrain.forceGenerateAt) {
+        world.terrain.forceGenerateAt(player.mesh.position.x, player.mesh.position.z);
+      } else if (world.terrain.update) {
         world.terrain.update(player.mesh.position.x, player.mesh.position.z);
       }
       
-      // Also force a second update pass to ensure chunk is fully built
-      // Some terrain systems need multiple frames to fully generate
-      if (world.terrain.forceGenerateAt) {
-        world.terrain.forceGenerateAt(player.mesh.position.x, player.mesh.position.z);
-      }
-      
-      // 1. Fix player position first
+      // Get terrain height at player position
       let playerTerrainY = world.terrain.getTerrainHeight(
         player.mesh.position.x, 
         player.mesh.position.z
       );
       
-      // Validate terrain height - if invalid, use HIGH safe fallback
-      // The key fix: when terrain isn't ready, use a height that's definitely ABOVE any terrain
-      if (isNaN(playerTerrainY) || !isFinite(playerTerrainY) || playerTerrainY < -100) {
-        console.warn('[Main] First-frame: terrain height invalid at spawn, using HIGH safe default');
-        // Use MIN_SAFE_HEIGHT as terrain Y so we spawn WAY above potential terrain
-        playerTerrainY = MIN_SAFE_HEIGHT - SAFE_SPAWN_OFFSET;
+      // Validate terrain height
+      const terrainValid = !isNaN(playerTerrainY) && isFinite(playerTerrainY) && playerTerrainY > -100;
+      
+      if (!terrainValid) {
+        playerTerrainY = 0; // Castle area default
       }
       
       const safePlayerY = playerTerrainY + SAFE_SPAWN_OFFSET;
       
-      // ALWAYS set player to safe height on first frame
-      // Don't trust any previous position - it could be inside terrain
-      console.log(`[Main] First-frame spawn fix: player Y ${player.mesh.position.y.toFixed(2)} -> ${safePlayerY.toFixed(2)} (terrain=${playerTerrainY.toFixed(2)})`);
-      player.mesh.position.y = safePlayerY;
-      
-      // Reset velocity to prevent falling back into terrain
-      if (player.velocity) {
-        player.velocity.y = 0;
+      // Fix player if below safe height
+      if (player.mesh.position.y < safePlayerY) {
+        if (isFirstFrame) {
+          console.log(`[Main] Spawn safety: player Y ${player.mesh.position.y.toFixed(2)} -> ${safePlayerY.toFixed(2)} (terrain=${playerTerrainY.toFixed(2)})`);
+        }
+        player.mesh.position.y = safePlayerY;
+        if (player.velocity) {
+          player.velocity.y = 0;
+        }
       }
       
-      // 2. Calculate where camera SHOULD be based on FIXED player position
-      // Use camera controller's actual parameters for proper positioning
-      const camDistance = cameraController?.distance || 6;
-      const camHeight = cameraController?.height || 2.5;
-      const camYaw = cameraController?.yaw || 0;
-      const camPitch = cameraController?.pitch || 0.3;
-      
-      // Calculate camera offset (same math as CameraController.update)
-      const offsetX = Math.sin(camYaw) * camDistance * Math.cos(camPitch);
-      const offsetZ = Math.cos(camYaw) * camDistance * Math.cos(camPitch);
-      const offsetY = camDistance * Math.sin(camPitch);
-      
-      // Calculate target camera position based on fixed player position
-      const targetCamX = player.mesh.position.x + offsetX;
-      const targetCamZ = player.mesh.position.z + offsetZ;
-      let targetCamY = player.mesh.position.y + camHeight + offsetY;
-      
-      // 3. Force terrain generation at CAMERA position too
-      if (world.terrain.update) {
-        world.terrain.update(targetCamX, targetCamZ);
+      // On first frame, also fix camera position
+      if (isFirstFrame) {
+        const camDistance = cameraController?.distance || 6;
+        const camHeight = cameraController?.height || 2.5;
+        const camYaw = cameraController?.yaw || 0;
+        const camPitch = cameraController?.pitch || 0.3;
+        
+        const offsetX = Math.sin(camYaw) * camDistance * Math.cos(camPitch);
+        const offsetZ = Math.cos(camYaw) * camDistance * Math.cos(camPitch);
+        const offsetY = camDistance * Math.sin(camPitch);
+        
+        const targetCamX = player.mesh.position.x + offsetX;
+        const targetCamZ = player.mesh.position.z + offsetZ;
+        const targetCamY = player.mesh.position.y + camHeight + offsetY;
+        
+        // Force terrain generation at camera position
+        if (world.terrain.forceGenerateAt) {
+          world.terrain.forceGenerateAt(targetCamX, targetCamZ);
+        }
+        
+        let camTerrainY = world.terrain.getTerrainHeight(targetCamX, targetCamZ);
+        if (isNaN(camTerrainY) || !isFinite(camTerrainY) || camTerrainY < -100) {
+          camTerrainY = playerTerrainY;
+        }
+        
+        const safeCamY = Math.max(targetCamY, camTerrainY + SAFE_SPAWN_OFFSET);
+        
+        console.log(`[Main] Spawn safety: camera -> (${targetCamX.toFixed(1)}, ${safeCamY.toFixed(1)}, ${targetCamZ.toFixed(1)})`);
+        camera.position.set(targetCamX, safeCamY, targetCamZ);
+        
+        if (cameraController && cameraController.currentPos) {
+          cameraController.currentPos.set(targetCamX, safeCamY, targetCamZ);
+        }
+        if (cameraController) {
+          cameraController._firstFrame = false;
+        }
+        
+        camera.lookAt(player.mesh.position.x, player.mesh.position.y + camHeight, player.mesh.position.z);
+        camera.updateProjectionMatrix();
+        camera.updateMatrixWorld(true);
       }
       
-      // 4. Get terrain height at camera's CALCULATED position
-      let camTerrainY = world.terrain.getTerrainHeight(targetCamX, targetCamZ);
-      if (isNaN(camTerrainY) || !isFinite(camTerrainY) || camTerrainY < -100) {
-        camTerrainY = playerTerrainY; // Fallback to player terrain height
-      }
-      
-      // Camera MUST be above terrain at its position - use the higher of calculated or safe height
-      const safeCamY = Math.max(targetCamY, camTerrainY + SAFE_SPAWN_OFFSET);
-      
-      // 5. Set camera position to calculated safe position
-      console.log(`[Main] First-frame spawn fix: camera (${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}) -> (${targetCamX.toFixed(1)}, ${safeCamY.toFixed(1)}, ${targetCamZ.toFixed(1)})`);
-      camera.position.set(targetCamX, safeCamY, targetCamZ);
-      
-      // 6. CRITICAL: Update camera controller's currentPos to EXACT same position
-      // This prevents lerping from old position which would cause the "green blob" issue
-      if (cameraController && cameraController.currentPos) {
-        cameraController.currentPos.set(targetCamX, safeCamY, targetCamZ);
-      }
-      
-      // Also reset the first-frame flag in camera controller to prevent it overriding our fix
-      if (cameraController) {
-        cameraController._firstFrame = false;
-      }
-      
-      // Make camera look at player (at eye level)
-      camera.lookAt(player.mesh.position.x, player.mesh.position.y + camHeight, player.mesh.position.z);
-      
-      // 7. Force the camera to update projection matrix
-      camera.updateProjectionMatrix();
-      camera.updateMatrixWorld(true);
-      
-    } else {
+    } else if (isFirstFrame) {
       // Terrain not ready - use absolute safe fallback
-      console.warn('[Main] First-frame: terrain not available, using safe default heights');
+      console.warn('[Main] Spawn safety: terrain unavailable, using safe defaults');
       player.mesh.position.y = MIN_SAFE_HEIGHT;
+      if (player.velocity) player.velocity.y = 0;
       
-      if (player.velocity) {
-        player.velocity.y = 0;
-      }
-      
-      // Position camera behind player at safe height
       const safeCamX = player.mesh.position.x;
-      const safeCamZ = player.mesh.position.z + 6; // Behind player
+      const safeCamZ = player.mesh.position.z + 6;
       const safeCamY = MIN_SAFE_HEIGHT + 10;
       
       camera.position.set(safeCamX, safeCamY, safeCamZ);
@@ -897,6 +877,23 @@ function animate() {
   
   // These always update regardless of hitstop
   cameraController.update(delta);
+  
+  // POST-CAMERA-UPDATE SAFETY: Ensure camera didn't get lerped into terrain
+  // This catches edge cases where camera smoothing pulls it toward bad positions
+  if (world.terrain && spawnSafetyFramesRemaining >= 0) {
+    const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
+    const CAM_TERRAIN_OFFSET = 3;
+    if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
+      if (camera.position.y < camTerrainY + CAM_TERRAIN_OFFSET) {
+        const safeCamY = camTerrainY + CAM_TERRAIN_OFFSET + 2;
+        camera.position.y = safeCamY;
+        if (cameraController && cameraController.currentPos) {
+          cameraController.currentPos.y = safeCamY;
+        }
+      }
+    }
+  }
+  
   itemManager.update(player.mesh.position);
   lootManager.update(player.mesh.position);
   

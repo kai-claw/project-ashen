@@ -27,7 +27,8 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 8; // Minimum units above terrain (increased from 5)
+    this._terrainClampOffset = 5; // Minimum units above terrain
+    this._spawnSafetyFrames = 10; // Extra safety frames after spawn
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -212,7 +213,14 @@ export class CameraController {
     const terrainY = this.terrain.getTerrainHeight(this.currentPos.x, this.currentPos.z);
     if (isNaN(terrainY) || !isFinite(terrainY)) return;
     
-    const minY = terrainY + this._terrainClampOffset;
+    // Use larger offset during spawn safety period
+    let offset = this._terrainClampOffset;
+    if (this._spawnSafetyFrames > 0) {
+      offset = 10; // Higher offset during spawn
+      this._spawnSafetyFrames--;
+    }
+    
+    const minY = terrainY + offset;
     if (this.currentPos.y < minY) {
       this.currentPos.y = minY;
     }
