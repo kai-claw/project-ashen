@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v6 (1746696): Added PRE-RENDER camera safety check. Changes: (1) Added final camera terrain check RIGHT BEFORE composer.render() - catches any positioning issues that occurred during frame, (2) Increased safety margins from 5 to 8 units above terrain, (3) Added camera.updateProjectionMatrix() and updateMatrixWorld() after fixes, (4) Increased spawn safety frames from 5 to 10, (5) More aggressive Player._ensureSafeSpawnHeight() - always sets to safe height, (6) CameraController.currentPos synced to prevent rubber-banding. Pre-render check ensures camera can NEVER render from inside terrain. Build: vite 7.3.1, deployed to gh-pages."
+      "workerNotes": "FIX v7 (558493e): CameraController terrain clamping. Changes: (1) CameraController now skips lerp on first frame - snaps directly to desired position, (2) Added setTerrain() method to CameraController for terrain reference, (3) Added clampToTerrain() called after EVERY position update - ensures camera Y >= terrain + 5, (4) CameraController.forcePosition() for external spawn control, (5) main.js passes world.terrain to CameraController on init, (6) Three-layer safety: CameraController clamp + first-frame fix + pre-render check. Root cause: lerp was moving camera toward desiredPos on first frame, potentially through terrain. Now camera snaps on frame 1 and is always clamped above terrain. Build: vite 7.3.1, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T16:30:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v6 complete (1746696) - Added PRE-RENDER camera safety check. Camera is now validated above terrain RIGHT BEFORE every render, catching any positioning issues. Increased safety margins, added matrix updates, extended safety frame checks. Camera can never render from inside terrain. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-15T16:50:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v7 complete (558493e) - CameraController now has built-in terrain clamping. Skip lerp on first frame + clampToTerrain() after every update. Three-layer safety: CameraController clamp, first-frame fix, pre-render check. Root cause was camera lerp on frame 1 moving through terrain. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
