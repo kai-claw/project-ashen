@@ -105,6 +105,7 @@ export class MinimapManager {
     this.dungeonManager = systems.dungeonManager || null;
     this.gatheringManager = systems.gatheringManager || null;
     this.bossSpawner = systems.bossSpawner || null;
+    this.gameManager = systems.gameManager || null;
     
     // Pre-render initial terrain
     if (this.player && this.terrain) {
@@ -754,24 +755,28 @@ export class MinimapManager {
       }
     }
     
-    // Quest objectives
-    if (this.questManager && this.questManager.getActiveObjectives) {
-      const objectives = this.questManager.getActiveObjectives();
-      for (const obj of objectives) {
-        if (obj.position) {
+    // Quest objectives and markers
+    if (this.questManager && this.questManager.getQuestMarkers) {
+      const markers = this.questManager.getQuestMarkers();
+      for (const marker of markers) {
+        if (marker.position) {
+          let iconType = 'quest_objective';
+          if (marker.type === 'available') iconType = 'npc_quest';
+          else if (marker.type === 'turn_in') iconType = 'npc_quest';
+          
           icons.push({
-            x: obj.position.x,
-            z: obj.position.z,
-            type: 'quest_objective',
-            size: 7,
+            x: marker.position.x,
+            z: marker.position.z,
+            type: iconType,
+            size: marker.type === 'objective' ? 7 : 6,
           });
         }
       }
     }
     
     // Bonfires/crucibles
-    if (this.bossSpawner && this.bossSpawner.getDiscoveredBonfires) {
-      const bonfires = this.bossSpawner.getDiscoveredBonfires();
+    if (this.gameManager && this.gameManager.getDiscoveredBonfires) {
+      const bonfires = this.gameManager.getDiscoveredBonfires();
       for (const bonfire of bonfires) {
         icons.push({
           x: bonfire.x,

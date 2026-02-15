@@ -6,15 +6,16 @@
       "id": "minimap-core",
       "name": "MinimapManager.js",
       "priority": "P0",
-      "status": "in-progress",
+      "status": "ready-for-review",
       "worker": 1,
-      "description": "Create MinimapManager.js: 150px circular minimap, orthographic top-down view, player arrow, zoom levels, biome coloring, M key toggle"
+      "description": "Create MinimapManager.js: 150px circular minimap, orthographic top-down view, player arrow, zoom levels, biome coloring, M key toggle",
+      "workerNotes": "Created MinimapManager.js with: (1) 150px circular minimap in top-right corner with dark fantasy border, (2) Real-time terrain rendering using canvas with biome colors (castle, meadow, grassland, woods, frontier), (3) Height-based shading for terrain depth, (4) Player arrow indicator always centered pointing forward, (5) Three zoom levels (50m/100m/200m) - click to cycle, (6) M key to toggle visibility, (7) North indicator, (8) Camera-relative rotation (forward always up), (9) Legend panel with icon descriptions, (10) Right-click to place custom waypoint, (11) Icon system foundation for phase 2, (12) Added getVillagePositions() to VillageManager, (13) Added getDungeonEntrances() to DungeonManager"
     },
     {
       "id": "minimap-icons",
       "name": "Minimap Icons",
       "priority": "P0",
-      "status": "pending",
+      "status": "in-progress",
       "worker": 1,
       "description": "Add icons to minimap: enemies, NPCs, quest markers, villages, dungeons, gathering nodes, bosses, waypoints, legend"
     },
@@ -27,6 +28,6 @@
       "description": "Fast travel system: discovered crucibles/bonfires, click-to-travel, confirmation dialog, loading tips, transition effects"
     }
   ],
-  "lastUpdated": "2026-02-15T03:20:00Z",
-  "workerStatus": "Worker 1: Starting Phase 27 — claiming minimap-core"
+  "lastUpdated": "2026-02-15T03:35:00Z",
+  "workerStatus": "Worker 1: minimap-core ready-for-review, starting minimap-icons"
 }

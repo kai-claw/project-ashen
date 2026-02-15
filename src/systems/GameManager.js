@@ -1023,6 +1023,20 @@ export class GameManager {
     return dist < 3.0;
   }
   
+  // Get all discovered bonfires/checkpoints for minimap (Phase 27)
+  getDiscoveredBonfires() {
+    // For now, return the starting bonfire
+    // Future: track visited checkpoints across the world
+    return [
+      {
+        x: this.bonfirePosition.x,
+        z: this.bonfirePosition.z,
+        name: 'Starting Bonfire',
+        discovered: true,
+      }
+    ];
+  }
+  
   // Get info about a specific track
   getTrackInfo(track) {
     const level = this.infusions[track] || 0;

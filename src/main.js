@@ -562,6 +562,7 @@ minimapManager.init({
   dungeonManager: dungeonManager,
   gatheringManager: gatheringManager,
   bossSpawner: bossSpawner,
+  gameManager: gameManager,
 });
 gameManager.minimapManager = minimapManager;
 

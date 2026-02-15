@@ -896,6 +896,21 @@ export class GatheringManager {
   }
   
   /**
+   * Get all active (non-depleted) nodes for minimap (Phase 27)
+   * Returns array of { x, z, type, name }
+   */
+  getActiveNodes() {
+    return this.activeNodes
+      .filter(node => !node.depleted)
+      .map(node => ({
+        x: node.position.x,
+        z: node.position.z,
+        type: node.typeId,
+        name: node.name || node.typeId,
+      }));
+  }
+  
+  /**
    * Cleanup
    */
   dispose() {
