@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v4 (c9fa45f): Enhanced terrain spawn safety with camera protection and frame-by-frame checks. New in v4: (1) First-frame check now ALSO fixes camera position + validates terrain height for NaN/Infinity, (2) Added _spawnSafetyFrames and _checkSpawnSafety() in Player.js - monitors first 5 frames after spawn for late position changes, (3) SaveManager.distributeGameState() now calls recalculateSafeSpawn() to trigger frame checks. Four layers of protection: distributeGameState calculates safe Y, recalculateSafeSpawn verifies + enables frame checks, Player._checkSpawnSafety() monitors 5 frames, main.js first-frame check catches remaining edge cases + camera. Build: vite 7.3.1, deployed to gh-pages."
+      "workerNotes": "FIX v5 (e806ea5): COMPLETE CAMERA FIX - The 'green blob' issue was caused by camera lerping from bad position. Root cause: camera's currentPos was only updated on Y axis, causing lerp from wrong X/Z. Fix: (1) Calculate camera position based on FIXED player position using CameraController parameters, (2) Get terrain height at CALCULATED camera position (behind player), not initial position, (3) Set BOTH camera.position AND cameraController.currentPos to FULL safe position, (4) Camera now properly positioned behind player above terrain on first frame. Build: vite 7.3.1, deployed to gh-pages. Commit: e806ea5."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T16:20:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v4 complete (c9fa45f) - added camera protection and per-frame safety checks. Four layers of spawn protection. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-15T16:30:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v5 complete (e806ea5) - COMPLETE camera fix. Green blob caused by camera lerping from bad X/Z position. Now properly calculates camera position behind player, sets full currentPos. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
