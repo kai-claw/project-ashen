@@ -46,6 +46,9 @@ import { createQuestWorldHooks, getQuestWorldHooks } from './systems/QuestWorldH
 import { createQuestUI, getQuestUI } from './ui/QuestUI.js';
 import { createNPCQuestGivers, getNPCQuestGivers } from './systems/NPCQuestGivers.js';
 import { createQuestRewards, getQuestRewards } from './systems/QuestRewards.js';
+import { getSaveManager } from './systems/SaveManager.js';
+import { getSaveIntegration } from './systems/SaveIntegration.js';
+import { getSaveUI } from './systems/SaveUI.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -123,6 +126,8 @@ scene.background = new THREE.Color(0x87CEEB);  // Initial sky blue (will be over
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, 5, 15);
 camera.lookAt(0, 0, 0);
+
+// DEBUG objects removed - terrain now rendering with MeshBasicMaterial
 
 // --- Post-Processing Setup ---
 const renderTarget = new THREE.WebGLRenderTarget(
@@ -460,6 +465,57 @@ gameManager.npcQuestGivers = npcQuestGivers;
 
 // Initialize Quest Rewards & Reputation (Phase 25 - Worker 2)
 questRewards.init(questManager, scene);
+
+// ========== SAVE SYSTEM INITIALIZATION (Phase 26) ==========
+const saveManager = getSaveManager();
+const saveUI = getSaveUI();
+const saveIntegration = getSaveIntegration();
+
+// Register all systems with save manager
+saveManager.init({
+  gameManager,
+  player: player.mesh,
+  inventoryUI,
+  equipmentManager,
+  lootManager,
+  questManager,
+  questRewards,
+  timeManager,
+  weatherManager,
+  craftingManager,
+  gatheringManager,
+  shopManager,
+  bossSpawner,
+  dungeonManager,
+  spellManager,
+  manaManager,
+  npcManager: npcQuestGivers,
+  scene,
+  hud,
+  questUI,
+  renderer,
+  camera,
+  audioManager,
+});
+
+// Initialize SaveUI with renderer for screenshots
+saveUI.init(saveManager, renderer, scene, camera, audioManager);
+
+// Initialize save integration (menus, hotkeys, autosave triggers)
+saveIntegration.init(saveManager, {
+  gameManager,
+  player: player.mesh,
+  enemyManager,
+  renderer,
+  scene,
+  camera,
+  audioManager,
+  questManager,
+  timeManager,
+});
+
+gameManager.saveManager = saveManager;
+gameManager.saveIntegration = saveIntegration;
 
 // Wire enemy death events to quest system
 enemyManager.onEnemyDeath = (enemyType, enemyData, position) => {
@@ -893,6 +949,19 @@ window.timeManager = timeManager;
 window.rareEventManager = rareEventManager;
 window.dayNightLighting = dayNightLighting;
 window.weatherManager = weatherManager;
+window.gatheringManager = gatheringManager;
+window.craftingManager = craftingManager;
+window.craftingUI = craftingUI;
+window.timeWeatherGameplay = timeWeatherGameplay;
+window.questManager = questManager;
+window.questWorldHooks = questWorldHooks;
+window.questUI = questUI;
+window.questRewards = questRewards;
+window.npcQuestGivers = npcQuestGivers;
+window.bossSpawner = bossSpawner;
+window.saveManager = saveManager;
+window.saveIntegration = saveIntegration;
+window.saveUI = saveUI;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;

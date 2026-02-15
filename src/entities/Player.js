@@ -138,21 +138,21 @@ export class Player {
 
   _createFallbackMesh() {
     // Complete humanoid placeholder while model loads
-    const armorMat = new THREE.MeshStandardMaterial({
+    const armorMat = new THREE.MeshBasicMaterial({
       color: 0x5a5a68,
       roughness: 0.35,
       metalness: 0.85,
     });
     
     // Darker material for joints/extremities (feet, etc.)
-    const jointMat = new THREE.MeshStandardMaterial({
+    const jointMat = new THREE.MeshBasicMaterial({
       color: 0x3a3a45,
       roughness: 0.4,
       metalness: 0.8,
     });
     
     // Brighter gauntlet material for hands - visible in dark areas
-    const gauntletMat = new THREE.MeshStandardMaterial({
+    const gauntletMat = new THREE.MeshBasicMaterial({
       color: 0x7a7a8c,        // Brighter than armor
       roughness: 0.3,
       metalness: 0.9,
@@ -175,7 +175,7 @@ export class Player {
     this.mesh.add(this.fallbackHead);
 
     // Glowing visor
-    const visorMat = new THREE.MeshStandardMaterial({
+    const visorMat = new THREE.MeshBasicMaterial({
       color: 0x66ccff,
       emissive: 0x4488cc,
       emissiveIntensity: 3,

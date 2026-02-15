@@ -15,6 +15,7 @@
 
 import { getSaveManager, formatPlaytime, formatTimestamp, AUTOSAVE_SLOT, MAX_MANUAL_SLOTS } from './SaveManager.js';
 import { SAVE_SLOT_TYPE, createDefaultSaveData } from './SaveDataSchema.js';
+import { getSaveUI } from './SaveUI.js';
 
 // ========== CONSTANTS ==========
 const VILLAGE_AREA_RADIUS = 50; // Units from village center
@@ -25,6 +26,7 @@ const TUTORIAL_FIRST_SAVE_SHOWN_KEY = 'ashen_tutorial_save_shown';
 class SaveIntegration {
   constructor() {
     this.saveManager = null;
+    this.saveUI = null;
     this.systems = {};
     
     // State tracking
@@ -58,6 +60,18 @@ class SaveIntegration {
   init(saveManager, systems) {
     this.saveManager = saveManager;
     this.systems = systems;
+    
+    // Initialize SaveUI for enhanced features
+    this.saveUI = getSaveUI();
+    if (systems.renderer && systems.scene && systems.camera) {
+      this.saveUI.init(
+        saveManager,
+        systems.renderer,
+        systems.scene,
+        systems.camera,
+        systems.audioManager
+      );
+    }
     
     // Check tutorial state
     this.tutorialSaveShown = localStorage.getItem(TUTORIAL_FIRST_SAVE_SHOWN_KEY) === 'true';
@@ -942,12 +956,27 @@ class SaveIntegration {
   }
   
   /**
-   * Populate load slot list
+   * Populate load slot list (uses SaveUI enhanced rendering)
    */
   populateLoadSlots() {
     const container = document.getElementById('load-slots');
     if (!container || !this.saveManager) return;
     
+    // Use SaveUI's enhanced slot rendering if available
+    if (this.saveUI) {
+      this.saveUI.populateSlots('load-slots', 'load', {
+        sortByRecent: true,
+        onLoad: async (slotId) => {
+          await this.loadSlotWithFade(slotId);
+        },
+        onDelete: (slotId, label) => {
+          this.confirmDeleteSlot(slotId, label);
+        },
+      });
+      return;
+    }
+    
+    // Fallback to basic rendering
     const slots = this.saveManager.listSaves();
     container.innerHTML = '';
     
@@ -1000,6 +1029,24 @@ class SaveIntegration {
   }
   
   /**
+   * Load slot with fade transition
+   */
+  async loadSlotWithFade(slotId) {
+    if (this.saveUI) {
+      const result = await this.saveUI.loadWithFade(slotId);
+      if (result?.success) {
+        this.hideLoadMenu();
+        this.hidePauseMenu();
+        this.hideMainMenu();
+        this.gameStarted = true;
+        this.isPaused = false;
+      }
+    } else {
+      await this.loadSlot(slotId);
+    }
+  }
+  
+  /**
    * Load a save slot
    */
   async loadSlot(slotId) {
@@ -1036,12 +1083,28 @@ class SaveIntegration {
   }
   
   /**
-   * Populate save slot list
+   * Populate save slot list (uses SaveUI enhanced rendering)
    */
   populateSaveSlots() {
     const container = document.getElementById('save-slots');
     if (!container || !this.saveManager) return;
     
+    // Use SaveUI's enhanced slot rendering if available
+    if (this.saveUI) {
+      this.saveUI.populateSlots('save-slots', 'save', {
+        includeAutosave: false,
+        onSave: async (slotId, isOverwrite) => {
+          if (isOverwrite) {
+            this.confirmOverwriteSlot(slotId, `Slot ${slotId}`);
+          } else {
+            await this.saveToSlot(slotId);
+          }
+        },
+      });
+      return;
+    }
+    
+    // Fallback to basic rendering
     const slots = this.saveManager.listSaves();
     container.innerHTML = '';
     

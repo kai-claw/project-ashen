@@ -27,6 +27,7 @@ import {
   formatPlaytime,
   formatTimestamp,
 } from './SaveDataSchema.js';
+import { getStateRestoration } from './StateRestoration.js';
 
 // ========== CONSTANTS ==========
 const STORAGE_PREFIX = 'ashen_save_';
@@ -36,6 +37,7 @@ const AUTOSAVE_SLOT = 0;
 const MAX_MANUAL_SLOTS = 3;
 const AUTOSAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_SAVE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per save
+const STORAGE_WARNING_THRESHOLD = 0.8; // Warn at 80% capacity
 
 // ========== SAVE MANAGER CLASS ==========
 class SaveManager {
@@ -103,7 +105,16 @@ class SaveManager {
       manaManager: systems.manaManager || null,
       npcManager: systems.npcManager || null,
       scene: systems.scene || null,
+      hud: systems.hud || null,
+      questUI: systems.questUI || null,
+      renderer: systems.renderer || null,
+      camera: systems.camera || null,
+      audioManager: systems.audioManager || null,
     };
+    
+    // Initialize StateRestoration with systems
+    this.stateRestoration = getStateRestoration();
+    this.stateRestoration.registerSystems(this.systems);
     
     // Start autosave timer
     this.startAutosaveTimer();
@@ -158,8 +169,11 @@ class SaveManager {
         throw new Error(`Save size (${(size / 1024).toFixed(1)}KB) exceeds limit`);
       }
       
-      // Write to localStorage
-      localStorage.setItem(storageKey, compressed);
+      // Write to localStorage with quota handling
+      const storageResult = this.safeStorageSet(storageKey, compressed);
+      if (!storageResult.success) {
+        throw new Error(storageResult.error);
+      }
       
       // Update metadata cache
       const metadata = createSaveMetadata(saveData);
@@ -248,8 +262,16 @@ class SaveManager {
         console.log('[SaveManager] Migrations applied:', migration.migrationsApplied);
       }
       
-      // Distribute state to all managers
-      this.distributeGameState(saveData);
+      // Use StateRestoration for proper initialization order
+      if (this.stateRestoration) {
+        const restoreResult = await this.stateRestoration.restoreGameState(saveData);
+        if (restoreResult.warnings.length > 0) {
+          console.warn('[SaveManager] Restoration warnings:', restoreResult.warnings);
+        }
+      } else {
+        // Fallback to direct distribution
+        this.distributeGameState(saveData);
+      }
       
       // Update local state
       this.currentSlot = slotId;
@@ -1109,6 +1131,135 @@ class SaveManager {
    */
   getFormattedPlaytime() {
     return formatPlaytime(this.getCurrentPlaytime());
+  }
+  
+  // ========== STORAGE MANAGEMENT ==========
+  
+  /**
+   * Get localStorage usage information
+   */
+  getStorageInfo() {
+    try {
+      let totalUsed = 0;
+      let savesUsed = 0;
+      
+      // Count all localStorage usage
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        const value = localStorage.getItem(key);
+        const size = (key.length + value.length) * 2; // UTF-16 chars = 2 bytes
+        totalUsed += size;
+        
+        if (key.startsWith(STORAGE_PREFIX) || key === METADATA_KEY) {
+          savesUsed += size;
+        }
+      }
+      
+      // Estimate available (most browsers allow ~5-10MB)
+      const estimatedTotal = 5 * 1024 * 1024; // 5MB conservative estimate
+      const available = Math.max(0, estimatedTotal - totalUsed);
+      const usagePercent = totalUsed / estimatedTotal;
+      
+      return {
+        totalUsed,
+        savesUsed,
+        available,
+        usagePercent,
+        isNearLimit: usagePercent > STORAGE_WARNING_THRESHOLD,
+        formatted: {
+          totalUsed: this.formatBytes(totalUsed),
+          savesUsed: this.formatBytes(savesUsed),
+          available: this.formatBytes(available),
+        },
+      };
+    } catch (e) {
+      console.warn('[SaveManager] Failed to get storage info:', e);
+      return null;
+    }
+  }
+  
+  /**
+   * Format bytes to human readable string
+   */
+  formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+  
+  /**
+   * Check if storage is near capacity
+   */
+  isStorageNearLimit() {
+    const info = this.getStorageInfo();
+    return info?.isNearLimit || false;
+  }
+  
+  /**
+   * Try to free up storage space
+   * Returns bytes freed
+   */
+  freeStorageSpace() {
+    let bytesFreed = 0;
+    
+    try {
+      // Remove old screenshots first (they're nice-to-have)
+      const screenshotKey = 'ashen_save_screenshots';
+      const screenshots = localStorage.getItem(screenshotKey);
+      if (screenshots) {
+        bytesFreed += screenshots.length * 2;
+        localStorage.removeItem(screenshotKey);
+        console.log('[SaveManager] Cleared screenshots to free space');
+      }
+      
+      // If still needed, could remove oldest autosave here
+      // But we prioritize keeping saves intact
+      
+    } catch (e) {
+      console.warn('[SaveManager] Failed to free storage:', e);
+    }
+    
+    return bytesFreed;
+  }
+  
+  /**
+   * Safely write to localStorage with quota handling
+   */
+  safeStorageSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return { success: true };
+    } catch (e) {
+      // QuotaExceededError
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        console.warn('[SaveManager] Storage quota exceeded, attempting cleanup...');
+        
+        // Try to free space
+        const freed = this.freeStorageSpace();
+        
+        if (freed > 0) {
+          // Retry
+          try {
+            localStorage.setItem(key, value);
+            return { success: true, freedSpace: freed };
+          } catch (e2) {
+            return { 
+              success: false, 
+              error: 'Storage full. Please delete old saves to continue.',
+              quotaExceeded: true,
+            };
+          }
+        }
+        
+        return { 
+          success: false, 
+          error: 'Storage full. Please delete old saves or export to file.',
+          quotaExceeded: true,
+        };
+      }
+      
+      return { success: false, error: e.message };
+    }
   }
   
   // ========== EVENT SYSTEM ==========
