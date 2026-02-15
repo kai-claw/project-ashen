@@ -626,6 +626,13 @@ class SaveManager {
           saveData.player.rotation.z
         );
       }
+      
+      // Trigger Player's safe spawn recalculation to enable frame-by-frame safety checks
+      // This ensures spawn safety even if terrain loads asynchronously
+      if (this.systems.gameManager && this.systems.gameManager.player && 
+          this.systems.gameManager.player.recalculateSafeSpawn) {
+        this.systems.gameManager.player.recalculateSafeSpawn();
+      }
     }
     
     if (this.systems.gameManager) {

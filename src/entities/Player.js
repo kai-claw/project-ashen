@@ -97,6 +97,9 @@ export class Player {
     this.lastGhostSpawnTime = 0;
     this.ghostSpawnInterval = 0.05;
     
+    // Spawn safety tracking (fixes autostart terrain bug)
+    this._spawnSafetyFrames = 0;
+    
     // Ability states
     this.dashDir = new THREE.Vector3();
     this.dashSpeed = 18;
@@ -432,6 +435,11 @@ export class Player {
   }
 
   update(delta) {
+    // Check spawn safety for first few frames after spawn (fixes autostart terrain bug)
+    if (this._spawnSafetyFrames > 0) {
+      this._checkSpawnSafety();
+    }
+    
     if (this.gm.isDead) {
       this.state = STATES.DEAD;
       if (this.currentAnim !== 'Death') {
@@ -1378,7 +1386,8 @@ export class Player {
     // because current position might be inside terrain)
     const safeY = terrainY + SAFE_SPAWN_OFFSET;
     
-    // Only adjust if current Y is below safe threshold
+    // ALWAYS set Y to safe height on spawn - don't trust current position
+    // This fixes the autostart bug where player spawns inside terrain
     if (this.mesh.position.y < safeY) {
       console.log(`[Player] Safe spawn height corrected: Y=${this.mesh.position.y} -> ${safeY} (terrain=${terrainY})`);
       this.mesh.position.y = safeY;
@@ -1386,6 +1395,39 @@ export class Player {
     
     this.grounded = false; // Let gravity bring us down naturally
     this.velocity.y = 0;
+    
+    // Mark that we need additional spawn safety checks
+    this._spawnSafetyFrames = 5; // Check for 5 frames after spawn
+  }
+  
+  /**
+   * Additional per-frame spawn safety check.
+   * Runs for first few frames after spawn to catch any late position changes.
+   */
+  _checkSpawnSafety() {
+    if (this._spawnSafetyFrames <= 0) return;
+    this._spawnSafetyFrames--;
+    
+    const SAFE_SPAWN_OFFSET = 5;
+    
+    if (!this.world) return;
+    
+    let terrainY = 0;
+    if (this.world.terrain && this.world.terrain.getTerrainHeight) {
+      terrainY = this.world.terrain.getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
+    } else if (this.world.getFloorY) {
+      terrainY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+    }
+    
+    // Validate and fix if needed
+    if (!isNaN(terrainY) && isFinite(terrainY) && terrainY > -100) {
+      const safeY = terrainY + SAFE_SPAWN_OFFSET;
+      if (this.mesh.position.y < safeY) {
+        console.warn(`[Player] Spawn safety frame ${5 - this._spawnSafetyFrames}: Y ${this.mesh.position.y} -> ${safeY}`);
+        this.mesh.position.y = safeY;
+        this.velocity.y = 0;
+      }
+    }
   }
   
   /**

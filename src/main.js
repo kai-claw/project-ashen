@@ -660,18 +660,65 @@ function animate() {
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
   // CRITICAL: First-frame spawn safety check (fixes autostart terrain spawn bug)
-  // Ensures player is above terrain before first render
+  // Ensures player AND camera are above terrain before first render
   if (isFirstFrame) {
     isFirstFrame = false;
+    
+    const SAFE_SPAWN_OFFSET = 5;  // Units above terrain
+    const MIN_SAFE_HEIGHT = 50;   // Fallback if terrain not ready
+    
     if (world.terrain && player.mesh) {
-      const terrainY = world.terrain.getTerrainHeight(
+      let terrainY = world.terrain.getTerrainHeight(
         player.mesh.position.x, 
         player.mesh.position.z
       );
-      const safeY = terrainY + 5; // 5 units above terrain
+      
+      // Validate terrain height - if invalid, use safe fallback
+      if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
+        console.warn('[Main] First-frame: terrain height invalid, using safe default');
+        terrainY = 0;
+      }
+      
+      const safeY = terrainY + SAFE_SPAWN_OFFSET;
+      
+      // Fix player position if below safe height
       if (player.mesh.position.y < safeY) {
-        console.log(`[Main] First-frame spawn fix: Y ${player.mesh.position.y} -> ${safeY}`);
+        console.log(`[Main] First-frame spawn fix: player Y ${player.mesh.position.y} -> ${safeY} (terrain=${terrainY})`);
         player.mesh.position.y = safeY;
+        
+        // Reset velocity to prevent falling back into terrain
+        if (player.velocity) {
+          player.velocity.y = 0;
+        }
+      }
+      
+      // ALSO fix camera position to prevent it from being inside terrain
+      // Camera should be above terrain at its own position
+      const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
+      const safeCamY = (isNaN(camTerrainY) || !isFinite(camTerrainY) || camTerrainY < -100)
+        ? MIN_SAFE_HEIGHT 
+        : camTerrainY + SAFE_SPAWN_OFFSET;
+      
+      if (camera.position.y < safeCamY) {
+        console.log(`[Main] First-frame spawn fix: camera Y ${camera.position.y} -> ${safeCamY}`);
+        camera.position.y = safeCamY;
+        
+        // Also update camera controller's currentPos to prevent lerp issues
+        if (cameraController && cameraController.currentPos) {
+          cameraController.currentPos.y = safeCamY;
+        }
+      }
+    } else {
+      // Terrain not ready - use absolute safe fallback
+      console.warn('[Main] First-frame: terrain not available, using safe default heights');
+      if (player.mesh.position.y < MIN_SAFE_HEIGHT) {
+        player.mesh.position.y = MIN_SAFE_HEIGHT;
+      }
+      if (camera.position.y < MIN_SAFE_HEIGHT) {
+        camera.position.y = MIN_SAFE_HEIGHT;
+        if (cameraController && cameraController.currentPos) {
+          cameraController.currentPos.y = MIN_SAFE_HEIGHT;
+        }
       }
     }
   }
