@@ -880,6 +880,12 @@ class SaveIntegration {
     const defaultData = createDefaultSaveData(0);
     this.saveManager?.distributeGameState(defaultData);
     
+    // CRITICAL: Ensure player spawns safely above terrain (fixes autostart bug)
+    // distributeGameState may set position to defaults which could be inside terrain
+    if (this.systems.gameManager?.player?.recalculateSafeSpawn) {
+      this.systems.gameManager.player.recalculateSafeSpawn();
+    }
+    
     // Update state
     this.hideMainMenu();
     this.gameStarted = true;

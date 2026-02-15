@@ -30,7 +30,9 @@ export const SAVE_SLOT_TYPE = {
 export function getDefaultPlayerData() {
   return {
     // Position & Rotation
-    position: { x: 0, y: 0, z: 5 },
+    // NOTE: Y is set to 5 as safe default above terrain (terrain at origin is ~0)
+    // The actual spawn height will be recalculated by Player._ensureSafeSpawnHeight()
+    position: { x: 0, y: 5, z: 5 },
     rotation: { x: 0, y: 0, z: 0 },
     checkpoint: { x: 0, y: 5, z: 5 },
     

@@ -1322,13 +1322,51 @@ export class Player {
     
     // Immediately snap player to terrain height + safety offset
     // This prevents spawning inside terrain (especially in autostart mode)
-    if (world && world.getFloorY) {
-      const terrainY = world.getFloorY(this.mesh.position.x, this.mesh.position.z);
-      // Use terrain height + 5 for safe spawn above terrain
-      this.mesh.position.y = terrainY + 5;
-      this.grounded = false; // Let gravity bring us down naturally
-      this.velocity.y = 0;
+    this._ensureSafeSpawnHeight();
+  }
+  
+  /**
+   * Ensure player is spawned safely above terrain.
+   * Called on setWorld and can be called again if position is reset.
+   */
+  _ensureSafeSpawnHeight() {
+    if (!this.world) return;
+    
+    const SAFE_SPAWN_OFFSET = 5; // Spawn 5 units above terrain
+    const MIN_SAFE_HEIGHT = 50;  // Absolute minimum if terrain isn't ready
+    
+    let terrainY = 0;
+    
+    // Try to get terrain height
+    if (this.world.getFloorY) {
+      terrainY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+    } else if (this.world.terrain && this.world.terrain.getTerrainHeight) {
+      terrainY = this.world.terrain.getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
     }
+    
+    // Calculate safe Y: terrain height + offset, or minimum safe height
+    const safeY = Math.max(terrainY + SAFE_SPAWN_OFFSET, this.mesh.position.y);
+    
+    // If terrain returned a suspiciously low value (not loaded?), use safe minimum
+    if (terrainY < -100 || isNaN(terrainY)) {
+      console.warn('[Player] Terrain height unavailable, using safe default spawn');
+      this.mesh.position.y = MIN_SAFE_HEIGHT;
+    } else {
+      this.mesh.position.y = safeY;
+    }
+    
+    this.grounded = false; // Let gravity bring us down naturally
+    this.velocity.y = 0;
+    
+    console.log(`[Player] Safe spawn height set to Y=${this.mesh.position.y} (terrain=${terrainY})`);
+  }
+  
+  /**
+   * Force recalculation of safe spawn height.
+   * Call this after position is externally modified (e.g., by save system).
+   */
+  recalculateSafeSpawn() {
+    this._ensureSafeSpawnHeight();
   }
 
   _getCameraYaw() {
