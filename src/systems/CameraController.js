@@ -27,8 +27,8 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 10; // Minimum units above terrain (increased from 5)
-    this._spawnSafetyFrames = 30; // Extra safety frames after spawn (increased from 10)
+    this._terrainClampOffset = 25; // Minimum units above terrain (was 10)
+    this._spawnSafetyFrames = 60;  // Extra safety frames after spawn (was 30)
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -214,8 +214,8 @@ export class CameraController {
     
     // Check for invalid terrain values
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-      // Terrain not ready - use safe fallback
-      const FALLBACK_MIN_Y = 50;
+      // Terrain not ready - use safe fallback (higher value)
+      const FALLBACK_MIN_Y = 100; // Was 50
       if (this.currentPos.y < FALLBACK_MIN_Y) {
         console.warn(`[CameraController] Terrain invalid, using fallback Y=${FALLBACK_MIN_Y}`);
         this.currentPos.y = FALLBACK_MIN_Y;
@@ -223,10 +223,10 @@ export class CameraController {
       return;
     }
     
-    // Use larger offset during spawn safety period
-    let offset = this._terrainClampOffset; // 10
+    // Use larger offset during spawn safety period to prevent green blob bug
+    let offset = this._terrainClampOffset; // 25
     if (this._spawnSafetyFrames > 0) {
-      offset = 15; // Even higher offset during spawn (increased from 10)
+      offset = 40; // Much higher offset during spawn (was 15)
       this._spawnSafetyFrames--;
     }
     

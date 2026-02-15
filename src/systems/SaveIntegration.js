@@ -883,9 +883,12 @@ class SaveIntegration {
     // CRITICAL FIX: Comprehensive spawn safety for autostart mode
     // The bug: player/camera spawn INSIDE terrain mesh because terrain chunks
     // might not be fully ready when position is calculated
+    // 
+    // Solution: Use VERY high initial spawn, then let gravity pull down safely
+    // This ensures first frame ALWAYS renders above terrain
     
-    const AUTOSTART_SAFE_OFFSET = 15; // Spawn this far above calculated terrain
-    const FALLBACK_SAFE_Y = 80;       // Use this if terrain unavailable
+    const AUTOSTART_SAFE_OFFSET = 50; // Spawn this far above calculated terrain (was 15)
+    const FALLBACK_SAFE_Y = 100;      // Use this if terrain unavailable (was 80)
     
     const playerMesh = this.systems.player; // player.mesh passed during init
     const gm = this.systems.gameManager;
@@ -926,13 +929,14 @@ class SaveIntegration {
     }
     
     // Step 3: Force camera to safe position as well
+    // Camera must be GUARANTEED above terrain on first frame - use very high offset
     if (camera && playerMesh) {
       const cameraController = gm?.cameraController;
-      const camOffset = 8;  // Camera should be this far above player
+      const camOffset = 20;  // Camera should be this far above player (was 8)
       const safeCamY = playerMesh.position.y + camOffset;
       
-      // Force camera position directly
-      const camZ = playerMesh.position.z + 8; // Behind player
+      // Force camera position directly - well behind and above player
+      const camZ = playerMesh.position.z + 12; // Behind player (was 8)
       camera.position.set(playerMesh.position.x, safeCamY, camZ);
       
       // Also update camera controller's internal position to prevent lerp issues
@@ -942,8 +946,10 @@ class SaveIntegration {
         }
         // Reset first frame flag to prevent snap to bad position
         cameraController._firstFrame = false;
-        // Extend spawn safety frames
-        cameraController._spawnSafetyFrames = 30;
+        // Extend spawn safety frames significantly
+        cameraController._spawnSafetyFrames = 60; // Was 30
+        // Increase terrain clamp offset during spawn
+        cameraController._terrainClampOffset = 20; // Was 10
       }
       
       // Look at player

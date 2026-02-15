@@ -129,7 +129,9 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);  // Initial sky blue (will be overridden)
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
-camera.position.set(0, 5, 15);
+// CRITICAL: Start camera VERY high to prevent spawning inside terrain during autostart
+// The camera will be repositioned correctly once terrain is ready
+camera.position.set(0, 100, 15);
 camera.lookAt(0, 0, 0);
 
 // DEBUG objects removed - terrain now rendering with MeshBasicMaterial
@@ -654,21 +656,21 @@ window.addEventListener('resize', () => {
 
 // --- Game Loop ---
 // Track spawn safety frames - check multiple frames to catch race conditions
-// Increased from 5 to 30 frames to better catch autostart timing issues
-let spawnSafetyFramesRemaining = 30; // Check first 30 frames for safety
+// Increased significantly to ensure terrain is fully loaded before normal positioning
+let spawnSafetyFramesRemaining = 60; // Check first 60 frames for safety (was 30)
 
 function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
   // CRITICAL: Multi-frame spawn safety check (fixes autostart terrain spawn bug)
-  // Runs for first 30 frames to catch any race conditions with terrain loading
+  // Runs for first 60 frames to catch any race conditions with terrain loading
   if (spawnSafetyFramesRemaining > 0) {
     spawnSafetyFramesRemaining--;
     
-    const SAFE_SPAWN_OFFSET = 12;  // Units above terrain (increased from 5)
-    const MIN_SAFE_HEIGHT = 80;    // Absolute minimum if terrain not ready (increased from 50)
-    const isFirstFrame = (spawnSafetyFramesRemaining === 29); // First of 30 frames
+    const SAFE_SPAWN_OFFSET = 25;  // Units above terrain (was 12)
+    const MIN_SAFE_HEIGHT = 100;   // Absolute minimum if terrain not ready (was 80)
+    const isFirstFrame = (spawnSafetyFramesRemaining === 59); // First of 60 frames
     
     if (world.terrain && player.mesh) {
       // Force terrain chunk generation at player position
@@ -1158,12 +1160,12 @@ function animate() {
   // Critical for autostart mode where initialization order can vary
   if (world.terrain) {
     const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
-    // Significantly increased offset - the "green blob" bug means we're still too close
-    const MIN_CAMERA_TERRAIN_OFFSET = 10;
+    // Use very large offset to guarantee no "green blob" bug
+    const MIN_CAMERA_TERRAIN_OFFSET = 25; // Was 10
     
     if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
       if (camera.position.y < camTerrainY + MIN_CAMERA_TERRAIN_OFFSET) {
-        const safeY = camTerrainY + MIN_CAMERA_TERRAIN_OFFSET + 5; // Extra margin
+        const safeY = camTerrainY + MIN_CAMERA_TERRAIN_OFFSET + 10; // Extra margin (was +5)
         console.warn(`[Main] Pre-render camera fix: Y ${camera.position.y.toFixed(2)} -> ${safeY.toFixed(2)} (terrain=${camTerrainY.toFixed(2)})`);
         camera.position.y = safeY;
         // Also sync CameraController to prevent rubber-banding next frame
@@ -1173,7 +1175,7 @@ function animate() {
       }
     } else {
       // Terrain not valid - use absolute safe fallback
-      const FALLBACK_CAM_Y = 60;
+      const FALLBACK_CAM_Y = 100; // Was 60
       if (camera.position.y < FALLBACK_CAM_Y) {
         console.warn(`[Main] Pre-render camera fallback: Y ${camera.position.y.toFixed(2)} -> ${FALLBACK_CAM_Y}`);
         camera.position.y = FALLBACK_CAM_Y;
@@ -1186,16 +1188,16 @@ function animate() {
     // Also check player position - catch any missed spawn-inside-terrain issues
     const playerTerrainY = world.terrain.getTerrainHeight(player.mesh.position.x, player.mesh.position.z);
     if (!isNaN(playerTerrainY) && isFinite(playerTerrainY) && playerTerrainY > -100) {
-      const MIN_PLAYER_TERRAIN_OFFSET = 5; // Increased from 2
+      const MIN_PLAYER_TERRAIN_OFFSET = 15; // Was 5
       if (player.mesh.position.y < playerTerrainY + MIN_PLAYER_TERRAIN_OFFSET) {
-        const safePlayerY = playerTerrainY + MIN_PLAYER_TERRAIN_OFFSET + 5;
+        const safePlayerY = playerTerrainY + MIN_PLAYER_TERRAIN_OFFSET + 10; // Was +5
         console.warn(`[Main] Pre-render player fix: Y ${player.mesh.position.y.toFixed(2)} -> ${safePlayerY.toFixed(2)} (terrain=${playerTerrainY.toFixed(2)})`);
         player.mesh.position.y = safePlayerY;
         if (player.velocity) player.velocity.y = 0;
       }
     } else {
       // Terrain not valid for player position check - use fallback
-      const FALLBACK_PLAYER_Y = 50;
+      const FALLBACK_PLAYER_Y = 80; // Was 50
       if (player.mesh.position.y < FALLBACK_PLAYER_Y) {
         console.warn(`[Main] Pre-render player fallback: Y ${player.mesh.position.y.toFixed(2)} -> ${FALLBACK_PLAYER_Y}`);
         player.mesh.position.y = FALLBACK_PLAYER_Y;
