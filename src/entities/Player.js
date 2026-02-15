@@ -491,7 +491,16 @@ export class Player {
       // Get floor Y at current position
       const floorY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
       
-      if (this.mesh.position.y > floorY) {
+      // Safety check: if player is significantly BELOW terrain, they spawned inside it
+      // This catches edge cases where spawn height calculation failed
+      const TERRAIN_SAFETY_MARGIN = 2; // Player should be at least this far above terrain
+      if (floorY > this.mesh.position.y + TERRAIN_SAFETY_MARGIN) {
+        // Player is inside/below terrain - immediately pop them above
+        console.warn(`[Player] Detected spawn inside terrain! Correcting: y=${this.mesh.position.y} -> ${floorY + 5}`);
+        this.mesh.position.y = floorY + 5;
+        this.velocity.y = 0;
+        this.grounded = false;
+      } else if (this.mesh.position.y > floorY) {
         // Above floor - apply gravity
         this.velocity.y += this.gravity * delta;
         this.mesh.position.y += this.velocity.y * delta;
@@ -1332,28 +1341,34 @@ export class Player {
   _ensureSafeSpawnHeight() {
     if (!this.world) return;
     
-    const SAFE_SPAWN_OFFSET = 5; // Spawn 5 units above terrain
-    const MIN_SAFE_HEIGHT = 50;  // Absolute minimum if terrain isn't ready
+    const SAFE_SPAWN_OFFSET = 10; // Spawn 10 units above terrain (increased from 5 for safety)
+    const MIN_SAFE_HEIGHT = 50;   // Absolute minimum if terrain isn't ready
     
     let terrainY = 0;
+    let terrainReady = false;
     
-    // Try to get terrain height
+    // Try to get terrain height - check multiple methods
     if (this.world.getFloorY) {
       terrainY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+      terrainReady = true;
     } else if (this.world.terrain && this.world.terrain.getTerrainHeight) {
       terrainY = this.world.terrain.getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
+      terrainReady = true;
     }
     
-    // Calculate safe Y: terrain height + offset, or minimum safe height
-    const safeY = Math.max(terrainY + SAFE_SPAWN_OFFSET, this.mesh.position.y);
-    
-    // If terrain returned a suspiciously low value (not loaded?), use safe minimum
-    if (terrainY < -100 || isNaN(terrainY)) {
-      console.warn('[Player] Terrain height unavailable, using safe default spawn');
+    // Validate terrain height
+    if (!terrainReady || terrainY < -100 || isNaN(terrainY) || !isFinite(terrainY)) {
+      console.warn('[Player] Terrain height unavailable or invalid, using safe default spawn');
       this.mesh.position.y = MIN_SAFE_HEIGHT;
-    } else {
-      this.mesh.position.y = safeY;
+      this.grounded = false;
+      this.velocity.y = 0;
+      return;
     }
+    
+    // Calculate safe Y: ALWAYS terrain height + offset (don't use Math.max with current position
+    // because current position might be inside terrain)
+    const safeY = terrainY + SAFE_SPAWN_OFFSET;
+    this.mesh.position.y = safeY;
     
     this.grounded = false; // Let gravity bring us down naturally
     this.velocity.y = 0;

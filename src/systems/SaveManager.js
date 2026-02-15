@@ -586,31 +586,34 @@ class SaveManager {
       const pos = saveData.player.position;
       let safeY = pos.y;
       let terrainY = 0;
-      const SAFE_SPAWN_OFFSET = 5; // Spawn 5 units above terrain for safety
+      const SAFE_SPAWN_OFFSET = 10; // Spawn 10 units above terrain for safety (increased from 5)
+      const MIN_SAFE_HEIGHT = 50;   // Absolute minimum safe height
       
       // Ensure player spawns above terrain (prevents spawning inside terrain mesh)
       // This is critical for autostart mode where terrain may not be fully ready
       if (this.systems.terrain && this.systems.terrain.getTerrainHeight) {
         terrainY = this.systems.terrain.getTerrainHeight(pos.x, pos.z);
         // Sanity check - if terrain returns weird value, use safe default
-        if (isNaN(terrainY) || terrainY < -100) {
+        if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
           console.warn('[SaveManager] Invalid terrain height, using safe default');
-          safeY = 50;
+          safeY = MIN_SAFE_HEIGHT;
         } else {
-          safeY = Math.max(pos.y, terrainY + SAFE_SPAWN_OFFSET);
+          // ALWAYS use terrain + offset, don't trust saved Y position
+          safeY = terrainY + SAFE_SPAWN_OFFSET;
         }
       } else if (this.systems.world && this.systems.world.getFloorY) {
         terrainY = this.systems.world.getFloorY(pos.x, pos.z);
-        if (isNaN(terrainY) || terrainY < -100) {
+        if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
           console.warn('[SaveManager] Invalid world floor height, using safe default');
-          safeY = 50;
+          safeY = MIN_SAFE_HEIGHT;
         } else {
-          safeY = Math.max(pos.y, terrainY + SAFE_SPAWN_OFFSET);
+          // ALWAYS use terrain + offset, don't trust saved Y position
+          safeY = terrainY + SAFE_SPAWN_OFFSET;
         }
       } else {
         // Fallback: use safe default if terrain not available
         console.warn('[SaveManager] No terrain/world available, using safe default spawn height');
-        safeY = Math.max(pos.y, 50);
+        safeY = MIN_SAFE_HEIGHT;
       }
       
       console.log(`[SaveManager] Setting player position: (${pos.x}, ${safeY}, ${pos.z}) [terrain=${terrainY}]`);
