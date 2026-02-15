@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "Fixed in Player.js setWorld(): When world is assigned, immediately calculate terrain height at player position and set player Y = terrainY + 5 for safe spawn above terrain. Prevents giant green blob view when camera/player spawn inside terrain mesh."
+      "workerNotes": "ROOT CAUSE: In autostart mode, SaveIntegration.startNewGame() called distributeGameState() which set player Y=0 from default save data, overwriting the safe spawn height from Player.setWorld(). FIX: Modified SaveManager.distributeGameState() to calculate safe Y = max(saveY, terrainHeight + 5) before setting player position. Added terrain/world references to SaveManager.init() systems object. main.js now passes terrain/world to SaveManager. Fallback to Y=50 if terrain not available. Player.setWorld() fix remains in place as defense-in-depth."
     }
   ],
   "subtasks": [
