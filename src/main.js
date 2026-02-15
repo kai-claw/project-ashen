@@ -50,6 +50,7 @@ import { getSaveManager } from './systems/SaveManager.js';
 import { getSaveIntegration } from './systems/SaveIntegration.js';
 import { getSaveUI } from './systems/SaveUI.js';
 import { createMinimapManager, getMinimapManager } from './ui/MinimapManager.js';
+import { createFastTravelManager, getFastTravelManager } from './systems/FastTravelManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -566,6 +567,24 @@ minimapManager.init({
 });
 gameManager.minimapManager = minimapManager;
 
+// ========== FAST TRAVEL SYSTEM (Phase 27) ==========
+const fastTravelManager = createFastTravelManager();
+fastTravelManager.init({
+  player: player.mesh,
+  gameManager: gameManager,
+  saveManager: saveManager,
+  dungeonManager: dungeonManager,
+  enemyManager: enemyManager,
+  terrain: world.terrain,
+  world: world,
+  audioManager: audioManager,
+  minimapManager: minimapManager,
+});
+gameManager.fastTravelManager = fastTravelManager;
+
+// Connect fast travel to minimap
+minimapManager.setFastTravelManager(fastTravelManager);
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -986,6 +1005,7 @@ window.saveManager = saveManager;
 window.saveIntegration = saveIntegration;
 window.saveUI = saveUI;
 window.minimapManager = minimapManager;
+window.fastTravelManager = fastTravelManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;

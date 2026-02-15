@@ -15,19 +15,20 @@
       "id": "minimap-icons",
       "name": "Minimap Icons",
       "priority": "P0",
-      "status": "in-progress",
+      "status": "ready-for-review",
       "worker": 1,
-      "description": "Add icons to minimap: enemies, NPCs, quest markers, villages, dungeons, gathering nodes, bosses, waypoints, legend"
+      "description": "Add icons to minimap: enemies, NPCs, quest markers, villages, dungeons, gathering nodes, bosses, waypoints, legend",
+      "workerNotes": "Enhanced icon system: (1) Enemy red dots with threat-based sizing, (2) NPC green/yellow dots (quest givers highlighted), (3) Quest objective markers using QuestManager.getQuestMarkers(), (4) Village house icons, (5) Dungeon skull icons, (6) Gathering node toggle, (7) Boss skull icons, (8) Bonfire/crucible flame icons, (9) Custom waypoint with right-click, (10) Edge fade for icons near radius, (11) Added getActiveNodes() to GatheringManager, (12) Added getDiscoveredBonfires() to GameManager"
     },
     {
       "id": "fast-travel",
       "name": "FastTravelManager.js",
       "priority": "P1",
-      "status": "pending",
+      "status": "in-progress",
       "worker": 1,
       "description": "Fast travel system: discovered crucibles/bonfires, click-to-travel, confirmation dialog, loading tips, transition effects"
     }
   ],
-  "lastUpdated": "2026-02-15T03:35:00Z",
-  "workerStatus": "Worker 1: minimap-core ready-for-review, starting minimap-icons"
+  "lastUpdated": "2026-02-15T03:45:00Z",
+  "workerStatus": "Worker 1: minimap-icons ready-for-review, starting fast-travel"
 }

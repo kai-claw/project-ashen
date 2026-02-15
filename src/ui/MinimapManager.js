@@ -106,11 +106,19 @@ export class MinimapManager {
     this.gatheringManager = systems.gatheringManager || null;
     this.bossSpawner = systems.bossSpawner || null;
     this.gameManager = systems.gameManager || null;
+    this.fastTravelManager = systems.fastTravelManager || null;
     
     // Pre-render initial terrain
     if (this.player && this.terrain) {
       this._renderTerrain();
     }
+  }
+  
+  /**
+   * Set fast travel manager (can be called after init)
+   */
+  setFastTravelManager(manager) {
+    this.fastTravelManager = manager;
   }
   
   /**
@@ -273,6 +281,12 @@ export class MinimapManager {
       this._cycleZoom();
     });
     
+    // Double-click for fast travel
+    this.container.addEventListener('dblclick', (e) => {
+      if (e.target === this.legendButton) return;
+      this._handleFastTravelClick(e);
+    });
+    
     // Right-click to place waypoint
     this.container.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -361,6 +375,7 @@ export class MinimapManager {
     controls.innerHTML = `
       <div><b>M</b> - Toggle map</div>
       <div><b>Click</b> - Zoom</div>
+      <div><b>Double-click</b> - Fast travel</div>
       <div><b>Right-click</b> - Waypoint</div>
     `;
     this.legendPanel.appendChild(controls);
@@ -445,6 +460,87 @@ export class MinimapManager {
    */
   _updateZoomIndicator() {
     this.zoomIndicator.textContent = `${this.zoomRadius}m`;
+  }
+  
+  /**
+   * Handle fast travel double-click
+   */
+  _handleFastTravelClick(event) {
+    if (!this.fastTravelManager || !this.player) return;
+    
+    // Get click position relative to minimap center
+    const rect = this.container.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const clickX = event.clientX - rect.left - centerX;
+    const clickY = event.clientY - rect.top - centerY;
+    
+    // Convert to world coordinates
+    const scale = this.zoomRadius / (this.size / 2);
+    const worldOffsetX = clickX * scale;
+    const worldOffsetZ = clickY * scale;
+    
+    // Account for camera rotation
+    const cameraAngle = this._getCameraAngle();
+    const cos = Math.cos(cameraAngle);
+    const sin = Math.sin(cameraAngle);
+    
+    const rotatedX = worldOffsetX * cos - worldOffsetZ * sin;
+    const rotatedZ = worldOffsetX * sin + worldOffsetZ * cos;
+    
+    const playerPos = this.player.position || this.player;
+    const worldX = playerPos.x + rotatedX;
+    const worldZ = playerPos.z + rotatedZ;
+    
+    // Check for nearby discovered locations
+    const discoveredLocations = this.fastTravelManager.getDiscoveredLocations();
+    const clickRadius = 15 * scale; // Allow some click tolerance
+    
+    for (const loc of discoveredLocations) {
+      const dx = loc.x - worldX;
+      const dz = loc.z - worldZ;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      
+      if (dist < clickRadius) {
+        // Found a nearby fast travel point
+        const locId = this._getLocationId(loc);
+        this.fastTravelManager.startTravel(locId);
+        return;
+      }
+    }
+    
+    // If custom waypoint is placed and clicked, offer travel there
+    if (this.customWaypoint) {
+      const dx = this.customWaypoint.x - worldX;
+      const dz = this.customWaypoint.z - worldZ;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      
+      if (dist < clickRadius) {
+        this.fastTravelManager.travelToCoordinates(
+          this.customWaypoint.x,
+          this.customWaypoint.z,
+          'Custom Waypoint'
+        );
+        return;
+      }
+    }
+  }
+  
+  /**
+   * Get location ID from location object
+   */
+  _getLocationId(loc) {
+    // Try to find matching ID in fastTravelManager
+    if (this.fastTravelManager) {
+      const discovered = this.fastTravelManager.discoveredLocations;
+      for (const [id, savedLoc] of discovered) {
+        if (savedLoc.x === loc.x && savedLoc.z === loc.z) {
+          return id;
+        }
+      }
+    }
+    // Fallback: generate ID from name
+    return loc.name.toLowerCase().replace(/\s+/g, '_');
   }
   
   /**
