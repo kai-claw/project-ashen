@@ -501,6 +501,8 @@ saveManager.init({
   renderer,
   camera,
   audioManager,
+  terrain: world.terrain,  // For safe spawn height calculation
+  world: world,            // Alternative terrain height access
 });
 
 // Initialize SaveUI with renderer for screenshots

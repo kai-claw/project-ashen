@@ -110,6 +110,8 @@ class SaveManager {
       renderer: systems.renderer || null,
       camera: systems.camera || null,
       audioManager: systems.audioManager || null,
+      terrain: systems.terrain || null,  // For safe spawn height calculation
+      world: systems.world || null,      // Alternative terrain height access
     };
     
     // Initialize StateRestoration with systems
@@ -581,11 +583,26 @@ class SaveManager {
   distributeGameState(saveData) {
     // ===== PLAYER DATA =====
     if (this.systems.player && saveData.player.position) {
-      this.systems.player.position.set(
-        saveData.player.position.x,
-        saveData.player.position.y,
-        saveData.player.position.z
-      );
+      const pos = saveData.player.position;
+      let safeY = pos.y;
+      
+      // Ensure player spawns above terrain (prevents spawning inside terrain mesh)
+      // This is critical for autostart mode where terrain may not be fully ready
+      if (this.systems.terrain && this.systems.terrain.getTerrainHeight) {
+        const terrainY = this.systems.terrain.getTerrainHeight(pos.x, pos.z);
+        const safeSpawnOffset = 5; // Spawn 5 units above terrain for safety
+        safeY = Math.max(pos.y, terrainY + safeSpawnOffset);
+      } else if (this.systems.world && this.systems.world.getFloorY) {
+        const terrainY = this.systems.world.getFloorY(pos.x, pos.z);
+        const safeSpawnOffset = 5;
+        safeY = Math.max(pos.y, terrainY + safeSpawnOffset);
+      } else {
+        // Fallback: use safe default if terrain not available
+        safeY = Math.max(pos.y, 50);
+      }
+      
+      this.systems.player.position.set(pos.x, safeY, pos.z);
+      
       if (saveData.player.rotation) {
         this.systems.player.rotation.set(
           saveData.player.rotation.x,
