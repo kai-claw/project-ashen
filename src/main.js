@@ -652,9 +652,29 @@ window.addEventListener('resize', () => {
 });
 
 // --- Game Loop ---
+// Track first frame for spawn safety check
+let isFirstFrame = true;
+
 function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
+
+  // CRITICAL: First-frame spawn safety check (fixes autostart terrain spawn bug)
+  // Ensures player is above terrain before first render
+  if (isFirstFrame) {
+    isFirstFrame = false;
+    if (world.terrain && player.mesh) {
+      const terrainY = world.terrain.getTerrainHeight(
+        player.mesh.position.x, 
+        player.mesh.position.z
+      );
+      const safeY = terrainY + 5; // 5 units above terrain
+      if (player.mesh.position.y < safeY) {
+        console.log(`[Main] First-frame spawn fix: Y ${player.mesh.position.y} -> ${safeY}`);
+        player.mesh.position.y = safeY;
+      }
+    }
+  }
 
   inputManager.update(delta);
   

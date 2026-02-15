@@ -882,8 +882,49 @@ class SaveIntegration {
     
     // CRITICAL: Ensure player spawns safely above terrain (fixes autostart bug)
     // distributeGameState may set position to defaults which could be inside terrain
+    // First try the Player class method
     if (this.systems.gameManager?.player?.recalculateSafeSpawn) {
       this.systems.gameManager.player.recalculateSafeSpawn();
+    }
+    
+    // EXTRA SAFETY: Direct fallback if terrain height wasn't properly calculated
+    // This catches edge cases where terrain/world references weren't available
+    const playerMesh = this.systems.player; // player.mesh passed during init
+    if (playerMesh && playerMesh.position) {
+      const SAFE_SPAWN_Y = 50; // Minimum safe height above any terrain
+      const MIN_TERRAIN_CHECK_Y = 10; // If Y is below this, assume spawn failed
+      
+      // Get terrain height directly if available
+      let terrainY = 0;
+      const gm = this.systems.gameManager;
+      if (gm?.player?.world?.terrain?.getTerrainHeight) {
+        terrainY = gm.player.world.terrain.getTerrainHeight(
+          playerMesh.position.x, 
+          playerMesh.position.z
+        );
+      } else if (gm?.player?.world?.getFloorY) {
+        terrainY = gm.player.world.getFloorY(
+          playerMesh.position.x, 
+          playerMesh.position.z
+        );
+      }
+      
+      // Validate terrain height and current position
+      const validTerrain = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
+      const currentY = playerMesh.position.y;
+      
+      if (validTerrain) {
+        // Ensure player is at least 5 units above terrain
+        const safeY = terrainY + 5;
+        if (currentY < safeY) {
+          console.log(`[SaveIntegration] Correcting spawn height: ${currentY} -> ${safeY} (terrain=${terrainY})`);
+          playerMesh.position.y = safeY;
+        }
+      } else if (currentY < MIN_TERRAIN_CHECK_Y) {
+        // Terrain unavailable and position looks unsafe - use safe default
+        console.warn(`[SaveIntegration] Terrain unavailable, using safe spawn height: ${SAFE_SPAWN_Y}`);
+        playerMesh.position.y = SAFE_SPAWN_Y;
+      }
     }
     
     // Update state
