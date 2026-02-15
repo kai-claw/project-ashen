@@ -27,8 +27,8 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 50; // Minimum units above terrain - very aggressive (was 25)
-    this._spawnSafetyFrames = 120;  // Extra safety frames after spawn (was 60)
+    this._terrainClampOffset = 80;  // Minimum units above terrain - very aggressive
+    this._spawnSafetyFrames = 180;  // Extended safety frames after spawn
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -206,6 +206,9 @@ export class CameraController {
   /**
    * Ensure camera position is above terrain
    * Called internally and can be called externally for spawn safety
+   * 
+   * CRITICAL: Only RAISE camera, never lower it below current position.
+   * This prevents the "green blob" bug in autostart mode.
    */
   clampToTerrain() {
     if (!this.terrain || !this.terrain.getTerrainHeight) return;
@@ -215,24 +218,25 @@ export class CameraController {
     // Check for invalid terrain values
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
       // Terrain not ready - use safe fallback (VERY high value)
-      const FALLBACK_MIN_Y = 150; // Was 100
+      const FALLBACK_MIN_Y = 200;
       if (this.currentPos.y < FALLBACK_MIN_Y) {
-        console.warn(`[CameraController] Terrain invalid, using fallback Y=${FALLBACK_MIN_Y}`);
+        console.warn(`[CameraController] Terrain invalid, raising to fallback Y=${FALLBACK_MIN_Y}`);
         this.currentPos.y = FALLBACK_MIN_Y;
       }
       return;
     }
     
     // Use MUCH larger offset during spawn safety period to prevent green blob bug
-    let offset = this._terrainClampOffset; // 50
+    let offset = this._terrainClampOffset; // 80
     if (this._spawnSafetyFrames > 0) {
-      offset = 70; // Very high offset during spawn (was 40)
+      // Extra aggressive for early frames
+      offset = this._spawnSafetyFrames > 120 ? 120 : 100;
       this._spawnSafetyFrames--;
     }
     
     const minY = terrainY + offset;
     if (this.currentPos.y < minY) {
-      console.log(`[CameraController] Clamping Y: ${this.currentPos.y.toFixed(2)} -> ${minY.toFixed(2)}`);
+      console.log(`[CameraController] Raising Y: ${this.currentPos.y.toFixed(2)} -> ${minY.toFixed(2)} (terrain=${terrainY.toFixed(2)})`);
       this.currentPos.y = minY;
     }
   }
