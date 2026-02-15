@@ -880,51 +880,83 @@ class SaveIntegration {
     const defaultData = createDefaultSaveData(0);
     this.saveManager?.distributeGameState(defaultData);
     
-    // CRITICAL: Ensure player spawns safely above terrain (fixes autostart bug)
-    // distributeGameState may set position to defaults which could be inside terrain
-    // First try the Player class method
-    if (this.systems.gameManager?.player?.recalculateSafeSpawn) {
-      this.systems.gameManager.player.recalculateSafeSpawn();
+    // CRITICAL FIX: Comprehensive spawn safety for autostart mode
+    // The bug: player/camera spawn INSIDE terrain mesh because terrain chunks
+    // might not be fully ready when position is calculated
+    
+    const AUTOSTART_SAFE_OFFSET = 15; // Spawn this far above calculated terrain
+    const FALLBACK_SAFE_Y = 80;       // Use this if terrain unavailable
+    
+    const playerMesh = this.systems.player; // player.mesh passed during init
+    const gm = this.systems.gameManager;
+    const camera = this.systems.camera;
+    
+    // Step 1: Force terrain chunk generation at spawn position
+    const terrain = gm?.player?.world?.terrain || this.systems.terrain;
+    if (terrain && terrain.update && playerMesh) {
+      // Force chunk generation at player position FIRST
+      terrain.update(playerMesh.position.x, playerMesh.position.z);
     }
     
-    // EXTRA SAFETY: Direct fallback if terrain height wasn't properly calculated
-    // This catches edge cases where terrain/world references weren't available
-    const playerMesh = this.systems.player; // player.mesh passed during init
+    // Step 2: Calculate and apply safe player Y
     if (playerMesh && playerMesh.position) {
-      const SAFE_SPAWN_Y = 50; // Minimum safe height above any terrain
-      const MIN_TERRAIN_CHECK_Y = 10; // If Y is below this, assume spawn failed
-      
-      // Get terrain height directly if available
       let terrainY = 0;
-      const gm = this.systems.gameManager;
-      if (gm?.player?.world?.terrain?.getTerrainHeight) {
-        terrainY = gm.player.world.terrain.getTerrainHeight(
-          playerMesh.position.x, 
-          playerMesh.position.z
-        );
-      } else if (gm?.player?.world?.getFloorY) {
-        terrainY = gm.player.world.getFloorY(
-          playerMesh.position.x, 
-          playerMesh.position.z
-        );
+      let terrainValid = false;
+      
+      if (terrain && terrain.getTerrainHeight) {
+        terrainY = terrain.getTerrainHeight(playerMesh.position.x, playerMesh.position.z);
+        terrainValid = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
       }
       
-      // Validate terrain height and current position
-      const validTerrain = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
-      const currentY = playerMesh.position.y;
+      let safeY;
+      if (terrainValid) {
+        safeY = terrainY + AUTOSTART_SAFE_OFFSET;
+      } else {
+        safeY = FALLBACK_SAFE_Y;
+        console.warn('[SaveIntegration] Terrain unavailable, using fallback spawn Y:', safeY);
+      }
       
-      if (validTerrain) {
-        // Ensure player is at least 5 units above terrain
-        const safeY = terrainY + 5;
-        if (currentY < safeY) {
-          console.log(`[SaveIntegration] Correcting spawn height: ${currentY} -> ${safeY} (terrain=${terrainY})`);
-          playerMesh.position.y = safeY;
+      console.log(`[SaveIntegration] Setting safe spawn: Y=${safeY} (terrain=${terrainY}, valid=${terrainValid})`);
+      playerMesh.position.y = safeY;
+      
+      // Reset velocity to prevent falling through terrain
+      if (gm?.player?.velocity) {
+        gm.player.velocity.y = 0;
+      }
+    }
+    
+    // Step 3: Force camera to safe position as well
+    if (camera && playerMesh) {
+      const cameraController = gm?.cameraController;
+      const camOffset = 8;  // Camera should be this far above player
+      const safeCamY = playerMesh.position.y + camOffset;
+      
+      // Force camera position directly
+      const camZ = playerMesh.position.z + 8; // Behind player
+      camera.position.set(playerMesh.position.x, safeCamY, camZ);
+      
+      // Also update camera controller's internal position to prevent lerp issues
+      if (cameraController) {
+        if (cameraController.currentPos) {
+          cameraController.currentPos.set(playerMesh.position.x, safeCamY, camZ);
         }
-      } else if (currentY < MIN_TERRAIN_CHECK_Y) {
-        // Terrain unavailable and position looks unsafe - use safe default
-        console.warn(`[SaveIntegration] Terrain unavailable, using safe spawn height: ${SAFE_SPAWN_Y}`);
-        playerMesh.position.y = SAFE_SPAWN_Y;
+        // Reset first frame flag to prevent snap to bad position
+        cameraController._firstFrame = false;
+        // Extend spawn safety frames
+        cameraController._spawnSafetyFrames = 30;
       }
+      
+      // Look at player
+      camera.lookAt(playerMesh.position.x, playerMesh.position.y + 2, playerMesh.position.z);
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld(true);
+      
+      console.log(`[SaveIntegration] Camera forced to: (${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)})`);
+    }
+    
+    // Step 4: Enable Player's spawn safety frame checks
+    if (gm?.player?.recalculateSafeSpawn) {
+      gm.player.recalculateSafeSpawn();
     }
     
     // Update state

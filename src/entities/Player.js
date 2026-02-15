@@ -1353,8 +1353,8 @@ export class Player {
    * Called on setWorld and can be called again if position is reset.
    */
   _ensureSafeSpawnHeight() {
-    const SAFE_SPAWN_OFFSET = 10; // Spawn 10 units above terrain for safety (increased from 8)
-    const MIN_SAFE_HEIGHT = 80;   // Absolute minimum if terrain isn't ready (increased from 50)
+    const SAFE_SPAWN_OFFSET = 15; // Spawn 15 units above terrain for safety (increased from 10)
+    const MIN_SAFE_HEIGHT = 80;   // Absolute minimum if terrain isn't ready
     
     // If no world reference, use safe default
     if (!this.world) {
@@ -1400,19 +1400,19 @@ export class Player {
     this.velocity.y = 0;
     
     // Mark that we need additional spawn safety checks
-    this._spawnSafetyFrames = 10; // Check for 10 frames after spawn (increased from 5)
+    this._spawnSafetyFrames = 30; // Check for 30 frames after spawn (increased from 10)
   }
   
   /**
    * Additional per-frame spawn safety check.
-   * Runs for first few frames after spawn to catch any late position changes.
+   * Runs for first 30 frames after spawn to catch any late position changes.
    */
   _checkSpawnSafety() {
     if (this._spawnSafetyFrames <= 0) return;
     this._spawnSafetyFrames--;
     
-    const SAFE_SPAWN_OFFSET = 5;  // Allow slightly closer to terrain after initial spawn
-    const MIN_SAFE_HEIGHT = 30;   // Absolute minimum
+    const SAFE_SPAWN_OFFSET = 8;  // Increased from 5
+    const MIN_SAFE_HEIGHT = 50;   // Increased from 30
     
     if (!this.world) {
       // No world yet - ensure minimum safe height
@@ -1439,7 +1439,7 @@ export class Player {
     if (terrainValid) {
       const safeY = terrainY + SAFE_SPAWN_OFFSET;
       if (this.mesh.position.y < safeY) {
-        console.warn(`[Player] Spawn safety frame ${10 - this._spawnSafetyFrames}: Y ${this.mesh.position.y.toFixed(2)} -> ${safeY.toFixed(2)} (terrain=${terrainY.toFixed(2)})`);
+        console.warn(`[Player] Spawn safety frame ${30 - this._spawnSafetyFrames}: Y ${this.mesh.position.y.toFixed(2)} -> ${safeY.toFixed(2)} (terrain=${terrainY.toFixed(2)})`);
         this.mesh.position.y = safeY;
         this.velocity.y = 0;
       }
