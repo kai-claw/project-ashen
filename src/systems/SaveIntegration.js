@@ -93,9 +93,18 @@ class SaveIntegration {
     // Setup keyboard shortcuts
     this.setupKeyboardShortcuts();
     
-    // Show main menu if no active game
+    // Check for autostart URL param (for testing/screenshots)
+    const urlParams = new URLSearchParams(window.location.search);
+    const autostart = urlParams.get('autostart');
+    
+    // Show main menu if no active game (unless autostart)
     if (!this.gameStarted) {
-      this.showMainMenu();
+      if (autostart === 'true' || autostart === '1') {
+        console.log('[SaveIntegration] Autostart enabled - skipping main menu');
+        this.startNewGame();
+      } else {
+        this.showMainMenu();
+      }
     }
     
     console.log('[SaveIntegration] Initialized');

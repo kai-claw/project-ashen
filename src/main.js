@@ -53,6 +53,7 @@ import { createMinimapManager, getMinimapManager } from './ui/MinimapManager.js'
 import { createFastTravelManager, getFastTravelManager } from './systems/FastTravelManager.js';
 import { createWorldMapUI, getWorldMapUI } from './ui/WorldMapUI.js';
 import { createDiscoveryManager, getDiscoveryManager } from './ui/DiscoveryManager.js';
+import { GameTester } from './systems/GameTester.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -616,6 +617,28 @@ worldMapUI.init({
   minimapManager: minimapManager,
 });
 gameManager.worldMapUI = worldMapUI;
+
+// ========== GAME TESTER (Automated Testing Framework) ==========
+const gameTester = new GameTester({
+  scene,
+  camera,
+  renderer,
+  player: player.mesh,
+  world,
+  terrain: world.terrain,
+  enemyManager,
+  gameManager,
+  minimapManager,
+  worldMapUI,
+  discoveryManager,
+  fastTravelManager,
+  questManager,
+  saveManager,
+  inventoryUI,
+  combatSystem: gameManager,
+  hud,
+});
+gameManager.gameTester = gameTester;
 
 // --- Resize ---
 window.addEventListener('resize', () => {

@@ -4,6 +4,28 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Ashen</title>
+  <script>
+    // Autostart mode - hide menu immediately for testing/screenshots
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autostart') === 'true' || params.get('autostart') === '1') {
+        window.AUTOSTART_MODE = true;
+        // Inject style immediately and watch for menu element
+        const style = document.createElement('style');
+        style.textContent = '#main-menu-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }';
+        document.head.appendChild(style);
+        // Also hide via MutationObserver in case element is added later
+        const observer = new MutationObserver(function(mutations) {
+          const menu = document.getElementById('main-menu-overlay');
+          if (menu) {
+            menu.style.display = 'none';
+            menu.style.visibility = 'hidden';
+          }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      }
+    })();
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #0a0a0f; }
