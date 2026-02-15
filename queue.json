@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "ROOT CAUSE: In autostart mode, SaveIntegration.startNewGame() called distributeGameState() which set player Y position from default save data (Y=0), overwriting the safe spawn height from Player.setWorld(). FIX: (1) Added _ensureSafeSpawnHeight() method in Player.js with robust terrain height checks, NaN handling, and MIN_SAFE_HEIGHT=50 fallback, (2) Added recalculateSafeSpawn() public method for external callers, (3) Updated SaveIntegration.startNewGame() to call recalculateSafeSpawn() after distributeGameState(), (4) Improved SaveManager.distributeGameState() with better terrain validation and logging, (5) Updated default player Y from 0 to 5 in SaveDataSchema.js. Deployed and committed: 4d74932"
+      "workerNotes": "FIX v2 (b69187e): Increased spawn safety margins and added runtime recovery. Changes: (1) Player._ensureSafeSpawnHeight() now uses SAFE_SPAWN_OFFSET=10 instead of 5, (2) Always uses terrain+offset instead of Math.max with current Y (which could be inside terrain), (3) Added isFinite() validation alongside NaN checks, (4) Player.update() now includes runtime safety check - if player Y is 2+ units below terrain, immediately pops them above (catches any edge cases), (5) SaveManager.distributeGameState() also increased to 10 unit offset and always calculates from terrain height. Build: vite 7.3.1, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T15:20:00Z",
-  "workerStatus": "Worker 1: All 3 subtasks ready-for-review + P0 hotfix (terrain-spawn-fix). Worker 2: All 3 subtasks ready-for-review. Phase 27 COMPLETE — build verified, deployed to gh-pages. Awaiting confirmer."
+  "lastUpdated": "2026-02-15T15:50:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v2 complete (b69187e) - increased spawn offsets + runtime recovery check. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
