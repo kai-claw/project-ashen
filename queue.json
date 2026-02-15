@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v13 (84430b5): ROOT CAUSE FIX - safety functions were LOWERING positions when they should only RAISE them. Player: initial Y 150→300, _ensureSafeSpawnHeight() now only raises never lowers, _checkSpawnSafety() uses aggressive minimums (Y=200-250) for first 30 frames. Camera: far plane 200→500, initial Y 200→350, clampToTerrain() only raises. Main.js: initializeSpawnSafety() only raises positions, graduated safety minimums (aggressive early frames, relaxed later), safety period extended 90→180 frames. CameraController: offsets 50→80, safety frames 120→180. Principle: start VERY high and let gravity bring down naturally. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v14 (a38e235): MAXIMUM SAFETY - All spawn heights dramatically increased. Player: Y=300 default, MIN_SAFE_HEIGHT=300. Camera: Y=350 initial, MIN_CAMERA_Y=320. IIFE: MIN_PLAYER_Y=300, TERRAIN_OFFSET=200. CameraController: _terrainClampOffset=150, _spawnSafetyFrames=240 (~4 seconds). Graduated safety in animate(): first 30 frames Y=280/300, frames 31-120 Y=200/220, frames 121-240 Y=80/100. SaveManager/SaveIntegration/SaveDataSchema all updated for consistency. Principle: start EXTREMELY high (Y=300+), let gravity bring down naturally. Extended safety period to 240 frames. All values consistent across entire codebase. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T18:20:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v13 complete (84430b5) - ROOT CAUSE FIX: Safety functions were LOWERING positions from initial high values when they should only RAISE. Now player starts Y=300, camera Y=350, and all safety code only raises positions, never lowers. Extended safety period to 180 frames with graduated minimums (aggressive first 60 frames). Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-15T18:30:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v14 complete (a38e235) - MAXIMUM SAFETY: All spawn values increased dramatically. Player default Y=300, camera Y=350, safety minimums Y=280-300 for first 30 frames. Extended safety period to 240 frames (~4 seconds at 60fps). Values now consistent across all files: main.js, Player.js, CameraController.js, SaveManager.js, SaveIntegration.js, SaveDataSchema.js. Principle: start EXTREMELY high, gravity brings player down naturally. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
