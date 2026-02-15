@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v8 (54b4da5): Force terrain generation before spawn check. Changes: (1) Force terrain.update() BEFORE reading terrain height to ensure chunks exist, (2) Increased safe spawn offset 8→10 units above terrain, (3) Increased fallback heights 50→80 when terrain unavailable, (4) Reset cameraController._firstFrame to prevent position overwrite, (5) Added pre-render PLAYER position check (was camera-only), (6) Increased camera terrain clamp offset 5→8 units. Root cause: terrain chunks weren't generated at spawn position before height was read, causing invalid fallback to Y=0. Build: vite 7.3.1, deployed to gh-pages."
+      "workerNotes": "FIX v9 (4f2af54): Multi-frame spawn safety with forceGenerateAt. Changes: (1) Added TerrainGenerator.forceGenerateAt() method for immediate chunk loading, (2) Added getHeightAt() alias for compatibility, (3) Changed spawn safety from single-frame to 5-frame check to catch race conditions, (4) Added post-cameraController.update() terrain safety check to prevent camera lerping into terrain, (5) Added CameraController._spawnSafetyFrames for increased terrain clamping during spawn period, (6) Reduced fallback heights to sensible values (offset=5, fallback=50). Root cause: race condition where camera lerp could pull camera into terrain during first frames. Build: vite 7.3.1, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -69,5 +69,5 @@
     }
   ],
   "lastUpdated": "2026-02-15T17:00:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v8 complete (54b4da5) - Force terrain chunk generation BEFORE spawn height calculation. Root cause: terrain chunks weren't generated at spawn position before height was read, causing invalid fallback to Y=0 (below terrain). Now terrain.update() is forced first, and fallback heights increased from 50→80. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v9 complete (4f2af54) - Multi-frame spawn safety with forceGenerateAt(). Changes: (1) TerrainGenerator.forceGenerateAt() for immediate chunk loading, (2) 5-frame spawn safety check instead of single frame, (3) Post-cameraController.update() terrain safety clamp, (4) CameraController spawn safety frames for higher terrain offset. Root cause: camera lerp could pull it into terrain during first frames. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
