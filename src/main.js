@@ -49,6 +49,7 @@ import { createQuestRewards, getQuestRewards } from './systems/QuestRewards.js';
 import { getSaveManager } from './systems/SaveManager.js';
 import { getSaveIntegration } from './systems/SaveIntegration.js';
 import { getSaveUI } from './systems/SaveUI.js';
+import { createMinimapManager, getMinimapManager } from './ui/MinimapManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -548,6 +549,22 @@ dialogueManager.startDialogue = (npc) => {
   originalDialogueStart(npc);
 };
 
+// ========== MINIMAP SYSTEM (Phase 27) ==========
+const minimapManager = createMinimapManager({ size: 150, padding: 15 });
+minimapManager.init({
+  terrain: world.terrain,
+  player: player.mesh,
+  camera: camera,
+  enemyManager: enemyManager,
+  npcManager: world.npcManager,
+  questManager: questManager,
+  villageManager: world.villages,
+  dungeonManager: dungeonManager,
+  gatheringManager: gatheringManager,
+  bossSpawner: bossSpawner,
+});
+gameManager.minimapManager = minimapManager;
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -818,6 +835,11 @@ function animate() {
   
   audioManager.updateListener();
   floatingText.update(delta);
+  
+  // Phase 27: Minimap update
+  if (minimapManager) {
+    minimapManager.update(delta);
+  }
 
   // Check for bloodstain collection
   gameManager.collectBloodstain();
@@ -962,6 +984,7 @@ window.bossSpawner = bossSpawner;
 window.saveManager = saveManager;
 window.saveIntegration = saveIntegration;
 window.saveUI = saveUI;
+window.minimapManager = minimapManager;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;

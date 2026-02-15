@@ -1265,6 +1265,22 @@ export class DungeonManager {
   }
   
   /**
+   * Get dungeon entrance positions for minimap (Phase 27)
+   * Returns array of { x, z, name, difficulty }
+   */
+  getDungeonEntrances() {
+    if (!this.world || !this.world.caveManager) return [];
+    
+    const caves = this.world.caveManager.caves || [];
+    return caves.map(cave => ({
+      x: cave.x,
+      z: cave.z,
+      name: cave.name || 'Cave',
+      difficulty: cave.difficulty || 1,
+    }));
+  }
+  
+  /**
    * Dispose of all resources
    */
   dispose() {

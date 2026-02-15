@@ -851,6 +851,19 @@ export class VillageManager {
   }
   
   /**
+   * Get all village positions for minimap (Phase 27)
+   * Returns array of { x, z, name, type }
+   */
+  getVillagePositions() {
+    return this.villages.map(v => ({
+      x: v.x,
+      z: v.z,
+      name: v.name || 'Village',
+      type: v.type || 'village',
+    }));
+  }
+  
+  /**
    * Get loaded region count (debugging)
    */
   getLoadedRegionCount() {
