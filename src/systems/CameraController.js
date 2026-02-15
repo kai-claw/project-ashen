@@ -27,7 +27,7 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 5; // Minimum units above terrain
+    this._terrainClampOffset = 8; // Minimum units above terrain (increased from 5)
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;

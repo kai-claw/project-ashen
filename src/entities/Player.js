@@ -1337,6 +1337,12 @@ export class Player {
   setWorld(world) {
     this.world = world;
     
+    // Force terrain chunk generation at player position FIRST
+    // This ensures terrain data exists before we try to read it
+    if (world && world.terrain && world.terrain.update) {
+      world.terrain.update(this.mesh.position.x, this.mesh.position.z);
+    }
+    
     // Immediately snap player to terrain height + safety offset
     // This prevents spawning inside terrain (especially in autostart mode)
     this._ensureSafeSpawnHeight();
@@ -1347,8 +1353,8 @@ export class Player {
    * Called on setWorld and can be called again if position is reset.
    */
   _ensureSafeSpawnHeight() {
-    const SAFE_SPAWN_OFFSET = 8; // Spawn 8 units above terrain for safety (increased from 5)
-    const MIN_SAFE_HEIGHT = 50;   // Absolute minimum if terrain isn't ready
+    const SAFE_SPAWN_OFFSET = 10; // Spawn 10 units above terrain for safety (increased from 8)
+    const MIN_SAFE_HEIGHT = 80;   // Absolute minimum if terrain isn't ready (increased from 50)
     
     // If no world reference, use safe default
     if (!this.world) {
