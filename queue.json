@@ -1,6 +1,17 @@
 {
   "phase": 27,
   "name": "Minimap & World Map",
+  "hotfixes": [
+    {
+      "id": "terrain-spawn-fix",
+      "name": "Terrain Spawn Fix",
+      "priority": "P0",
+      "status": "ready-for-review",
+      "worker": 1,
+      "description": "Fix player spawning inside terrain mesh in autostart mode",
+      "workerNotes": "Fixed in Player.js setWorld(): When world is assigned, immediately calculate terrain height at player position and set player Y = terrainY + 5 for safe spawn above terrain. Prevents giant green blob view when camera/player spawn inside terrain mesh."
+    }
+  ],
   "subtasks": [
     {
       "id": "minimap-core",
@@ -57,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T04:05:00Z",
-  "workerStatus": "Worker 1: All 3 subtasks ready-for-review. Worker 2: All 3 subtasks ready-for-review. Phase 27 COMPLETE — build verified, deployed to gh-pages. Awaiting confirmer."
+  "lastUpdated": "2026-02-15T15:20:00Z",
+  "workerStatus": "Worker 1: All 3 subtasks ready-for-review + P0 hotfix (terrain-spawn-fix). Worker 2: All 3 subtasks ready-for-review. Phase 27 COMPLETE — build verified, deployed to gh-pages. Awaiting confirmer."
 }
