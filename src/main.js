@@ -1210,6 +1210,70 @@ function animate() {
   composer.render();
 }
 
+// ========== PRE-RENDER INITIALIZATION (Autostart Spawn Safety) ==========
+// This runs ONCE before the first frame to guarantee safe positions
+// Critical for ?autostart=true mode where terrain/player might not be synced
+(function initializeSpawnSafety() {
+  const INIT_SAFE_OFFSET = 40;
+  const INIT_FALLBACK_Y = 100;
+  
+  // Step 1: Force terrain chunk generation at player position
+  if (world.terrain && world.terrain.forceGenerateAt) {
+    world.terrain.forceGenerateAt(player.mesh.position.x, player.mesh.position.z);
+  }
+  
+  // Step 2: Calculate safe player Y
+  let terrainY = 0;
+  let terrainValid = false;
+  if (world.terrain && world.terrain.getTerrainHeight) {
+    terrainY = world.terrain.getTerrainHeight(player.mesh.position.x, player.mesh.position.z);
+    terrainValid = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
+  }
+  
+  const safePlayerY = terrainValid ? terrainY + INIT_SAFE_OFFSET : INIT_FALLBACK_Y;
+  
+  // Step 3: If player is below safe height, fix it
+  if (player.mesh.position.y < safePlayerY) {
+    console.log(`[Main:Init] Player spawn safety: Y ${player.mesh.position.y.toFixed(2)} -> ${safePlayerY.toFixed(2)}`);
+    player.mesh.position.y = safePlayerY;
+    if (player.velocity) player.velocity.y = 0;
+  }
+  
+  // Step 4: Position camera safely behind and above player
+  const camDistance = 8;
+  const camHeight = 5;
+  const safeCamY = player.mesh.position.y + camHeight + 10; // Extra margin
+  const safeCamZ = player.mesh.position.z + camDistance;
+  
+  // Ensure camera terrain at that position is clear
+  if (world.terrain && world.terrain.forceGenerateAt) {
+    world.terrain.forceGenerateAt(player.mesh.position.x, safeCamZ);
+  }
+  
+  let camTerrainY = 0;
+  if (world.terrain && world.terrain.getTerrainHeight) {
+    camTerrainY = world.terrain.getTerrainHeight(player.mesh.position.x, safeCamZ);
+    if (isNaN(camTerrainY) || !isFinite(camTerrainY)) camTerrainY = terrainY;
+  }
+  
+  const finalCamY = Math.max(safeCamY, camTerrainY + INIT_SAFE_OFFSET);
+  
+  camera.position.set(player.mesh.position.x, finalCamY, safeCamZ);
+  if (cameraController && cameraController.currentPos) {
+    cameraController.currentPos.set(player.mesh.position.x, finalCamY, safeCamZ);
+  }
+  if (cameraController) {
+    cameraController._firstFrame = false;
+    cameraController._spawnSafetyFrames = 90; // Extended safety period
+  }
+  
+  camera.lookAt(player.mesh.position.x, player.mesh.position.y + 2, player.mesh.position.z);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  
+  console.log(`[Main:Init] Spawn safety complete: player=(${player.mesh.position.x.toFixed(1)}, ${player.mesh.position.y.toFixed(1)}, ${player.mesh.position.z.toFixed(1)}), camera=(${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)})`);
+})();
+
 animate();
 
 // Export for debugging

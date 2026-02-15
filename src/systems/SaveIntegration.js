@@ -895,10 +895,18 @@ class SaveIntegration {
     const camera = this.systems.camera;
     
     // Step 1: Force terrain chunk generation at spawn position
+    // CRITICAL: Use forceGenerateAt, NOT update - update() is a no-op if same chunk
     const terrain = gm?.player?.world?.terrain || this.systems.terrain;
-    if (terrain && terrain.update && playerMesh) {
+    if (terrain && playerMesh) {
       // Force chunk generation at player position FIRST
-      terrain.update(playerMesh.position.x, playerMesh.position.z);
+      if (terrain.forceGenerateAt) {
+        terrain.forceGenerateAt(playerMesh.position.x, playerMesh.position.z);
+      } else if (terrain.update) {
+        // Fallback: reset tracking to force update to work
+        terrain.lastPlayerChunkX = null;
+        terrain.lastPlayerChunkZ = null;
+        terrain.update(playerMesh.position.x, playerMesh.position.z);
+      }
     }
     
     // Step 2: Calculate and apply safe player Y
