@@ -28,8 +28,34 @@
       "worker": 1,
       "description": "Fast travel system: discovered crucibles/bonfires, click-to-travel, confirmation dialog, loading tips, transition effects",
       "workerNotes": "Created FastTravelManager.js with: (1) Location discovery system with localStorage persistence, (2) Starting bonfire auto-discovered, (3) Discovery notification popup, (4) Confirmation dialog showing destination and distance, (5) Combat/dungeon/boss fight restrictions, (6) Fade out/in transitions (1s each), (7) Loading screen with random gameplay tips from 20+ tips pool, (8) Progress bar animation, (9) Chunk refresh after teleport (terrain, foliage, villages, ruins, caves), (10) Autosave trigger after arrival, (11) Arrival notification, (12) Double-click on minimap bonfires triggers fast travel, (13) Waypoint travel support, (14) Save/load data integration, (15) ESC to cancel confirmation"
+    },
+    {
+      "id": "world-map-ui",
+      "name": "WorldMapUI.js",
+      "priority": "P0",
+      "status": "ready-for-review",
+      "worker": 2,
+      "description": "Full-screen map overlay (Tab key toggle), pan/zoom, fog of war, region names, filter buttons, search function",
+      "workerNotes": "Created WorldMapUI.js with: (1) Full-screen overlay with Tab key toggle, (2) Mouse drag + WASD panning, (3) Scroll wheel zoom with 4 levels (0.5x, 1x, 2x, 4x), (4) Terrain rendering with biome colors, (5) Fog of war integration with DiscoveryManager, (6) Region names displayed at centers, (7) Sidebar with filter buttons (quests, NPCs, villages, dungeons, bonfires, resources, bosses), (8) Legend showing all icon types, (9) Search function with dropdown results, (10) Coordinate display on hover, (11) Click POI for details, (12) Double-click bonfires for fast travel, (13) Exploration progress stats, (14) C key to center on player, (15) Save/load zoom and pan position"
+    },
+    {
+      "id": "discovery-system",
+      "name": "DiscoveryManager.js",
+      "priority": "P0",
+      "status": "ready-for-review",
+      "worker": 2,
+      "description": "Track explored areas, reveal map as player explores, discovery notifications, XP bonus, save/load state",
+      "workerNotes": "Created DiscoveryManager.js with: (1) Chunk-based exploration tracking (20m chunks), (2) 50m reveal radius around player, (3) Three fog levels: unexplored (black), seen (dim), current (clear), (4) 'Location Discovered' notifications with icons and XP rewards, (5) Discovery XP bonuses (villages 50XP, dungeons 75XP, bonfires 25XP, regions 100XP), (6) Region discovery tracking with progress percentage, (7) Region completion rewards (250XP), (8) World completion achievement (1000XP), (9) Auto-reveal around villages, (10) Save/load discovery state with compressed chunk data, (11) Exploration stats API for UI integration, (12) Quest system hooks for exploration quests"
+    },
+    {
+      "id": "map-polish",
+      "name": "Map Polish",
+      "priority": "P1",
+      "status": "in-progress",
+      "worker": 2,
+      "description": "Minimap transparency slider, map legend, coordinate display, quest path lines, achievements"
     }
   ],
-  "lastUpdated": "2026-02-15T03:55:00Z",
-  "workerStatus": "Worker 1: Phase 27 COMPLETE — all 3 subtasks ready-for-review. Build verified, deployed to gh-pages. Awaiting confirmer."
+  "lastUpdated": "2026-02-15T03:35:00Z",
+  "workerStatus": "Worker 1: All 3 subtasks ready-for-review. Worker 2: Starting world-map-ui."
 }

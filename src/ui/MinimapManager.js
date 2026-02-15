@@ -80,6 +80,16 @@ export class MinimapManager {
     this.iconSources = [];
     this.customWaypoint = null; // Player-placed waypoint
     
+    // Opacity/transparency (0.3 to 1.0)
+    this.opacity = options.opacity || 0.85;
+    
+    // Map ping system
+    this.pings = []; // { x, z, timestamp, color }
+    this.pingDuration = 3000; // ms
+    
+    // Waypoint distance display
+    this.showWaypointDistance = true;
+    
     // Create DOM elements
     this._createMinimapDOM();
     
@@ -221,6 +231,25 @@ export class MinimapManager {
       z-index: 10;
     `;
     this._updateZoomIndicator();
+    
+    // Waypoint distance display
+    this.waypointDistDisplay = document.createElement('div');
+    this.waypointDistDisplay.style.cssText = `
+      position: absolute;
+      bottom: ${this.size + this.padding + 5}px;
+      right: 0;
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(0, 255, 255, 0.5);
+      border-radius: 4px;
+      color: #00ffff;
+      font-size: 11px;
+      text-shadow: 0 0 3px black;
+      pointer-events: none;
+      z-index: 1001;
+      display: none;
+    `;
+    this.container.parentNode?.appendChild(this.waypointDistDisplay);
     
     // Compass ring (decorative)
     this.compassRing = document.createElement('div');
@@ -1060,10 +1089,25 @@ export class MinimapManager {
     if (now - this.lastUpdateTime < this.updateInterval) return;
     this.lastUpdateTime = now;
     
+    // Update pings (remove expired)
+    this._updatePings();
+    
+    // Update waypoint distance display
+    this._updateWaypointDistanceDisplay();
+    
     // Update all layers
     this._renderTerrain();
     this._renderIcons();
     this._renderPlayer();
+    
+    // Render pings on icons layer
+    if (this.pings.length > 0 && this.player) {
+      const ctx = this.iconsCtx;
+      const size = this.size * 2;
+      const center = size / 2;
+      const scale = (size / 2) / this.zoomRadius;
+      this._renderPings(ctx, center, scale);
+    }
   }
   
   /**
@@ -1097,6 +1141,122 @@ export class MinimapManager {
     const dx = this.customWaypoint.x - playerPos.x;
     const dz = this.customWaypoint.z - playerPos.z;
     return Math.sqrt(dx * dx + dz * dz);
+  }
+  
+  /**
+   * Set minimap opacity/transparency (0.3 to 1.0)
+   */
+  setOpacity(opacity) {
+    this.opacity = Math.max(0.3, Math.min(1.0, opacity));
+    this.container.style.opacity = this.opacity;
+    localStorage.setItem('ashen-minimap-opacity', this.opacity.toString());
+  }
+  
+  /**
+   * Get current opacity
+   */
+  getOpacity() {
+    return this.opacity;
+  }
+  
+  /**
+   * Load opacity from storage
+   */
+  loadOpacity() {
+    const stored = localStorage.getItem('ashen-minimap-opacity');
+    if (stored) {
+      this.setOpacity(parseFloat(stored));
+    }
+  }
+  
+  /**
+   * Add a ping at world position
+   */
+  addPing(worldX, worldZ, color = '#00ffff') {
+    this.pings.push({
+      x: worldX,
+      z: worldZ,
+      timestamp: performance.now(),
+      color: color
+    });
+    
+    // Limit pings
+    if (this.pings.length > 5) {
+      this.pings.shift();
+    }
+  }
+  
+  /**
+   * Update pings (remove expired)
+   */
+  _updatePings() {
+    const now = performance.now();
+    this.pings = this.pings.filter(ping => now - ping.timestamp < this.pingDuration);
+  }
+  
+  /**
+   * Render pings on minimap
+   */
+  _renderPings(ctx, center, scale) {
+    if (!this.player) return;
+    
+    const now = performance.now();
+    const playerPos = this.player.position || this.player;
+    
+    for (const ping of this.pings) {
+      const age = now - ping.timestamp;
+      const alpha = 1 - (age / this.pingDuration);
+      const pulseScale = 1 + Math.sin(age / 100) * 0.3;
+      
+      // Convert world to screen position
+      const dx = ping.x - playerPos.x;
+      const dz = ping.z - playerPos.z;
+      const screenX = center + dx * scale;
+      const screenY = center + dz * scale;
+      
+      // Clamp to minimap bounds
+      const distFromCenter = Math.sqrt((screenX - center) ** 2 + (screenY - center) ** 2);
+      if (distFromCenter > this.size - 10) continue;
+      
+      // Draw ping ring
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, 8 * pulseScale, 0, Math.PI * 2);
+      ctx.strokeStyle = ping.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.stroke();
+      
+      // Inner dot
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, 3, 0, Math.PI * 2);
+      ctx.fillStyle = ping.color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+      
+      ctx.globalAlpha = 1;
+    }
+  }
+  
+  /**
+   * Update waypoint distance display
+   */
+  _updateWaypointDistanceDisplay() {
+    if (!this.waypointDistDisplay) return;
+    
+    const distance = this.getWaypointDistance();
+    
+    if (distance !== null && this.showWaypointDistance) {
+      let distText;
+      if (distance < 10) {
+        distText = `${distance.toFixed(1)}m`;
+      } else {
+        distText = `${Math.round(distance)}m`;
+      }
+      this.waypointDistDisplay.textContent = `📍 ${distText}`;
+      this.waypointDistDisplay.style.display = 'block';
+    } else {
+      this.waypointDistDisplay.style.display = 'none';
+    }
   }
   
   /**

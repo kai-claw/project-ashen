@@ -51,6 +51,8 @@ import { getSaveIntegration } from './systems/SaveIntegration.js';
 import { getSaveUI } from './systems/SaveUI.js';
 import { createMinimapManager, getMinimapManager } from './ui/MinimapManager.js';
 import { createFastTravelManager, getFastTravelManager } from './systems/FastTravelManager.js';
+import { createWorldMapUI, getWorldMapUI } from './ui/WorldMapUI.js';
+import { createDiscoveryManager, getDiscoveryManager } from './ui/DiscoveryManager.js';
 
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
@@ -585,6 +587,36 @@ gameManager.fastTravelManager = fastTravelManager;
 // Connect fast travel to minimap
 minimapManager.setFastTravelManager(fastTravelManager);
 
+// ========== DISCOVERY SYSTEM (Phase 27) ==========
+const discoveryManager = createDiscoveryManager({ revealRadius: 50, chunkSize: 20 });
+discoveryManager.init({
+  player: player.mesh,
+  terrain: world.terrain,
+  gameManager: gameManager,
+  questManager: questManager,
+  villageManager: world.villages,
+  dungeonManager: dungeonManager,
+});
+gameManager.discoveryManager = discoveryManager;
+
+// ========== WORLD MAP UI (Phase 27) ==========
+const worldMapUI = createWorldMapUI();
+worldMapUI.init({
+  terrain: world.terrain,
+  player: player.mesh,
+  discoveryManager: discoveryManager,
+  questManager: questManager,
+  villageManager: world.villages,
+  dungeonManager: dungeonManager,
+  npcManager: world.npcManager,
+  enemyManager: enemyManager,
+  bossSpawner: bossSpawner,
+  gatheringManager: gatheringManager,
+  gameManager: gameManager,
+  minimapManager: minimapManager,
+});
+gameManager.worldMapUI = worldMapUI;
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -859,6 +891,11 @@ function animate() {
   // Phase 27: Minimap update
   if (minimapManager) {
     minimapManager.update(delta);
+  }
+  
+  // Phase 27: Discovery system update (fog of war, POI discovery)
+  if (discoveryManager) {
+    discoveryManager.update(delta);
   }
 
   // Check for bloodstain collection
