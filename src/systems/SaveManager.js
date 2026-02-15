@@ -586,8 +586,8 @@ class SaveManager {
       const pos = saveData.player.position;
       let safeY = pos.y;
       let terrainY = 0;
-      const SAFE_SPAWN_OFFSET = 30; // Spawn 30 units above terrain for safety (increased from 10)
-      const MIN_SAFE_HEIGHT = 80;   // Absolute minimum safe height (increased from 50)
+      const SAFE_SPAWN_OFFSET = 60; // Spawn 60 units above terrain - very aggressive (was 30)
+      const MIN_SAFE_HEIGHT = 150;  // Absolute minimum safe height (was 80)
       
       // Ensure player spawns above terrain (prevents spawning inside terrain mesh)
       // This is critical for autostart mode where terrain may not be fully ready

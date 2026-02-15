@@ -30,12 +30,12 @@ export const SAVE_SLOT_TYPE = {
 export function getDefaultPlayerData() {
   return {
     // Position & Rotation
-    // NOTE: Y is set to 50 as safe default well above terrain (terrain at origin is ~0)
+    // NOTE: Y is set to 100 as safe default well above terrain (terrain at origin is ~0)
     // The actual spawn height will be recalculated by spawn safety systems
-    // High initial value prevents "green blob" bug in autostart mode
-    position: { x: 0, y: 50, z: 5 },
+    // VERY high initial value prevents "green blob" bug in autostart mode
+    position: { x: 0, y: 100, z: 5 },
     rotation: { x: 0, y: 0, z: 0 },
-    checkpoint: { x: 0, y: 50, z: 5 },
+    checkpoint: { x: 0, y: 100, z: 5 },
     
     // Core Stats
     health: 100,

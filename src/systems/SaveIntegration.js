@@ -887,8 +887,8 @@ class SaveIntegration {
     // Solution: Use VERY high initial spawn, then let gravity pull down safely
     // This ensures first frame ALWAYS renders above terrain
     
-    const AUTOSTART_SAFE_OFFSET = 50; // Spawn this far above calculated terrain (was 15)
-    const FALLBACK_SAFE_Y = 100;      // Use this if terrain unavailable (was 80)
+    const AUTOSTART_SAFE_OFFSET = 80; // Spawn this far above calculated terrain - very aggressive (was 50)
+    const FALLBACK_SAFE_Y = 150;      // Use this if terrain unavailable (was 100)
     
     const playerMesh = this.systems.player; // player.mesh passed during init
     const gm = this.systems.gameManager;
@@ -937,14 +937,14 @@ class SaveIntegration {
     }
     
     // Step 3: Force camera to safe position as well
-    // Camera must be GUARANTEED above terrain on first frame - use very high offset
+    // Camera must be GUARANTEED above terrain on first frame - use VERY high offset
     if (camera && playerMesh) {
       const cameraController = gm?.cameraController;
-      const camOffset = 20;  // Camera should be this far above player (was 8)
+      const camOffset = 30;  // Camera should be this far above player - aggressive (was 20)
       const safeCamY = playerMesh.position.y + camOffset;
       
       // Force camera position directly - well behind and above player
-      const camZ = playerMesh.position.z + 12; // Behind player (was 8)
+      const camZ = playerMesh.position.z + 15; // Behind player (was 12)
       camera.position.set(playerMesh.position.x, safeCamY, camZ);
       
       // Also update camera controller's internal position to prevent lerp issues
@@ -955,7 +955,7 @@ class SaveIntegration {
         // Reset first frame flag to prevent snap to bad position
         cameraController._firstFrame = false;
         // Extend spawn safety frames significantly
-        cameraController._spawnSafetyFrames = 60; // Was 30
+        cameraController._spawnSafetyFrames = 120; // Was 60
         // Increase terrain clamp offset during spawn
         cameraController._terrainClampOffset = 20; // Was 10
       }

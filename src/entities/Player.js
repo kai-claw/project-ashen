@@ -120,10 +120,11 @@ export class Player {
     this.gltfModel = null;
 
     // Create mesh container
-    // CRITICAL: Start at safe height to prevent spawning inside terrain during autostart
-    // This will be adjusted by _ensureSafeSpawnHeight() when world is set
+    // CRITICAL: Start EXTREMELY high to prevent spawning inside terrain during autostart
+    // This ensures first frame renders above terrain. Gravity will bring player down naturally.
+    // Position will be properly adjusted by _ensureSafeSpawnHeight() when world is set.
     this.mesh = new THREE.Group();
-    this.mesh.position.set(0, 100, 5);
+    this.mesh.position.set(0, 150, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)
     this._createFallbackMesh();
@@ -1413,8 +1414,8 @@ export class Player {
     if (this._spawnSafetyFrames <= 0) return;
     this._spawnSafetyFrames--;
     
-    const SAFE_SPAWN_OFFSET = 25; // Increased from 8
-    const MIN_SAFE_HEIGHT = 100;  // Increased from 50
+    const SAFE_SPAWN_OFFSET = 60; // Very aggressive (was 25)
+    const MIN_SAFE_HEIGHT = 150;  // Very high fallback (was 100)
     
     if (!this.world) {
       // No world yet - ensure minimum safe height
