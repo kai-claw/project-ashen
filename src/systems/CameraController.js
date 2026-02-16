@@ -228,22 +228,27 @@ export class CameraController {
    * If terrain isn't ready, use safe default (y=50).
    */
   clampToTerrain() {
+    // Check if we're in autostart mode for extra aggressive safety
+    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
+    
     // Track spawn safety frames
     const inSpawnSafety = this._spawnSafetyFrames > 0;
     if (inSpawnSafety) {
       this._spawnSafetyFrames--;
     }
     
-    // CRITICAL: Always enforce absolute minimum camera Y (increased to 30)
-    const absoluteMinY = this._minCameraY || 30;
+    // CRITICAL: Always enforce absolute minimum camera Y
+    // Use higher minimum in autostart mode to prevent green blob bug
+    const absoluteMinY = this._minCameraY || (isAutostart ? 50 : 30);
     if (this.currentPos.y < absoluteMinY) {
       this.currentPos.y = absoluteMinY;
     }
     
     // If no terrain, use fallback height (especially important during spawn safety)
+    const fallbackY = isAutostart ? 60 : 50;
     if (!this.terrain) {
-      if (this.currentPos.y < 50) {
-        this.currentPos.y = 50;
+      if (this.currentPos.y < fallbackY) {
+        this.currentPos.y = fallbackY;
       }
       return;
     }
@@ -251,8 +256,8 @@ export class CameraController {
     // Per task spec: use TerrainManager.getHeightAt(x,z)
     const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
     if (!getHeight) {
-      if (this.currentPos.y < 50) {
-        this.currentPos.y = 50;
+      if (this.currentPos.y < fallbackY) {
+        this.currentPos.y = fallbackY;
       }
       return;
     }
@@ -261,8 +266,8 @@ export class CameraController {
     
     // If terrain returns invalid value, use fallback
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-      if (this.currentPos.y < 50) {
-        this.currentPos.y = 50;
+      if (this.currentPos.y < fallbackY) {
+        this.currentPos.y = fallbackY;
       }
       return;
     }
@@ -270,12 +275,18 @@ export class CameraController {
     // Use higher offset during spawn safety to guarantee camera is above terrain
     // During normal gameplay, use standard offset (still 15 units for safety)
     // Per task spec: terrain height + 5 for player, using 15+ for camera to ensure visibility
-    const offset = inSpawnSafety ? Math.max(this._terrainClampOffset, 20) : this._terrainClampOffset;
+    // In autostart mode, use even higher offsets
+    let offset;
+    if (inSpawnSafety) {
+      offset = isAutostart ? Math.max(this._terrainClampOffset, 30) : Math.max(this._terrainClampOffset, 20);
+    } else {
+      offset = isAutostart ? 20 : this._terrainClampOffset;
+    }
     const minY = Math.max(terrainY + offset, absoluteMinY);
     
     if (this.currentPos.y < minY) {
       if (inSpawnSafety) {
-        console.warn(`[CameraController] Camera below terrain + offset (${this.currentPos.y.toFixed(2)} < ${minY.toFixed(2)}), correcting`);
+        console.warn(`[CameraController] Camera below terrain + offset (${this.currentPos.y.toFixed(2)} < ${minY.toFixed(2)}), correcting${isAutostart ? ' [AUTOSTART]' : ''}`);
       }
       this.currentPos.y = minY;
     }

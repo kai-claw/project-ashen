@@ -941,24 +941,38 @@ class SaveIntegration {
    * Start a new game
    */
   startNewGame() {
+    // Check if we're in autostart mode - use extra aggressive safety
+    const isAutostart = window.AUTOSTART_MODE === true;
+    
     // Reset all game state to defaults
     const defaultData = createDefaultSaveData(0);
     this.saveManager?.distributeGameState(defaultData);
     
     // Spawn safety: Use terrain height + 5 or fallback to y=50
+    // Per task spec: TerrainManager.getHeightAt(x,z) + 5 for safe spawn height
+    // If terrain isn't ready, use safe default (y=50)
     const SAFE_OFFSET = 5;
     const FALLBACK_Y = 50;
-    const CAMERA_OFFSET = 15;  // Increased from 8 for extra safety
+    const CAMERA_OFFSET = isAutostart ? 30 : 15;           // Extra height in autostart mode
+    const MIN_CAMERA_Y = isAutostart ? 50 : 30;            // Higher minimum in autostart mode
+    const CAMERA_TERRAIN_OFFSET = isAutostart ? 25 : 15;   // Camera above terrain offset
     
     const playerMesh = this.systems.player;
     const gm = this.systems.gameManager;
     const camera = this.systems.camera;
     const terrain = gm?.player?.world?.terrain || this.systems.terrain;
     
-    // Force terrain chunk generation at spawn position
+    // Force terrain chunk generation at spawn position and surrounding area
     if (terrain && playerMesh) {
       if (terrain.forceGenerateAt) {
-        terrain.forceGenerateAt(playerMesh.position.x, playerMesh.position.z);
+        // Generate 3x3 grid of chunks around player for better coverage
+        const px = playerMesh.position.x;
+        const pz = playerMesh.position.z;
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            terrain.forceGenerateAt(px + dx * 64, pz + dz * 64);
+          }
+        }
       } else if (terrain.update) {
         terrain.lastPlayerChunkX = null;
         terrain.lastPlayerChunkZ = null;
@@ -980,7 +994,7 @@ class SaveIntegration {
       }
       
       const safeY = terrainReady ? terrainY + SAFE_OFFSET : FALLBACK_Y;
-      console.log(`[SaveIntegration] Player spawn: Y=${safeY} (terrain=${terrainY}, ready=${terrainReady})`);
+      console.log(`[SaveIntegration] Player spawn: Y=${safeY} (terrain=${terrainY}, ready=${terrainReady})${isAutostart ? ' [AUTOSTART]' : ''}`);
       playerMesh.position.y = safeY;
       
       if (gm?.player?.velocity) {
@@ -996,6 +1010,11 @@ class SaveIntegration {
       const camX = playerMesh.position.x;
       const camZ = playerMesh.position.z + 6;
       
+      // Force terrain generation at camera position
+      if (terrain && terrain.forceGenerateAt) {
+        terrain.forceGenerateAt(camX, camZ);
+      }
+      
       // Calculate camera Y: start with player Y + offset
       let safeCamY = playerMesh.position.y + CAMERA_OFFSET;
       
@@ -1006,12 +1025,15 @@ class SaveIntegration {
         if (getHeight) {
           const camTerrainY = getHeight.call(terrain, camX, camZ);
           if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-            // Camera must be at least CAMERA_OFFSET above terrain AT ITS OWN POSITION
-            const minCamY = Math.max(camTerrainY + CAMERA_OFFSET, 30); // 30 = absolute minimum (increased from 15)
+            // Camera must be at least CAMERA_TERRAIN_OFFSET above terrain AT ITS OWN POSITION
+            const minCamY = Math.max(camTerrainY + CAMERA_TERRAIN_OFFSET, MIN_CAMERA_Y);
             safeCamY = Math.max(safeCamY, minCamY);
           }
         }
       }
+      
+      // Enforce absolute minimum
+      safeCamY = Math.max(safeCamY, MIN_CAMERA_Y);
       
       camera.position.set(camX, safeCamY, camZ);
       
@@ -1020,16 +1042,18 @@ class SaveIntegration {
           cameraController.currentPos.set(camX, safeCamY, camZ);
         }
         cameraController._firstFrame = false;
-        // CRITICAL: Use higher safety values to match main.js IIFE
-        // 300 frames (~5 seconds) and 20 unit offset for reliable terrain safety
-        cameraController._spawnSafetyFrames = 300;    // Increased from 120
-        cameraController._terrainClampOffset = 20;    // Increased from 8
-        cameraController._minCameraY = 30;            // Set absolute minimum
+        // CRITICAL: Use higher safety values in autostart mode
+        // Extended safety period (10 seconds in autostart mode) for reliable terrain safety
+        cameraController._spawnSafetyFrames = isAutostart ? 600 : 300;
+        cameraController._terrainClampOffset = isAutostart ? 30 : 20;
+        cameraController._minCameraY = MIN_CAMERA_Y;
       }
       
       camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1.5, playerMesh.position.z);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld(true);
+      
+      console.log(`[SaveIntegration] Camera positioned at Y=${safeCamY.toFixed(2)}${isAutostart ? ' [AUTOSTART]' : ''}`);
     }
     
     // Enable Player's spawn safety checks
