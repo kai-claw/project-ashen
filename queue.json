@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v31 (e3ea370): TERRAIN CONFIRMATION REQUIRED. Root cause: camera descended before terrain mesh rendered. Fix: (1) Camera starts at Y=1500 in autostart, (2) Player starts at Y=800 in autostart, (3) Camera Y-lock requires BOTH 15s elapsed AND 600 frames of terrain confirmation, (4) Spawn safety frames no longer decrement during Y-lock, (5) Safety offsets: player +500, camera +600 above terrain, (6) Fallback Y values: player 1000, camera 1200. Key insight: terrain height queries work before mesh renders - must wait for mesh. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v32 (00d84dd): FOUND ROOT CAUSE. SaveIntegration.startNewGame() was lowering camera from Y=1500 to Y=900 BEFORE main.js IIFE could capture initial position. Fix: (1) startNewGame() now SKIPS spawn positioning in autostart mode - only resets game state, (2) main.js IIFE handles all spawn positioning with high values (camera Y=1500, player Y=800), (3) Player.update() keeps player at Y=800 during spawn safety with NO gravity, (4) Player._checkSpawnSafety() only enforces floor of Y=500 in autostart, doesn't reposition. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T08:10:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v31 complete (e3ea370) - TERRAIN CONFIRMATION REQUIRED. Fixed root cause: camera was descending before terrain MESH rendered. Now camera Y-lock requires BOTH 15s elapsed AND 600 frames of confirmed terrain. Initial positions: camera Y=1500, player Y=800. Build verified, deployed. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T08:20:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v32 complete (00d84dd) - FOUND ROOT CAUSE. SaveIntegration.startNewGame() was overwriting camera Y=1500 with Y=900 before main.js IIFE. Fix: startNewGame() now skips spawn positioning in autostart mode. main.js IIFE handles all positioning. Build verified, deployed. Ready for confirmer verification."
 }
