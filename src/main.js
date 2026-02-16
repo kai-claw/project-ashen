@@ -132,8 +132,8 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 // CRITICAL: Start camera EXTREMELY high to prevent spawning inside terrain during autostart
 // This ensures the first rendered frame is ALWAYS above any possible terrain height
 // The camera will be repositioned correctly once terrain is ready
-// Using Y=350 to guarantee we're above player start height of 300
-camera.position.set(0, 350, 15);
+// Using Y=500 to guarantee we're WELL above any possible terrain (max ~25)
+camera.position.set(0, 500, 15);
 camera.lookAt(0, 0, 0);
 
 // DEBUG objects removed - terrain now rendering with MeshBasicMaterial
@@ -681,22 +681,22 @@ function animate() {
     const isEarlyFrame = (frameNum <= 120);     // First 120 frames - aggressive
     
     // Graduated minimums - start VERY high, gradually allow lower as terrain stabilizes
-    // First 30 frames: absolute safety (Y=280/300)
-    // Frames 31-120: aggressive safety (Y=200/220)
-    // Frames 121-240: normal safety (Y=80/100)
+    // First 30 frames: MAXIMUM safety (Y=350/400)
+    // Frames 31-120: aggressive safety (Y=280/320)
+    // Frames 121-240: normal safety (Y=100/150)
     let MIN_PLAYER_Y, MIN_CAMERA_Y, TERRAIN_OFFSET;
     if (isVeryEarlyFrame) {
-      MIN_PLAYER_Y = 280;
-      MIN_CAMERA_Y = 300;
-      TERRAIN_OFFSET = 150;
+      MIN_PLAYER_Y = 350;
+      MIN_CAMERA_Y = 400;
+      TERRAIN_OFFSET = 300;
     } else if (isEarlyFrame) {
-      MIN_PLAYER_Y = 200;
-      MIN_CAMERA_Y = 220;
-      TERRAIN_OFFSET = 100;
+      MIN_PLAYER_Y = 280;
+      MIN_CAMERA_Y = 320;
+      TERRAIN_OFFSET = 200;
     } else {
-      MIN_PLAYER_Y = 80;
-      MIN_CAMERA_Y = 100;
-      TERRAIN_OFFSET = 50;
+      MIN_PLAYER_Y = 100;
+      MIN_CAMERA_Y = 150;
+      TERRAIN_OFFSET = 80;
     }
     
     if (world.terrain && player.mesh) {
@@ -911,9 +911,9 @@ function animate() {
   // Use MUCH larger offsets during spawn safety period to prevent green blob bug
   {
     const isSpawnSafety = spawnSafetyFramesRemaining > 0;
-    const ABSOLUTE_MIN_Y = isSpawnSafety ? 250 : 10;
+    const ABSOLUTE_MIN_Y = isSpawnSafety ? 350 : 10;
     const CAM_TERRAIN_OFFSET = isSpawnSafety ? 
-      (spawnSafetyFramesRemaining > 180 ? 150 : spawnSafetyFramesRemaining > 120 ? 100 : 50) 
+      (spawnSafetyFramesRemaining > 180 ? 300 : spawnSafetyFramesRemaining > 120 ? 200 : 100) 
       : 8;
     
     // Absolute minimum check FIRST
@@ -1204,8 +1204,9 @@ function animate() {
   // NOTE: During early frames, we use VERY aggressive minimums to prevent green blob bug.
   // Gradually relax as terrain becomes stable.
   // ABSOLUTE MINIMUM is ALWAYS enforced during spawn safety - this is the ultimate safety net.
-  const ABSOLUTE_MIN_CAMERA_Y = 250; // Camera must NEVER be below this during spawn safety
-  const ABSOLUTE_MIN_PLAYER_Y = 200; // Player must NEVER be below this during spawn safety
+  // Terrain max height is ~25 (heightScale), so 350/300 is GUARANTEED safe.
+  const ABSOLUTE_MIN_CAMERA_Y = 350; // Camera must NEVER be below this during spawn safety
+  const ABSOLUTE_MIN_PLAYER_Y = 300; // Player must NEVER be below this during spawn safety
   
   // During spawn safety period, enforce absolute minimums FIRST (before any terrain checks)
   if (spawnSafetyFramesRemaining > 0) {
@@ -1229,20 +1230,23 @@ function animate() {
     
     let MIN_CAMERA_TERRAIN_OFFSET, FALLBACK_CAM_Y, MIN_PLAYER_TERRAIN_OFFSET, FALLBACK_PLAYER_Y;
     if (isVeryEarlyFrame) {
-      MIN_CAMERA_TERRAIN_OFFSET = 150;
-      FALLBACK_CAM_Y = 300;
-      MIN_PLAYER_TERRAIN_OFFSET = 130;
-      FALLBACK_PLAYER_Y = 280;
+      // First 30 frames: MAXIMUM safety - stay VERY high above terrain
+      MIN_CAMERA_TERRAIN_OFFSET = 300;
+      FALLBACK_CAM_Y = 400;
+      MIN_PLAYER_TERRAIN_OFFSET = 280;
+      FALLBACK_PLAYER_Y = 350;
     } else if (isEarlyFrame) {
-      MIN_CAMERA_TERRAIN_OFFSET = 100;
-      FALLBACK_CAM_Y = 220;
-      MIN_PLAYER_TERRAIN_OFFSET = 80;
-      FALLBACK_PLAYER_Y = 200;
+      // Frames 31-120: aggressive safety
+      MIN_CAMERA_TERRAIN_OFFSET = 200;
+      FALLBACK_CAM_Y = 300;
+      MIN_PLAYER_TERRAIN_OFFSET = 180;
+      FALLBACK_PLAYER_Y = 280;
     } else {
-      MIN_CAMERA_TERRAIN_OFFSET = 30;
-      FALLBACK_CAM_Y = 100;
-      MIN_PLAYER_TERRAIN_OFFSET = 20;
-      FALLBACK_PLAYER_Y = 80;
+      // Frames 121-240: normal safety
+      MIN_CAMERA_TERRAIN_OFFSET = 50;
+      FALLBACK_CAM_Y = 120;
+      MIN_PLAYER_TERRAIN_OFFSET = 30;
+      FALLBACK_PLAYER_Y = 100;
     }
     
     const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
@@ -1312,10 +1316,11 @@ function animate() {
 (function initializeSpawnSafety() {
   // CRITICAL: These values must be MUCH higher than any possible terrain
   // Terrain heightScale=25 + baseHeight=0 means max terrain is ~25
-  // We use 300+ to guarantee NO possibility of spawning inside terrain
-  const MIN_PLAYER_Y = 300;  // Absolute minimum - very high above any terrain
-  const MIN_CAMERA_Y = 320;  // Camera even higher than player
-  const TERRAIN_OFFSET = 200; // Massive offset when using terrain height
+  // We use 350+ to guarantee NO possibility of spawning inside terrain
+  // These are the ULTIMATE fallbacks - higher than all other safety checks
+  const MIN_PLAYER_Y = 350;  // Absolute minimum - very high above any terrain
+  const MIN_CAMERA_Y = 400;  // Camera even higher than player
+  const TERRAIN_OFFSET = 300; // Massive offset when using terrain height
   
   // Step 1: Force terrain chunk generation at player position AND surrounding chunks
   // This is critical - we need terrain data to exist before we can trust height queries
@@ -1364,7 +1369,7 @@ function animate() {
   
   // Step 4: Position camera WELL above player - no lerping, direct set
   const camOffsetZ = 12;  // Behind player
-  const camOffsetY = 20;  // Above player's head
+  const camOffsetY = 50;  // Well above player's head (was 20)
   const targetCamY = Math.max(player.mesh.position.y + camOffsetY, MIN_CAMERA_Y);
   const safeCamZ = player.mesh.position.z + camOffsetZ;
   

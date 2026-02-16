@@ -27,7 +27,7 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 150;  // Minimum units above terrain - MAXIMUM safety
+    this._terrainClampOffset = 300;  // Minimum units above terrain - MAXIMUM safety
     this._spawnSafetyFrames = 240;   // Extended safety frames after spawn (4 seconds at 60fps)
     
     // Smooth lock-on transition
@@ -216,7 +216,7 @@ export class CameraController {
   clampToTerrain() {
     // ABSOLUTE MINIMUM: During spawn safety, camera must NEVER be below this value
     // regardless of terrain calculations. This is the ultimate safety net.
-    const ABSOLUTE_MIN_DURING_SAFETY = 250;
+    const ABSOLUTE_MIN_DURING_SAFETY = 350;
     const NORMAL_MIN_Y = 5; // After safety period, allow camera closer to ground
     
     // During spawn safety, enforce absolute minimum FIRST
@@ -242,7 +242,7 @@ export class CameraController {
     // Check for invalid terrain values
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
       // Terrain not ready - already handled by absolute minimum above
-      const FALLBACK_MIN_Y = this._spawnSafetyFrames > 0 ? ABSOLUTE_MIN_DURING_SAFETY : 100;
+      const FALLBACK_MIN_Y = this._spawnSafetyFrames > 0 ? ABSOLUTE_MIN_DURING_SAFETY : 150;
       if (this.currentPos.y < FALLBACK_MIN_Y) {
         console.warn(`[CameraController] Terrain invalid, raising to fallback Y=${FALLBACK_MIN_Y}`);
         this.currentPos.y = FALLBACK_MIN_Y;
@@ -252,15 +252,15 @@ export class CameraController {
     
     // Use MUCH larger offset during spawn safety period to prevent green blob bug
     // Graduated: first 60 frames use max safety, then gradually reduce
-    let offset = this._terrainClampOffset; // 150
+    let offset = this._terrainClampOffset; // 300
     if (this._spawnSafetyFrames > 0) {
       // Extra aggressive for early frames
       if (this._spawnSafetyFrames > 180) {
-        offset = 200; // First 60 frames: MAXIMUM
+        offset = 350; // First 60 frames: MAXIMUM
       } else if (this._spawnSafetyFrames > 120) {
-        offset = 150; // Frames 61-120: very high
+        offset = 250; // Frames 61-120: very high
       } else {
-        offset = 100; // Frames 121-240: aggressive
+        offset = 150; // Frames 121-240: aggressive
       }
       this._spawnSafetyFrames--;
     } else {

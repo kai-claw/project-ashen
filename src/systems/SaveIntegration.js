@@ -884,12 +884,12 @@ class SaveIntegration {
     // The bug: player/camera spawn INSIDE terrain mesh because terrain chunks
     // might not be fully ready when position is calculated
     // 
-    // Solution: Use EXTREMELY high initial spawn (Y=300+), let gravity pull down safely
+    // Solution: Use EXTREMELY high initial spawn (Y=400+), let gravity pull down safely
     // This ensures first frame ALWAYS renders WELL above terrain - no green blob!
     // 
     // KEY: These values MUST match the IIFE in main.js for consistency
-    const AUTOSTART_SAFE_OFFSET = 200; // Spawn this far above calculated terrain - MAXIMUM safety
-    const FALLBACK_SAFE_Y = 300;       // Use this if terrain unavailable - very high
+    const AUTOSTART_SAFE_OFFSET = 350; // Spawn this far above calculated terrain - MAXIMUM safety
+    const FALLBACK_SAFE_Y = 400;       // Use this if terrain unavailable - very high
     
     const playerMesh = this.systems.player; // player.mesh passed during init
     const gm = this.systems.gameManager;
@@ -942,8 +942,8 @@ class SaveIntegration {
     // This prevents the "green blob" bug in autostart mode
     if (camera && playerMesh) {
       const cameraController = gm?.cameraController;
-      const camOffset = 50;   // Camera this far above player - MAXIMUM safety
-      const safeCamY = Math.max(playerMesh.position.y + camOffset, 320); // Absolute minimum 320
+      const camOffset = 80;   // Camera this far above player - MAXIMUM safety
+      const safeCamY = Math.max(playerMesh.position.y + camOffset, 450); // Absolute minimum 450
       
       // Force camera position directly - well behind and above player
       const camZ = playerMesh.position.z + 15; // Behind player
@@ -959,7 +959,7 @@ class SaveIntegration {
         // Extended spawn safety frames for aggressive terrain clamping
         cameraController._spawnSafetyFrames = 240; // Match main.js
         // Very high terrain clamp offset during spawn safety period
-        cameraController._terrainClampOffset = 150; // Match main.js
+        cameraController._terrainClampOffset = 300; // Match main.js
       }
       
       // Look at player

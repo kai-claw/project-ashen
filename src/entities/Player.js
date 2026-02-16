@@ -123,9 +123,9 @@ export class Player {
     // CRITICAL: Start EXTREMELY high to prevent spawning inside terrain during autostart
     // This ensures first frame renders above terrain. Gravity will bring player down naturally.
     // Position will be properly adjusted by _ensureSafeSpawnHeight() when world is set.
-    // Using Y=300 to guarantee we're well above any possible terrain height.
+    // Using Y=400 to guarantee we're well above any possible terrain height (max ~25).
     this.mesh = new THREE.Group();
-    this.mesh.position.set(0, 300, 5);
+    this.mesh.position.set(0, 400, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)
     this._createFallbackMesh();
@@ -1361,8 +1361,8 @@ export class Player {
    * These values MUST match main.js IIFE for consistency in autostart mode.
    */
   _ensureSafeSpawnHeight() {
-    const SAFE_SPAWN_OFFSET = 200; // Units above terrain for safety - MAXIMUM
-    const MIN_SAFE_HEIGHT = 300;   // Absolute minimum (very high to prevent green blob)
+    const SAFE_SPAWN_OFFSET = 300; // Units above terrain for safety - MAXIMUM
+    const MIN_SAFE_HEIGHT = 350;   // Absolute minimum (very high to prevent green blob)
     
     // If no world reference, ensure we're at minimum safe height
     if (!this.world) {
@@ -1432,16 +1432,16 @@ export class Player {
     this._spawnSafetyFrames--;
     
     // CRITICAL: Use VERY high values to prevent green blob bug
-    const SAFE_SPAWN_OFFSET = 150; // Units above terrain to maintain
-    const MIN_SAFE_HEIGHT = 280;   // Absolute minimum Y during safety period
-    const AGGRESSIVE_FIRST_FRAMES = 60; // Extra aggressive for first 60 frames (was 30)
+    const SAFE_SPAWN_OFFSET = 250; // Units above terrain to maintain
+    const MIN_SAFE_HEIGHT = 350;   // Absolute minimum Y during safety period
+    const AGGRESSIVE_FIRST_FRAMES = 60; // Extra aggressive for first 60 frames
     
     const frameNum = 180 - this._spawnSafetyFrames;
     const isEarlyFrame = frameNum <= AGGRESSIVE_FIRST_FRAMES;
     
     // During first 60 frames, use even higher minimum
-    const effectiveMinHeight = isEarlyFrame ? 300 : MIN_SAFE_HEIGHT;
-    const effectiveOffset = isEarlyFrame ? 200 : SAFE_SPAWN_OFFSET;
+    const effectiveMinHeight = isEarlyFrame ? 400 : MIN_SAFE_HEIGHT;
+    const effectiveOffset = isEarlyFrame ? 350 : SAFE_SPAWN_OFFSET;
     
     if (!this.world) {
       // No world yet - ensure minimum safe height

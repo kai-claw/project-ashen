@@ -588,8 +588,8 @@ class SaveManager {
       let terrainY = 0;
       // CRITICAL: These must be VERY high to prevent "green blob" bug in autostart mode
       // Player starts high, gravity brings them down naturally
-      const SAFE_SPAWN_OFFSET = 200; // Spawn 200 units above terrain - MAXIMUM safety
-      const MIN_SAFE_HEIGHT = 300;   // Absolute minimum safe height - very high
+      const SAFE_SPAWN_OFFSET = 350; // Spawn 350 units above terrain - MAXIMUM safety
+      const MIN_SAFE_HEIGHT = 400;   // Absolute minimum safe height - very high
       
       // Ensure player spawns above terrain (prevents spawning inside terrain mesh)
       // This is critical for autostart mode where terrain may not be fully ready
