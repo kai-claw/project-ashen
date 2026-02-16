@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v17 (efa1c96): MAJOR VALUE INCREASE - All spawn safety values raised significantly. Player init Y: 300->400, Camera init Y: 350->500, Terrain offsets: 150-200->300-350, Absolute minimums: 200-250->300-400, Fallbacks: 280-320->350-450. Terrain max is ~25, so 300-400+ guarantees no spawn inside terrain regardless of init order. Updated 6 files: main.js (IIFE, animate safety checks), Player.js (spawn safety), CameraController.js (clampToTerrain), SaveManager.js, SaveIntegration.js, SaveDataSchema.js. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v18 (1102740): SIMPLIFIED APPROACH - Use terrain getHeightAt() + 5 for spawn, fallback to y=50 if terrain not ready. Removed complex graduated offset logic (was Y=300-400). IIFE forces terrain generation then calculates proper height BEFORE first render. Spawn safety frames reduced 240->60 (~1 second). Camera stays 3 units above terrain. Terrain max is ~25, so terrain+5 is sufficient. Updated 6 files: main.js (IIFE, simplified animate checks), Player.js (spawn safety), CameraController.js (clampToTerrain), SaveManager.js, SaveIntegration.js, SaveDataSchema.js. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T02:50:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v17 complete (efa1c96) - MAJOR VALUE INCREASE. Player init Y: 300->400, Camera init Y: 350->500, All terrain offsets raised to 300-350, Absolute minimums raised to 300-400. Terrain max is only ~25, so 300-400+ is GUARANTEED safe. Updated 6 files with consistent values. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T03:15:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v18 complete (1102740) - SIMPLIFIED APPROACH. Now uses terrain getHeightAt() + 5 for spawn (or y=50 fallback). Removed complex graduated offsets. IIFE forces terrain gen THEN calculates height. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
