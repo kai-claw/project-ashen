@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v27 (121f19e): ROOT CAUSE FOUND - SaveIntegration.startNewGame() was overwriting main.js safe positions with lower values (Y=80 instead of Y=300). FIX: Aligned ALL autostart safety values across main.js IIFE, CameraController, SaveIntegration, and Player. Values: Camera min Y: 300, Camera terrain offset: 200, Player fallback Y: 200, Player min Y: 150, Safety frames: 1800 (~30s). Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v28 (4c6e59b): AGGRESSIVE safety margins. Root cause: terrain height queries returning low values before chunks loaded, causing positions to be LOWERED from safe initial values. FIX: (1) Player starts at y=400, camera at y=500 (much higher), (2) NEVER move positions DOWN in IIFE - only up, (3) All safety values increased: TERRAIN_SAFETY_OFFSET=300, MIN_CAM_Y=400, PLAYER_OFFSET=100, PLAYER_FALLBACK=350, (4) Let gravity naturally descend AFTER first safe render. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T07:20:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v27 complete (121f19e) - ROOT CAUSE FIX. SaveIntegration.startNewGame() was overwriting safe positions with lower values. ALL systems now aligned: Camera min Y=300, Player fallback Y=200, Safety frames=1800. Build verified, deployed. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T07:30:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v28 complete (4c6e59b) - AGGRESSIVE safety fix. Player starts y=400, camera y=500, NEVER move DOWN in IIFE. All safety values raised: CAM_MIN=400, TERRAIN_OFFSET=300. Build verified, deployed. Ready for confirmer verification."
 }
