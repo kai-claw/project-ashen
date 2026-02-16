@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v36 (d6fd60e): Root cause fix per spec. Changes: (1) Player spawn uses TerrainManager.getHeightAt(x,z) + 5 per spec, (2) Fallback y=50 if terrain not ready per spec, (3) Camera at terrain + 20 during spawn safety, (4) Extended spawn safety to 300 frames for autostart, (5) Force 7x7 chunk grid generation at spawn, (6) Reset terrain chunk tracking for full update, (7) Pre-render frames to burn in positions, (8) Simplified terrain sampling to exact position per spec. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v37 (1074e3a): Verified fix implementation. TerrainGenerator already has getHeightAt() and forceGenerateAt() methods - forceGenerateAt loads 3x3 chunk grid. Updated getTerrainHeight doc comment. main.js IIFE uses terrain+5 for player spawn, fallback y=50 per spec, camera at terrain+20. CameraController.clampToTerrain() enforces bounds. 300-frame spawn safety window in autostart mode. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T10:10:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v36 complete. Root cause fix per spec: TerrainManager.getHeightAt(x,z) + 5 for player spawn, fallback y=50 if terrain not ready, camera at terrain + 20. Commit d6fd60e. Build verified, deployed to gh-pages. Status: ready-for-review."
+  "lastUpdated": "2026-02-16T10:20:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v37 verified. TerrainGenerator.forceGenerateAt() loads 3x3 chunks, getHeightAt() aliases getTerrainHeight(). main.js IIFE implements spec (terrain+5 player, y=50 fallback, terrain+20 camera). 300-frame spawn safety. Commit 1074e3a. Build verified, deployed. Status: ready-for-review."
 }
