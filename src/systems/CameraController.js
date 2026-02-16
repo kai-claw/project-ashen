@@ -211,16 +211,38 @@ export class CameraController {
    * This prevents the "green blob" bug in autostart mode.
    * 
    * Uses graduated offsets - start VERY high, gradually allow lower positions.
+   * ALWAYS enforces absolute minimum during spawn safety period.
    */
   clampToTerrain() {
-    if (!this.terrain || !this.terrain.getTerrainHeight) return;
+    // ABSOLUTE MINIMUM: During spawn safety, camera must NEVER be below this value
+    // regardless of terrain calculations. This is the ultimate safety net.
+    const ABSOLUTE_MIN_DURING_SAFETY = 250;
+    const NORMAL_MIN_Y = 5; // After safety period, allow camera closer to ground
+    
+    // During spawn safety, enforce absolute minimum FIRST
+    if (this._spawnSafetyFrames > 0) {
+      if (this.currentPos.y < ABSOLUTE_MIN_DURING_SAFETY) {
+        console.warn(`[CameraController] Spawn safety: Raising Y ${this.currentPos.y.toFixed(2)} -> ${ABSOLUTE_MIN_DURING_SAFETY} (absolute minimum)`);
+        this.currentPos.y = ABSOLUTE_MIN_DURING_SAFETY;
+      }
+    }
+    
+    // If no terrain, use fallback
+    if (!this.terrain || !this.terrain.getTerrainHeight) {
+      const FALLBACK_MIN_Y = this._spawnSafetyFrames > 0 ? ABSOLUTE_MIN_DURING_SAFETY : 50;
+      if (this.currentPos.y < FALLBACK_MIN_Y) {
+        console.warn(`[CameraController] No terrain, raising to fallback Y=${FALLBACK_MIN_Y}`);
+        this.currentPos.y = FALLBACK_MIN_Y;
+      }
+      return;
+    }
     
     const terrainY = this.terrain.getTerrainHeight(this.currentPos.x, this.currentPos.z);
     
     // Check for invalid terrain values
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-      // Terrain not ready - use safe fallback (VERY high value)
-      const FALLBACK_MIN_Y = 300; // Was 200 - use much higher for safety
+      // Terrain not ready - already handled by absolute minimum above
+      const FALLBACK_MIN_Y = this._spawnSafetyFrames > 0 ? ABSOLUTE_MIN_DURING_SAFETY : 100;
       if (this.currentPos.y < FALLBACK_MIN_Y) {
         console.warn(`[CameraController] Terrain invalid, raising to fallback Y=${FALLBACK_MIN_Y}`);
         this.currentPos.y = FALLBACK_MIN_Y;
@@ -241,6 +263,9 @@ export class CameraController {
         offset = 100; // Frames 121-240: aggressive
       }
       this._spawnSafetyFrames--;
+    } else {
+      // After safety period, use normal offset
+      offset = 3;
     }
     
     const minY = terrainY + offset;

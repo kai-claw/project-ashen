@@ -908,15 +908,32 @@ function animate() {
   
   // POST-CAMERA-UPDATE SAFETY: Ensure camera didn't get lerped into terrain
   // This catches edge cases where camera smoothing pulls it toward bad positions
-  if (world.terrain && spawnSafetyFramesRemaining >= 0) {
-    const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
-    const CAM_TERRAIN_OFFSET = 8; // Increased from 3 for more safety margin
-    if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-      if (camera.position.y < camTerrainY + CAM_TERRAIN_OFFSET) {
-        const safeCamY = camTerrainY + CAM_TERRAIN_OFFSET + 5;
-        camera.position.y = safeCamY;
-        if (cameraController && cameraController.currentPos) {
-          cameraController.currentPos.y = safeCamY;
+  // Use MUCH larger offsets during spawn safety period to prevent green blob bug
+  {
+    const isSpawnSafety = spawnSafetyFramesRemaining > 0;
+    const ABSOLUTE_MIN_Y = isSpawnSafety ? 250 : 10;
+    const CAM_TERRAIN_OFFSET = isSpawnSafety ? 
+      (spawnSafetyFramesRemaining > 180 ? 150 : spawnSafetyFramesRemaining > 120 ? 100 : 50) 
+      : 8;
+    
+    // Absolute minimum check FIRST
+    if (isSpawnSafety && camera.position.y < ABSOLUTE_MIN_Y) {
+      camera.position.y = ABSOLUTE_MIN_Y;
+      if (cameraController && cameraController.currentPos) {
+        cameraController.currentPos.y = ABSOLUTE_MIN_Y;
+      }
+    }
+    
+    // Then terrain-based check
+    if (world.terrain) {
+      const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
+      if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
+        const minCamY = camTerrainY + CAM_TERRAIN_OFFSET;
+        if (camera.position.y < minCamY) {
+          camera.position.y = minCamY;
+          if (cameraController && cameraController.currentPos) {
+            cameraController.currentPos.y = minCamY;
+          }
         }
       }
     }
@@ -1186,6 +1203,26 @@ function animate() {
   //
   // NOTE: During early frames, we use VERY aggressive minimums to prevent green blob bug.
   // Gradually relax as terrain becomes stable.
+  // ABSOLUTE MINIMUM is ALWAYS enforced during spawn safety - this is the ultimate safety net.
+  const ABSOLUTE_MIN_CAMERA_Y = 250; // Camera must NEVER be below this during spawn safety
+  const ABSOLUTE_MIN_PLAYER_Y = 200; // Player must NEVER be below this during spawn safety
+  
+  // During spawn safety period, enforce absolute minimums FIRST (before any terrain checks)
+  if (spawnSafetyFramesRemaining > 0) {
+    if (camera.position.y < ABSOLUTE_MIN_CAMERA_Y) {
+      console.warn(`[Main] ABSOLUTE safety: Camera Y ${camera.position.y.toFixed(2)} -> ${ABSOLUTE_MIN_CAMERA_Y}`);
+      camera.position.y = ABSOLUTE_MIN_CAMERA_Y;
+      if (cameraController && cameraController.currentPos) {
+        cameraController.currentPos.y = ABSOLUTE_MIN_CAMERA_Y;
+      }
+    }
+    if (player.mesh.position.y < ABSOLUTE_MIN_PLAYER_Y) {
+      console.warn(`[Main] ABSOLUTE safety: Player Y ${player.mesh.position.y.toFixed(2)} -> ${ABSOLUTE_MIN_PLAYER_Y}`);
+      player.mesh.position.y = ABSOLUTE_MIN_PLAYER_Y;
+      if (player.velocity) player.velocity.y = 0;
+    }
+  }
+  
   if (world.terrain) {
     const isVeryEarlyFrame = spawnSafetyFramesRemaining > 210; // First 30 frames
     const isEarlyFrame = spawnSafetyFramesRemaining > 120;     // First 120 frames
@@ -1239,6 +1276,20 @@ function animate() {
     } else if (player.mesh.position.y < FALLBACK_PLAYER_Y) {
       console.warn(`[Main] Pre-render player fallback: Y ${player.mesh.position.y.toFixed(2)} -> ${FALLBACK_PLAYER_Y}`);
       player.mesh.position.y = FALLBACK_PLAYER_Y;
+      if (player.velocity) player.velocity.y = 0;
+    }
+  } else if (spawnSafetyFramesRemaining > 0) {
+    // No terrain available during spawn safety - use absolute fallbacks
+    if (camera.position.y < ABSOLUTE_MIN_CAMERA_Y) {
+      console.warn(`[Main] No terrain, using absolute minimum for camera: Y -> ${ABSOLUTE_MIN_CAMERA_Y}`);
+      camera.position.y = ABSOLUTE_MIN_CAMERA_Y;
+      if (cameraController && cameraController.currentPos) {
+        cameraController.currentPos.y = ABSOLUTE_MIN_CAMERA_Y;
+      }
+    }
+    if (player.mesh.position.y < ABSOLUTE_MIN_PLAYER_Y) {
+      console.warn(`[Main] No terrain, using absolute minimum for player: Y -> ${ABSOLUTE_MIN_PLAYER_Y}`);
+      player.mesh.position.y = ABSOLUTE_MIN_PLAYER_Y;
       if (player.velocity) player.velocity.y = 0;
     }
   }
