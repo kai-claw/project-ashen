@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v32 (00d84dd): FOUND ROOT CAUSE. SaveIntegration.startNewGame() was lowering camera from Y=1500 to Y=900 BEFORE main.js IIFE could capture initial position. Fix: (1) startNewGame() now SKIPS spawn positioning in autostart mode - only resets game state, (2) main.js IIFE handles all spawn positioning with high values (camera Y=1500, player Y=800), (3) Player.update() keeps player at Y=800 during spawn safety with NO gravity, (4) Player._checkSpawnSafety() only enforces floor of Y=500 in autostart, doesn't reposition. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v33 (a226d41): Found CameraController was missing initialization of critical spawn safety variables (_isAutostart, _spawnStartTime, _minimumSafetyMs, _terrainReadyFrames, _terrainConfirmedReady, _minCameraY). These were being referenced but undefined, causing safety logic to silently fail. Fix: (1) Initialize all variables in CameraController constructor with proper autostart detection, (2) Use higher spawn offsets in autostart mode (player +15, camera +30 vs normal +5/+15), (3) Use higher fallback Y values in autostart mode (100 vs 50), (4) Apply fixes consistently across Player.js, CameraController.js, and main.js, (5) Increase initial player Y position in autostart mode to 100. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -69,5 +69,5 @@
     }
   ],
   "lastUpdated": "2026-02-16T08:20:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v32 complete (00d84dd) - FOUND ROOT CAUSE. SaveIntegration.startNewGame() was overwriting camera Y=1500 with Y=900 before main.js IIFE. Fix: startNewGame() now skips spawn positioning in autostart mode. main.js IIFE handles all positioning. Build verified, deployed. Ready for confirmer verification."
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v33 complete (a226d41) - ROOT CAUSE: CameraController missing variable initializations. Fix: Initialize _isAutostart, _spawnStartTime, _minimumSafetyMs, etc. Use higher offsets in autostart mode. Build verified, deployed. Ready for confirmer verification."
 }
