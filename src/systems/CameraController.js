@@ -32,12 +32,13 @@ export class CameraController {
     
     // FIX (P0 TERRAIN SPAWN): Initialize all spawn safety variables
     // These were being referenced but never initialized, causing safety logic to fail
+    // Terrain heightScale is 25, so max terrain is ~25. Safety values must be above this.
     this._isAutostart = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
     this._spawnStartTime = Date.now();
-    this._minimumSafetyMs = this._isAutostart ? 3000 : 1000;  // 3 sec for autostart, 1 sec normally
+    this._minimumSafetyMs = this._isAutostart ? 5000 : 1000;  // 5 sec for autostart (longer for chunk loading)
     this._terrainReadyFrames = 0;
     this._terrainConfirmedReady = false;
-    this._minCameraY = this._isAutostart ? 100 : 30;  // Higher minimum for autostart mode
+    this._minCameraY = this._isAutostart ? 120 : 30;  // Much higher minimum for autostart mode (terrain max is ~25)
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -234,19 +235,20 @@ export class CameraController {
       this._spawnSafetyFrames--;
     }
     
-    // P0 GREEN BLOB FIX: Use moderate minimum - real fix is camera ANGLE not extreme height
-    // Previous: player Y=800, camera Y=1500 = 89° downward angle (terrain fills view)
-    // New: player Y=300, camera Y=310 = normal viewing angle, terrain max is ~25
-    const safetyProgress = inTimeSafety ? 0 : Math.min(1, (timeSinceSpawn - this._minimumSafetyMs) / 10000);
-    let absoluteMinY = this._minCameraY || (isAutostart ? 100 : 30);
+    // P0 GREEN BLOB FIX: Use conservative minimum camera height
+    // Terrain heightScale is 25, so max terrain is ~25. Camera must stay well above this.
+    // In autostart mode, use higher values and transition more slowly to normal gameplay.
+    const safetyProgress = inTimeSafety ? 0 : Math.min(1, (timeSinceSpawn - this._minimumSafetyMs) / 15000);
+    let absoluteMinY = this._minCameraY || (isAutostart ? 120 : 30);
     
-    // In autostart mode, use moderate minimum that decreases as terrain is confirmed
+    // In autostart mode, use high minimum that decreases as terrain is confirmed
     if (isAutostart && (!this._terrainConfirmedReady || inTimeSafety)) {
-      // Keep at safe level until terrain proves reliable
-      absoluteMinY = 100;
+      // Keep at very safe level until terrain proves reliable
+      // This ensures camera is ALWAYS above terrain during initial load
+      absoluteMinY = 120;  // Well above max terrain of ~25
     } else if (isAutostart && this._terrainConfirmedReady && inSpawnSafety) {
       // Gradually lower minimum as spawn safety winds down (smooth descent to normal gameplay)
-      absoluteMinY = Math.max(50, 100 * (1 - safetyProgress)); // Descend from 100 to 50 over 10 seconds
+      absoluteMinY = Math.max(60, 120 * (1 - safetyProgress)); // Descend from 120 to 60 over 15 seconds
     }
     
     if (this.currentPos.y < absoluteMinY) {
@@ -254,8 +256,8 @@ export class CameraController {
     }
     
     // If no terrain, use fallback height
-    // P0 GREEN BLOB FIX: Moderate fallback - terrain max is ~25
-    const fallbackY = isAutostart ? (inTimeSafety ? 100 : 75) : 50;
+    // P0 GREEN BLOB FIX: Conservative fallback - terrain max is ~25
+    const fallbackY = isAutostart ? (inTimeSafety ? 120 : 80) : 50;
     if (!this.terrain) {
       this._terrainReadyFrames = 0;
       if (this.currentPos.y < fallbackY) {
@@ -293,19 +295,19 @@ export class CameraController {
       console.log(`[CameraController] Terrain confirmed ready after ${this._terrainReadyFrames} frames${isAutostart ? ' [AUTOSTART]' : ''}`);
     }
     
-    // P0 GREEN BLOB FIX: Use moderate offset during spawn safety
-    // Real fix is camera ANGLE, not extreme heights - terrain max is ~25
+    // P0 GREEN BLOB FIX: Use conservative offset during spawn safety
+    // Terrain max is ~25 (heightScale). Camera needs to be well above terrain surface.
     // Per task spec: terrain height + 5 for player, using 15+ for camera
     let offset;
     if (inSpawnSafety) {
       if (isAutostart && (!this._terrainConfirmedReady || inTimeSafety)) {
-        // Before terrain is confirmed OR within time safety, use moderate offset
-        offset = 50; // Terrain max is ~25, so 50 gives safe margin
+        // Before terrain is confirmed OR within time safety, use high offset
+        offset = 60; // Terrain max is ~25, so 60 gives very safe margin
       } else if (isAutostart) {
         // After terrain confirmed and time elapsed, gradually reduce offset
-        offset = Math.max(20, 50 * (1 - safetyProgress)); // From 50 to 20
+        offset = Math.max(25, 60 * (1 - safetyProgress)); // From 60 to 25
       } else {
-        offset = Math.max(this._terrainClampOffset, 20);
+        offset = Math.max(this._terrainClampOffset, 25);
       }
     } else {
       offset = this._terrainClampOffset || 15;
