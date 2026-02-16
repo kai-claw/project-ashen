@@ -132,8 +132,9 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 // Initial camera position - will be adjusted by IIFE before first render
 // CRITICAL: In autostart mode, start EXTREMELY high to prevent green blob bug
 // The camera will naturally descend once terrain safety is confirmed
-// Using 300 guarantees we're WELL above any possible terrain during init
-const initialCamY = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true) ? 300 : 60;
+// Using 500 guarantees we're WELL above any possible terrain during init
+// This is the PRIMARY defense against the green blob bug - start HIGH, descend safely
+const initialCamY = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true) ? 500 : 60;
 camera.position.set(0, initialCamY, 11);
 camera.lookAt(0, initialCamY - 10, 5);
 
@@ -679,11 +680,11 @@ function animate() {
     
     // Use EXTREMELY high safety margins in autostart mode to GUARANTEE no green blob
     // The bug occurs when camera is inside terrain mesh, so we use very conservative values
-    // FIX: Using MUCH higher values (200+) for first few hundred frames
-    const TERRAIN_SAFETY_OFFSET = isAutostart ? 200 : 15;  // Units above terrain (EXTREMELY high in autostart)
-    const ABSOLUTE_MIN_CAM_Y = isAutostart ? 250 : 30;     // Absolute minimum camera Y (EXTREMELY high in autostart)
-    const PLAYER_OFFSET = isAutostart ? 50 : 5;            // Player stays well above terrain
-    const PLAYER_FALLBACK_Y = isAutostart ? 200 : 50;      // High fallback if terrain not ready
+    // FIX (P0): Using MUCH higher values (300+) for first few hundred frames
+    const TERRAIN_SAFETY_OFFSET = isAutostart ? 300 : 15;  // Units above terrain (EXTREMELY high in autostart)
+    const ABSOLUTE_MIN_CAM_Y = isAutostart ? 400 : 30;     // Absolute minimum camera Y (EXTREMELY high in autostart)
+    const PLAYER_OFFSET = isAutostart ? 100 : 5;           // Player stays well above terrain
+    const PLAYER_FALLBACK_Y = isAutostart ? 350 : 50;      // High fallback if terrain not ready
     
     // Force terrain generation at current positions
     if (world.terrain && world.terrain.forceGenerateAt) {
@@ -873,9 +874,9 @@ function animate() {
   {
     const isAutostartPostCam = window.AUTOSTART_MODE === true;
     // Use EXTREMELY high offsets in autostart mode - this is the key fix
-    // FIX: Raised to 200+ to guarantee camera is NEVER inside terrain
-    const POST_CAM_TERRAIN_OFFSET = isAutostartPostCam ? 200 : 10;
-    const POST_CAM_MIN_Y = isAutostartPostCam ? 250 : 30;
+    // FIX (P0): Raised to 300+ to guarantee camera is NEVER inside terrain
+    const POST_CAM_TERRAIN_OFFSET = isAutostartPostCam ? 300 : 10;
+    const POST_CAM_MIN_Y = isAutostartPostCam ? 400 : 30;
     
     if (world.terrain) {
       const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
@@ -1173,11 +1174,11 @@ function animate() {
     
     // CRITICAL: Use EXTREMELY conservative values in autostart mode
     // The green blob bug means camera is inside terrain - we MUST guarantee camera is well above
-    // FIX: Using 200+ values to absolutely guarantee no terrain clipping
-    const PLAYER_OFFSET = isAutostart ? 50 : 5;           // Much higher in autostart to guarantee safety
-    const CAMERA_OFFSET = isAutostart ? 200 : 15;         // EXTREMELY high for camera safety in autostart
-    const PLAYER_FALLBACK_Y = isAutostart ? 200 : 50;     // Very high safe default
-    const MIN_CAMERA_Y = isAutostart ? 250 : 30;          // EXTREMELY high minimum in autostart mode
+    // FIX (P0): Using 300+ values to absolutely guarantee no terrain clipping
+    const PLAYER_OFFSET = isAutostart ? 100 : 5;          // Much higher in autostart to guarantee safety
+    const CAMERA_OFFSET = isAutostart ? 300 : 15;         // EXTREMELY high for camera safety in autostart
+    const PLAYER_FALLBACK_Y = isAutostart ? 350 : 50;     // Very high safe default
+    const MIN_CAMERA_Y = isAutostart ? 400 : 30;          // EXTREMELY high minimum in autostart mode
     
     if (getHeightFinal) {
       // Check player - use TerrainManager.getHeightAt(x,z) + 5
@@ -1242,21 +1243,32 @@ function animate() {
   // Check if we're in autostart mode - use extra aggressive safety
   const isAutostart = window.AUTOSTART_MODE === true;
   
-  // CRITICAL FIX: In autostart mode, use EXTREMELY aggressive safety margins
+  // CRITICAL FIX (P0): In autostart mode, use EXTREMELY aggressive safety margins
   // The green blob bug occurs when camera spawns inside terrain mesh
-  // We use extremely conservative values to GUARANTEE camera is ALWAYS visible
-  // Values are much higher than normal to handle any terrain loading race conditions
   // 
-  // FIX STRATEGY: Start camera VERY high (300+), let it naturally descend
-  // This guarantees the first rendered frame is from OUTSIDE any terrain
-  const SAFE_OFFSET_ABOVE_TERRAIN = isAutostart ? 50 : 5;   // Spawn 50 units above terrain in autostart
-  const FALLBACK_SAFE_Y = isAutostart ? 250 : 50;           // VERY high safe default for autostart
-  const CAMERA_OFFSET_ABOVE_PLAYER = isAutostart ? 150 : 20; // Much higher in autostart mode
-  const MIN_CAMERA_HEIGHT = isAutostart ? 300 : 30;         // VERY high minimum in autostart mode
-  const CAMERA_TERRAIN_OFFSET = isAutostart ? 150 : 15;     // Camera well above terrain
+  // KEY INSIGHT: The bug happens because:
+  // 1. Terrain chunks haven't fully generated/meshed yet
+  // 2. We query terrain height and get an invalid/low value
+  // 3. Player/camera get moved DOWN from their safe initial positions
+  // 4. Pre-render happens with camera inside terrain = GREEN BLOB
+  //
+  // FIX STRATEGY: 
+  // - NEVER move player/camera DOWN from their initial high positions in autostart
+  // - Use EXTREMELY high values (400+) to guarantee safety
+  // - Let gravity naturally bring them down AFTER first render is safe
+  const SAFE_OFFSET_ABOVE_TERRAIN = isAutostart ? 100 : 5;   // 100 units above terrain in autostart
+  const FALLBACK_SAFE_Y = isAutostart ? 400 : 50;            // EXTREMELY high safe default for autostart
+  const CAMERA_OFFSET_ABOVE_PLAYER = isAutostart ? 200 : 20; // Much higher in autostart mode
+  const MIN_CAMERA_HEIGHT = isAutostart ? 450 : 30;          // EXTREMELY high minimum in autostart mode
+  const CAMERA_TERRAIN_OFFSET = isAutostart ? 200 : 15;      // Camera well above terrain
+  
+  // Store initial positions BEFORE any modifications - we'll use these as minimums
+  const initialPlayerY = player.mesh.position.y;  // Should be ~200 in autostart
+  const initialCameraY = camera.position.y;       // Should be ~300 in autostart
   
   if (isAutostart) {
-    console.log('[Main:Init] AUTOSTART MODE DETECTED - Using aggressive spawn safety');
+    console.log(`[Main:Init] AUTOSTART MODE DETECTED - Using aggressive spawn safety`);
+    console.log(`[Main:Init] Initial positions: player.y=${initialPlayerY}, camera.y=${initialCameraY}`);
   }
   
   // Step 1: Force terrain chunk generation at player position AND wide surrounding area
@@ -1298,6 +1310,7 @@ function animate() {
   
   // Step 3: Calculate safe player Y position
   // Use TerrainManager.getHeightAt(x,z) + 5 for safe spawn height above terrain (per task spec)
+  // CRITICAL: In autostart mode, NEVER move player DOWN from initial position
   // If terrain isn't ready when player spawns, use safe default (y=50) (per task spec)
   let targetPlayerY;
   if (terrainReady) {
@@ -1310,6 +1323,13 @@ function animate() {
   
   // Ensure player is NEVER below minimum safe height
   targetPlayerY = Math.max(targetPlayerY, SAFE_OFFSET_ABOVE_TERRAIN);
+  
+  // CRITICAL FIX: In autostart mode, NEVER move player DOWN from initial position
+  // This prevents the green blob bug where we move player into terrain before first render
+  if (isAutostart && targetPlayerY < initialPlayerY) {
+    console.log(`[Main:Init] BLOCKED lowering player from ${initialPlayerY.toFixed(2)} to ${targetPlayerY.toFixed(2)}`);
+    targetPlayerY = initialPlayerY;
+  }
   
   // Set player position IMMEDIATELY
   console.log(`[Main:Init] Player spawn: Y=${player.mesh.position.y.toFixed(2)} -> ${targetPlayerY.toFixed(2)}${isAutostart ? ' (AUTOSTART MODE)' : ''}`);
@@ -1356,6 +1376,13 @@ function animate() {
   // CRITICAL: Ensure camera is NEVER below absolute minimum height
   // This is the PRIMARY safeguard against the "green blob" bug
   targetCamY = Math.max(targetCamY, MIN_CAMERA_HEIGHT);
+  
+  // CRITICAL FIX: In autostart mode, NEVER move camera DOWN from initial position
+  // This is the key fix for the green blob bug - camera must NEVER go down before first safe render
+  if (isAutostart && targetCamY < initialCameraY) {
+    console.log(`[Main:Init] BLOCKED lowering camera from ${initialCameraY.toFixed(2)} to ${targetCamY.toFixed(2)}`);
+    targetCamY = initialCameraY;
+  }
   
   console.log(`[Main:Init] Camera spawn: Y=${camera.position.y.toFixed(2)} -> ${targetCamY.toFixed(2)}`);
   

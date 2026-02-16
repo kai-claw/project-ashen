@@ -128,9 +128,10 @@ export class Player {
     // Initial position uses fallback height - will be adjusted by _ensureSafeSpawnHeight()
     // when world is set, or by main.js IIFE before first render.
     // CRITICAL: In autostart mode, use EXTREMELY HIGH initial Y to prevent green blob bug
-    // FIX: Using 200 to ensure player starts well above any terrain
+    // FIX (P0): Using 400 to ensure player starts well above any terrain
+    // Must be high enough that camera (at player.y + offset) is also safe
     this.mesh = new THREE.Group();
-    const initialY = isAutostart ? 200 : 50;  // EXTREMELY high in autostart mode
+    const initialY = isAutostart ? 400 : 50;  // EXTREMELY high in autostart mode (400)
     this.mesh.position.set(0, initialY, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)

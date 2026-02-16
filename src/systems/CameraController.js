@@ -30,11 +30,12 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    // FIX: Using EXTREMELY high values to absolutely prevent green blob bug
+    // FIX (P0): Using EXTREMELY high values to absolutely prevent green blob bug
     // Camera will start very high and gradually descend once terrain safety is confirmed
-    this._terrainClampOffset = isAutostart ? 150 : 15;  // EXTREMELY high in autostart mode for green blob fix
+    // These values must be high enough that camera NEVER renders inside terrain
+    this._terrainClampOffset = isAutostart ? 250 : 15;  // EXTREMELY high in autostart mode for green blob fix
     this._spawnSafetyFrames = isAutostart ? 1800 : 300; // 30 seconds safety in autostart mode (1800 frames @ 60fps)
-    this._minCameraY = isAutostart ? 250 : 30;          // EXTREMELY high minimum in autostart mode
+    this._minCameraY = isAutostart ? 400 : 30;          // EXTREMELY high minimum in autostart mode (400)
     this._isAutostart = isAutostart;                     // Cache for use in update
     this._terrainConfirmedReady = false;                // Track when terrain returns valid heights consistently
     this._terrainReadyFrames = 0;                       // Count consecutive frames with valid terrain height
