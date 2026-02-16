@@ -27,9 +27,9 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 5;    // Minimum units above terrain (increased for safety)
-    this._spawnSafetyFrames = 180;   // Safety frames after spawn (~3 seconds at 60fps)
-    this._minCameraY = 20;           // Absolute minimum camera Y position
+    this._terrainClampOffset = 15;   // Minimum units above terrain (increased from 5 for safety)
+    this._spawnSafetyFrames = 300;   // Safety frames after spawn (~5 seconds at 60fps, increased from 180)
+    this._minCameraY = 30;           // Absolute minimum camera Y position (increased from 20)
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -221,11 +221,11 @@ export class CameraController {
   
   /**
    * Ensure camera position is above terrain.
-   * Uses terrain height + offset (default 5 units, higher during spawn safety).
+   * Uses terrain height + offset (default 15 units, higher during spawn safety).
    * CRITICAL: This prevents the "green blob" bug where camera renders inside terrain.
    * 
    * Per task spec: Use TerrainManager.getHeightAt(x,z) + offset for safe height.
-   * If terrain isn't ready, use safe default.
+   * If terrain isn't ready, use safe default (y=50).
    */
   clampToTerrain() {
     // Track spawn safety frames
@@ -234,15 +234,15 @@ export class CameraController {
       this._spawnSafetyFrames--;
     }
     
-    // CRITICAL: Always enforce absolute minimum camera Y
-    const absoluteMinY = this._minCameraY || 20;
+    // CRITICAL: Always enforce absolute minimum camera Y (increased to 30)
+    const absoluteMinY = this._minCameraY || 30;
     if (this.currentPos.y < absoluteMinY) {
       this.currentPos.y = absoluteMinY;
     }
     
-    // If no terrain, use fallback height during spawn safety
+    // If no terrain, use fallback height (especially important during spawn safety)
     if (!this.terrain) {
-      if (inSpawnSafety && this.currentPos.y < 50) {
+      if (this.currentPos.y < 50) {
         this.currentPos.y = 50;
       }
       return;
@@ -251,7 +251,7 @@ export class CameraController {
     // Per task spec: use TerrainManager.getHeightAt(x,z)
     const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
     if (!getHeight) {
-      if (inSpawnSafety && this.currentPos.y < 50) {
+      if (this.currentPos.y < 50) {
         this.currentPos.y = 50;
       }
       return;
@@ -259,21 +259,24 @@ export class CameraController {
     
     const terrainY = getHeight.call(this.terrain, this.currentPos.x, this.currentPos.z);
     
-    // If terrain returns invalid value, use fallback during spawn safety
+    // If terrain returns invalid value, use fallback
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-      if (inSpawnSafety && this.currentPos.y < 50) {
+      if (this.currentPos.y < 50) {
         this.currentPos.y = 50;
       }
       return;
     }
     
     // Use higher offset during spawn safety to guarantee camera is above terrain
-    // During normal gameplay, use standard offset
-    // Per task spec: terrain height + 5 for player, using higher offset for camera
-    const offset = inSpawnSafety ? Math.max(this._terrainClampOffset, 10) : this._terrainClampOffset;
+    // During normal gameplay, use standard offset (still 15 units for safety)
+    // Per task spec: terrain height + 5 for player, using 15+ for camera to ensure visibility
+    const offset = inSpawnSafety ? Math.max(this._terrainClampOffset, 20) : this._terrainClampOffset;
     const minY = Math.max(terrainY + offset, absoluteMinY);
     
     if (this.currentPos.y < minY) {
+      if (inSpawnSafety) {
+        console.warn(`[CameraController] Camera below terrain + offset (${this.currentPos.y.toFixed(2)} < ${minY.toFixed(2)}), correcting`);
+      }
       this.currentPos.y = minY;
     }
   }

@@ -948,7 +948,7 @@ class SaveIntegration {
     // Spawn safety: Use terrain height + 5 or fallback to y=50
     const SAFE_OFFSET = 5;
     const FALLBACK_Y = 50;
-    const CAMERA_OFFSET = 8;
+    const CAMERA_OFFSET = 15;  // Increased from 8 for extra safety
     
     const playerMesh = this.systems.player;
     const gm = this.systems.gameManager;
@@ -1007,7 +1007,7 @@ class SaveIntegration {
           const camTerrainY = getHeight.call(terrain, camX, camZ);
           if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
             // Camera must be at least CAMERA_OFFSET above terrain AT ITS OWN POSITION
-            const minCamY = Math.max(camTerrainY + CAMERA_OFFSET, 15); // 15 = absolute minimum
+            const minCamY = Math.max(camTerrainY + CAMERA_OFFSET, 30); // 30 = absolute minimum (increased from 15)
             safeCamY = Math.max(safeCamY, minCamY);
           }
         }
@@ -1021,9 +1021,10 @@ class SaveIntegration {
         }
         cameraController._firstFrame = false;
         // CRITICAL: Use higher safety values to match main.js IIFE
-        // 120 frames (~2 seconds) and 8 unit offset for reliable terrain safety
-        cameraController._spawnSafetyFrames = 120;
-        cameraController._terrainClampOffset = 8;
+        // 300 frames (~5 seconds) and 20 unit offset for reliable terrain safety
+        cameraController._spawnSafetyFrames = 300;    // Increased from 120
+        cameraController._terrainClampOffset = 20;    // Increased from 8
+        cameraController._minCameraY = 30;            // Set absolute minimum
       }
       
       camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1.5, playerMesh.position.z);
