@@ -505,12 +505,25 @@ export class Player {
       const floorY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
       
       // Spawn safety check - ensure player is above terrain during initial frames
-      // Per task spec: terrain height + 5 for safe spawn, fallback y=50 if terrain not ready
+      // Per spec: terrain height + 5 for safe spawn, fallback y=50 if terrain not ready
       const inSpawnSafety = this._spawnSafetyFrames > 0;
       if (inSpawnSafety) {
         const SAFE_OFFSET = 5;   // Per spec: terrain + 5
         const FALLBACK_Y = 50;   // Per spec: fallback y=50
-        const minSafeY = !isNaN(floorY) && floorY > -100 ? (floorY + SAFE_OFFSET) : FALLBACK_Y;
+        
+        // Get terrain at exact position, not floor (floor includes buildings etc)
+        let terrainY = null;
+        if (this.world && this.world.terrain) {
+          const getHeight = this.world.terrain.getHeightAt || this.world.terrain.getTerrainHeight;
+          if (getHeight) {
+            const h = getHeight.call(this.world.terrain, this.mesh.position.x, this.mesh.position.z);
+            if (!isNaN(h) && isFinite(h) && h > -100) {
+              terrainY = h;
+            }
+          }
+        }
+        
+        const minSafeY = terrainY !== null ? (terrainY + SAFE_OFFSET) : FALLBACK_Y;
         
         if (this.mesh.position.y < minSafeY) {
           this.mesh.position.y = minSafeY;
@@ -1456,16 +1469,17 @@ export class Player {
   /**
    * Per-frame spawn safety check.
    * Ensures player stays above terrain during initial spawn period.
-   * Uses conservative offset to handle slopes and terrain generation timing.
+   * Per spec: terrain + 5 for safe spawn, fallback y=50 if terrain not ready.
    */
   _checkSpawnSafety() {
     if (this._spawnSafetyFrames <= 0) return;
     this._spawnSafetyFrames--;
     
-    const SAFE_OFFSET = 8;   // Conservative: terrain + 8
-    const FALLBACK_Y = 50;   // Safe fallback
+    // Per spec: terrain + 5 for safe spawn, fallback y=50
+    const SAFE_OFFSET = 5;   // Per spec: terrain + 5
+    const FALLBACK_Y = 50;   // Per spec: fallback y=50
     
-    // Simple safety: ensure player is above terrain
+    // If no world, use fallback
     if (!this.world) {
       if (this.mesh.position.y < FALLBACK_Y) {
         this.mesh.position.y = FALLBACK_Y;
@@ -1479,26 +1493,26 @@ export class Player {
       this.world.terrain.forceGenerateAt(this.mesh.position.x, this.mesh.position.z);
     }
     
-    // Sample terrain at multiple points to find max height
-    let maxTerrainY = -Infinity;
+    // Get terrain height at exact position (per spec)
+    let terrainY = null;
     if (this.world.terrain) {
       const getHeight = this.world.terrain.getHeightAt || this.world.terrain.getTerrainHeight;
       if (getHeight) {
-        for (let dx = -2; dx <= 2; dx++) {
-          for (let dz = -2; dz <= 2; dz++) {
-            const h = getHeight.call(this.world.terrain, this.mesh.position.x + dx, this.mesh.position.z + dz);
-            if (!isNaN(h) && isFinite(h) && h > -100) {
-              maxTerrainY = Math.max(maxTerrainY, h);
-            }
-          }
+        const h = getHeight.call(this.world.terrain, this.mesh.position.x, this.mesh.position.z);
+        if (!isNaN(h) && isFinite(h) && h > -100) {
+          terrainY = h;
         }
       }
     }
     
     // Calculate minimum safe Y
-    const minSafeY = maxTerrainY > -Infinity 
-      ? Math.max(maxTerrainY + SAFE_OFFSET, FALLBACK_Y)
-      : FALLBACK_Y;
+    // Per spec: terrain + 5, or fallback y=50 if terrain not ready
+    let minSafeY;
+    if (terrainY !== null) {
+      minSafeY = terrainY + SAFE_OFFSET;
+    } else {
+      minSafeY = FALLBACK_Y;
+    }
     
     if (this.mesh.position.y < minSafeY) {
       this.mesh.position.y = minSafeY;
