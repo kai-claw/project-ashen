@@ -74,7 +74,7 @@ export class TerrainGenerator {
   /**
    * Get terrain height at world position with castle flattening
    * This is the main collision function - works for ANY world position
-   * Alias: getHeightAt
+   * P0 TERRAIN SPAWN FIX: Critical for player/camera spawn height calculation
    */
   getTerrainHeight(x, z) {
     const distFromOrigin = Math.sqrt(x * x + z * z);
