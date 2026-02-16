@@ -34,7 +34,7 @@ export function getDefaultPlayerData() {
     // The actual spawn height will be recalculated by spawn safety systems
     // This prevents "green blob" bug in autostart mode - player falls down naturally via gravity
     // Terrain max is ~25 (heightScale), so 400 is GUARANTEED safe
-    position: { x: 0, y: 400, z: 5 },
+    position: { x: 0, y: 50, z: 5 },
     rotation: { x: 0, y: 0, z: 0 },
     checkpoint: { x: 0, y: 400, z: 5 },
     

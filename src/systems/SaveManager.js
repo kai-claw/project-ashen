@@ -584,45 +584,35 @@ class SaveManager {
     // ===== PLAYER DATA =====
     if (this.systems.player && saveData.player.position) {
       const pos = saveData.player.position;
-      let safeY = pos.y;
-      let terrainY = 0;
-      // CRITICAL: These must be VERY high to prevent "green blob" bug in autostart mode
-      // Player starts high, gravity brings them down naturally
-      const SAFE_SPAWN_OFFSET = 350; // Spawn 350 units above terrain - MAXIMUM safety
-      const MIN_SAFE_HEIGHT = 400;   // Absolute minimum safe height - very high
+      const SAFE_OFFSET = 5;     // Units above terrain
+      const FALLBACK_Y = 50;     // If terrain not ready
       
-      // Ensure player spawns above terrain (prevents spawning inside terrain mesh)
-      // This is critical for autostart mode where terrain may not be fully ready
-      if (this.systems.terrain && this.systems.terrain.getTerrainHeight) {
-        // CRITICAL: Force terrain chunk generation at spawn position FIRST
-        if (this.systems.terrain.forceGenerateAt) {
-          this.systems.terrain.forceGenerateAt(pos.x, pos.z);
+      let safeY = FALLBACK_Y;
+      let terrainY = 0;
+      let terrainReady = false;
+      
+      // Try to get terrain height
+      const terrain = this.systems.terrain;
+      if (terrain) {
+        if (terrain.forceGenerateAt) {
+          terrain.forceGenerateAt(pos.x, pos.z);
         }
-        terrainY = this.systems.terrain.getTerrainHeight(pos.x, pos.z);
-        // Sanity check - if terrain returns weird value, use safe default
-        if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-          console.warn('[SaveManager] Invalid terrain height, using safe default');
-          safeY = MIN_SAFE_HEIGHT;
-        } else {
-          // ALWAYS use terrain + offset, don't trust saved Y position
-          safeY = terrainY + SAFE_SPAWN_OFFSET;
+        const getHeight = terrain.getHeightAt || terrain.getTerrainHeight;
+        if (getHeight) {
+          terrainY = getHeight.call(terrain, pos.x, pos.z);
+          terrainReady = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
         }
       } else if (this.systems.world && this.systems.world.getFloorY) {
         terrainY = this.systems.world.getFloorY(pos.x, pos.z);
-        if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-          console.warn('[SaveManager] Invalid world floor height, using safe default');
-          safeY = MIN_SAFE_HEIGHT;
-        } else {
-          // ALWAYS use terrain + offset, don't trust saved Y position
-          safeY = terrainY + SAFE_SPAWN_OFFSET;
-        }
-      } else {
-        // Fallback: use safe default if terrain not available
-        console.warn('[SaveManager] No terrain/world available, using safe default spawn height');
-        safeY = MIN_SAFE_HEIGHT;
+        terrainReady = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
       }
       
-      console.log(`[SaveManager] Setting player position: (${pos.x}, ${safeY}, ${pos.z}) [terrain=${terrainY}]`);
+      // Calculate safe Y
+      if (terrainReady) {
+        safeY = terrainY + SAFE_OFFSET;
+      }
+      
+      console.log(`[SaveManager] Setting player position: (${pos.x}, ${safeY}, ${pos.z}) [terrain=${terrainY}, ready=${terrainReady}]`);
       this.systems.player.position.set(pos.x, safeY, pos.z);
       
       if (saveData.player.rotation) {

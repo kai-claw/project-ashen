@@ -880,97 +880,72 @@ class SaveIntegration {
     const defaultData = createDefaultSaveData(0);
     this.saveManager?.distributeGameState(defaultData);
     
-    // CRITICAL FIX: Comprehensive spawn safety for autostart mode
-    // The bug: player/camera spawn INSIDE terrain mesh because terrain chunks
-    // might not be fully ready when position is calculated
-    // 
-    // Solution: Use EXTREMELY high initial spawn (Y=400+), let gravity pull down safely
-    // This ensures first frame ALWAYS renders WELL above terrain - no green blob!
-    // 
-    // KEY: These values MUST match the IIFE in main.js for consistency
-    const AUTOSTART_SAFE_OFFSET = 350; // Spawn this far above calculated terrain - MAXIMUM safety
-    const FALLBACK_SAFE_Y = 400;       // Use this if terrain unavailable - very high
+    // Spawn safety: Use terrain height + 5 or fallback to y=50
+    const SAFE_OFFSET = 5;
+    const FALLBACK_Y = 50;
+    const CAMERA_OFFSET = 8;
     
-    const playerMesh = this.systems.player; // player.mesh passed during init
+    const playerMesh = this.systems.player;
     const gm = this.systems.gameManager;
     const camera = this.systems.camera;
-    
-    // Step 1: Force terrain chunk generation at spawn position
-    // CRITICAL: Use forceGenerateAt, NOT update - update() is a no-op if same chunk
     const terrain = gm?.player?.world?.terrain || this.systems.terrain;
+    
+    // Force terrain chunk generation at spawn position
     if (terrain && playerMesh) {
-      // Force chunk generation at player position FIRST
       if (terrain.forceGenerateAt) {
         terrain.forceGenerateAt(playerMesh.position.x, playerMesh.position.z);
       } else if (terrain.update) {
-        // Fallback: reset tracking to force update to work
         terrain.lastPlayerChunkX = null;
         terrain.lastPlayerChunkZ = null;
         terrain.update(playerMesh.position.x, playerMesh.position.z);
       }
     }
     
-    // Step 2: Calculate and apply safe player Y
+    // Calculate safe player Y
     if (playerMesh && playerMesh.position) {
       let terrainY = 0;
-      let terrainValid = false;
+      let terrainReady = false;
       
-      if (terrain && terrain.getTerrainHeight) {
-        terrainY = terrain.getTerrainHeight(playerMesh.position.x, playerMesh.position.z);
-        terrainValid = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
+      if (terrain) {
+        const getHeight = terrain.getHeightAt || terrain.getTerrainHeight;
+        if (getHeight) {
+          terrainY = getHeight.call(terrain, playerMesh.position.x, playerMesh.position.z);
+          terrainReady = !isNaN(terrainY) && isFinite(terrainY) && terrainY > -100;
+        }
       }
       
-      let safeY;
-      if (terrainValid) {
-        safeY = terrainY + AUTOSTART_SAFE_OFFSET;
-      } else {
-        safeY = FALLBACK_SAFE_Y;
-        console.warn('[SaveIntegration] Terrain unavailable, using fallback spawn Y:', safeY);
-      }
-      
-      console.log(`[SaveIntegration] Setting safe spawn: Y=${safeY} (terrain=${terrainY}, valid=${terrainValid})`);
+      const safeY = terrainReady ? terrainY + SAFE_OFFSET : FALLBACK_Y;
+      console.log(`[SaveIntegration] Player spawn: Y=${safeY} (terrain=${terrainY}, ready=${terrainReady})`);
       playerMesh.position.y = safeY;
       
-      // Reset velocity to prevent falling through terrain
       if (gm?.player?.velocity) {
         gm.player.velocity.y = 0;
       }
     }
     
-    // Step 3: Force camera to safe position as well
-    // Camera must be GUARANTEED above terrain on first frame - use MAXIMUM safety offset
-    // This prevents the "green blob" bug in autostart mode
+    // Position camera above player
     if (camera && playerMesh) {
       const cameraController = gm?.cameraController;
-      const camOffset = 80;   // Camera this far above player - MAXIMUM safety
-      const safeCamY = Math.max(playerMesh.position.y + camOffset, 450); // Absolute minimum 450
+      const safeCamY = playerMesh.position.y + CAMERA_OFFSET;
+      const camZ = playerMesh.position.z + 6;
       
-      // Force camera position directly - well behind and above player
-      const camZ = playerMesh.position.z + 15; // Behind player
       camera.position.set(playerMesh.position.x, safeCamY, camZ);
       
-      // Also update camera controller's internal position to prevent lerp issues
       if (cameraController) {
         if (cameraController.currentPos) {
           cameraController.currentPos.set(playerMesh.position.x, safeCamY, camZ);
         }
-        // Reset first frame flag to prevent snap to bad position
         cameraController._firstFrame = false;
-        // Extended spawn safety frames for aggressive terrain clamping
-        cameraController._spawnSafetyFrames = 240; // Match main.js
-        // Very high terrain clamp offset during spawn safety period
-        cameraController._terrainClampOffset = 300; // Match main.js
+        cameraController._spawnSafetyFrames = 60;
+        cameraController._terrainClampOffset = 3;
       }
       
-      // Look at player
-      camera.lookAt(playerMesh.position.x, playerMesh.position.y + 2, playerMesh.position.z);
+      camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1.5, playerMesh.position.z);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld(true);
-      
-      console.log(`[SaveIntegration] Camera forced to: (${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)})`);
     }
     
-    // Step 4: Enable Player's spawn safety frame checks
+    // Enable Player's spawn safety checks
     if (gm?.player?.recalculateSafeSpawn) {
       gm.player.recalculateSafeSpawn();
     }
