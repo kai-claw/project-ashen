@@ -505,8 +505,41 @@ export class Player {
 
     // Floor collision and gravity
     if (this.world) {
+      // Check for autostart mode - need gentler physics during spawn safety
+      const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
+      const inSpawnSafety = this._spawnSafetyFrames > 0;
+      
       // Get floor Y at current position
       const floorY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
+      
+      // AUTOSTART SPAWN SAFETY: During safety period, use different collision behavior
+      // This prevents the "green blob" bug by keeping player high until terrain is confirmed
+      if (isAutostart && inSpawnSafety) {
+        // During autostart spawn safety, DON'T apply normal gravity
+        // Just ensure player stays above a safe minimum
+        const minSafeY = !isNaN(floorY) && isFinite(floorY) && floorY > -100 
+          ? Math.max(floorY + 50, 100)  // 50 units above terrain, min 100
+          : 150;  // Fallback if terrain not ready
+        
+        if (this.mesh.position.y < minSafeY) {
+          this.mesh.position.y = minSafeY;
+          this.velocity.y = 0;
+        }
+        // Apply very gentle gravity (1/10th normal) to allow slow descent
+        if (this._spawnSafetyFrames < 300) { // Only after first 5 seconds
+          this.velocity.y += (this.gravity * 0.1) * delta;
+          this.mesh.position.y += this.velocity.y * delta;
+          // But never go below safe minimum
+          if (this.mesh.position.y < minSafeY) {
+            this.mesh.position.y = minSafeY;
+            this.velocity.y = 0;
+          }
+        }
+        this.grounded = false;
+        return; // Skip normal gravity processing
+      }
+      
+      // NORMAL GRAVITY PROCESSING (non-autostart or after safety period)
       
       // Safety check: if player is significantly BELOW terrain, they spawned inside it
       // This catches edge cases where spawn height calculation failed
@@ -1346,28 +1379,63 @@ export class Player {
   setWorld(world) {
     this.world = world;
     
+    // Check for autostart mode - need to be more careful about spawn timing
+    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
+    
     // Force terrain chunk generation at player position FIRST
     // This ensures terrain data exists before we try to read it
-    if (world && world.terrain && world.terrain.update) {
-      world.terrain.update(this.mesh.position.x, this.mesh.position.z);
+    // Generate a wider area in autostart mode to ensure full coverage
+    if (world && world.terrain) {
+      const px = this.mesh.position.x;
+      const pz = this.mesh.position.z;
+      
+      if (world.terrain.forceGenerateAt) {
+        // Generate 3x3 grid of chunks around player for safety
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            world.terrain.forceGenerateAt(px + dx * 64, pz + dz * 64);
+          }
+        }
+      } else if (world.terrain.update) {
+        world.terrain.update(px, pz);
+      }
     }
     
-    // Immediately snap player to terrain height + safety offset
-    // This prevents spawning inside terrain (especially in autostart mode)
-    this._ensureSafeSpawnHeight();
+    // In autostart mode, DON'T snap to terrain immediately - stay high
+    // The per-frame safety check will gradually allow descent once terrain is confirmed
+    if (isAutostart) {
+      console.log('[Player] Autostart mode: maintaining high spawn position, safety check will handle descent');
+      // Ensure we're high enough
+      if (this.mesh.position.y < 100) {
+        this.mesh.position.y = 150;
+        this.velocity.y = 0;
+        this.grounded = false;
+      }
+      this._spawnSafetyFrames = 600; // 10 seconds of safety checks
+    } else {
+      // Normal mode: snap to terrain immediately
+      this._ensureSafeSpawnHeight();
+    }
   }
   
   /**
    * Ensure player is spawned safely above terrain.
    * Called on setWorld and can be called again if position is reset.
-   * Uses terrain height + 5 or fallback to y=50 if terrain not ready.
+   * Uses terrain height + offset or fallback if terrain not ready.
    * 
    * FIX: This addresses the autostart terrain spawn bug where player spawns inside terrain.
+   * In autostart mode, uses MUCH higher offsets to match camera safety expectations.
    */
   _ensureSafeSpawnHeight() {
-    const SAFE_OFFSET = 5;      // Units above terrain
-    const FALLBACK_Y = 50;      // Safe default if terrain not ready
-    const MIN_SAFE_Y = 5;       // Absolute minimum Y position
+    // Check for autostart mode - need higher safety values to prevent green blob bug
+    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
+    
+    // CRITICAL: In autostart mode, player must start HIGH to match camera expectations
+    // The green blob bug occurs when camera renders inside terrain - player being too low
+    // causes camera to calculate a position that clips into terrain
+    const SAFE_OFFSET = isAutostart ? 50 : 5;       // Much higher in autostart mode
+    const FALLBACK_Y = isAutostart ? 150 : 50;      // Very high safe default in autostart
+    const MIN_SAFE_Y = isAutostart ? 100 : 5;       // High minimum in autostart mode
     
     // If no world reference, use fallback
     if (!this.world) {
@@ -1420,23 +1488,30 @@ export class Player {
     
     this.grounded = true; // On ground since we calculated proper height
     this.velocity.y = 0;
-    this._spawnSafetyFrames = 120; // Extended safety frames (2 seconds)
+    // Extended safety frames - much longer in autostart mode to ensure terrain is fully loaded
+    this._spawnSafetyFrames = isAutostart ? 600 : 120; // 10 seconds in autostart, 2 seconds normally
   }
   
   /**
    * Additional per-frame spawn safety check.
    * Runs for first N frames after spawn to catch any late position changes.
-   * Uses terrain height + 5 or fallback to y=50.
+   * Uses terrain height + offset or fallback if terrain not ready.
    * 
    * FIX: This addresses the autostart terrain spawn bug where player spawns inside terrain.
+   * In autostart mode, uses MUCH higher offsets and runs for longer to ensure terrain is ready.
    */
   _checkSpawnSafety() {
     if (this._spawnSafetyFrames <= 0) return;
     this._spawnSafetyFrames--;
     
-    const SAFE_OFFSET = 5;
-    const FALLBACK_Y = 50;
-    const MIN_SAFE_Y = 5;
+    // Check for autostart mode - need higher safety values to prevent green blob bug
+    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
+    
+    // CRITICAL: In autostart mode, keep player HIGH until terrain is confirmed stable
+    // This prevents camera from calculating positions that clip into terrain
+    const SAFE_OFFSET = isAutostart ? 50 : 5;       // Much higher in autostart mode
+    const FALLBACK_Y = isAutostart ? 150 : 50;      // Very high safe default in autostart
+    const MIN_SAFE_Y = isAutostart ? 100 : 5;       // High minimum in autostart mode
     
     if (!this.world) {
       if (this.mesh.position.y < FALLBACK_Y) {
@@ -1462,9 +1537,20 @@ export class Player {
     
     // Fix if below safe threshold
     if (this.mesh.position.y < minSafeY) {
+      if (isAutostart && this._spawnSafetyFrames > 500) {
+        // In early autostart frames, log corrections for debugging
+        console.log(`[Player:SpawnSafety] Correcting Y: ${this.mesh.position.y.toFixed(2)} -> ${minSafeY.toFixed(2)} (terrain=${terrainY.toFixed(2)}, valid=${terrainValid})`);
+      }
       this.mesh.position.y = minSafeY;
       this.velocity.y = 0;
       this.grounded = true;
+    }
+    
+    // In autostart mode, also prevent gravity from pulling player down during safety period
+    // This is critical - gravity in update() can undo our safety positioning
+    if (isAutostart && this._spawnSafetyFrames > 300) {
+      // Keep velocity zeroed during early safety frames
+      this.velocity.y = Math.max(this.velocity.y, 0); // Prevent downward velocity
     }
   }
   
