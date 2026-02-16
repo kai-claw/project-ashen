@@ -98,10 +98,10 @@ export class Player {
     this.ghostSpawnInterval = 0.05;
     
     // Spawn safety tracking (fixes autostart terrain bug - "green blob" issue)
-    // Extended to 300 frames (~5 seconds) for reliable terrain loading in autostart mode
+    // Extended to 600 frames (~10 seconds) for reliable terrain loading in autostart mode
     // Check for autostart mode and use higher safety
     const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    this._spawnSafetyFrames = isAutostart ? 300 : 120;
+    this._spawnSafetyFrames = isAutostart ? 600 : 120;
     
     // Ability states
     this.dashDir = new THREE.Vector3();
@@ -125,9 +125,9 @@ export class Player {
     // Create mesh container
     // Initial position uses fallback height - will be adjusted by _ensureSafeSpawnHeight()
     // when world is set, or by main.js IIFE before first render.
-    // CRITICAL: In autostart mode, use HIGHER initial Y to prevent green blob bug
+    // CRITICAL: In autostart mode, use MUCH HIGHER initial Y to prevent green blob bug
     this.mesh = new THREE.Group();
-    const initialY = isAutostart ? 80 : 50;  // Higher in autostart mode
+    const initialY = isAutostart ? 100 : 50;  // MUCH higher in autostart mode
     this.mesh.position.set(0, initialY, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)

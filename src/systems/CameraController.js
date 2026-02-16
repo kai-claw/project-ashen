@@ -30,9 +30,9 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = isAutostart ? 40 : 15;   // MUCH higher in autostart mode
-    this._spawnSafetyFrames = isAutostart ? 600 : 300;  // 10 seconds safety in autostart mode
-    this._minCameraY = isAutostart ? 80 : 30;           // MUCH higher minimum in autostart mode
+    this._terrainClampOffset = isAutostart ? 60 : 15;   // EXTREMELY high in autostart mode for green blob fix
+    this._spawnSafetyFrames = isAutostart ? 900 : 300;  // 15 seconds safety in autostart mode
+    this._minCameraY = isAutostart ? 100 : 30;          // Very high minimum in autostart mode
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -276,15 +276,15 @@ export class CameraController {
       return;
     }
     
-    // Use MUCH higher offset during spawn safety to GUARANTEE camera is above terrain
+    // Use EXTREMELY high offset during spawn safety to GUARANTEE camera is above terrain
     // During normal gameplay, use standard offset (still 15 units for safety)
     // Per task spec: terrain height + 5 for player, using 15+ for camera to ensure visibility
-    // In autostart mode, use VERY HIGH offsets to absolutely prevent green blob bug
+    // In autostart mode, use EXTREMELY HIGH offsets to absolutely prevent green blob bug
     let offset;
     if (inSpawnSafety) {
-      offset = isAutostart ? Math.max(this._terrainClampOffset, 50) : Math.max(this._terrainClampOffset, 20);
+      offset = isAutostart ? Math.max(this._terrainClampOffset, 70) : Math.max(this._terrainClampOffset, 20);
     } else {
-      offset = isAutostart ? 35 : this._terrainClampOffset;
+      offset = isAutostart ? 50 : this._terrainClampOffset;
     }
     const minY = Math.max(terrainY + offset, absoluteMinY);
     
