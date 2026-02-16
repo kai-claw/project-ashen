@@ -655,9 +655,11 @@ window.addEventListener('resize', () => {
 
 // --- Game Loop ---
 // Track spawn safety frames - check multiple frames to catch race conditions
-// Extended to 300 frames (~5 seconds) to ensure terrain is fully loaded
+// Extended to handle autostart mode which needs longer safety periods
 // CRITICAL: These frames guarantee player/camera stay ABOVE terrain until gravity naturally brings them down
-let spawnSafetyFramesRemaining = 300;  // ~5 seconds of spawn safety checks (increased from 180)
+// In autostart mode, use 600 frames (~10 seconds) for reliable terrain safety
+const spawnSafetyInitial = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true) ? 600 : 300;
+let spawnSafetyFramesRemaining = spawnSafetyInitial;
 let isFirstAnimateFrame = true;  // Track very first frame for aggressive safety
 
 function animate() {
@@ -861,16 +863,36 @@ function animate() {
   cameraController.update(delta);
   
   // POST-CAMERA-UPDATE SAFETY: Ensure camera didn't get lerped into terrain
-  // Keeps camera at least 10 units above terrain at its position (increased from 3)
-  if (world.terrain) {
-    const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
-    if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-      const minCamY = Math.max(camTerrainY + 10, 30);  // 10 units above terrain, min 30 absolute
-      if (camera.position.y < minCamY) {
-        camera.position.y = minCamY;
-        if (cameraController && cameraController.currentPos) {
-          cameraController.currentPos.y = minCamY;
+  // CRITICAL: Use autostart-aware values to prevent "green blob" bug
+  // The bug occurs when cameraController.update() lerps camera into terrain
+  {
+    const isAutostartPostCam = window.AUTOSTART_MODE === true;
+    // Use MUCH higher offsets in autostart mode - this is the key fix
+    const POST_CAM_TERRAIN_OFFSET = isAutostartPostCam ? 45 : 10;
+    const POST_CAM_MIN_Y = isAutostartPostCam ? 80 : 30;
+    
+    if (world.terrain) {
+      const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
+      if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
+        const minCamY = Math.max(camTerrainY + POST_CAM_TERRAIN_OFFSET, POST_CAM_MIN_Y);
+        if (camera.position.y < minCamY) {
+          camera.position.y = minCamY;
+          if (cameraController && cameraController.currentPos) {
+            cameraController.currentPos.y = minCamY;
+          }
         }
+      } else if (camera.position.y < POST_CAM_MIN_Y) {
+        // Terrain not ready - enforce minimum
+        camera.position.y = POST_CAM_MIN_Y;
+        if (cameraController && cameraController.currentPos) {
+          cameraController.currentPos.y = POST_CAM_MIN_Y;
+        }
+      }
+    } else if (camera.position.y < POST_CAM_MIN_Y) {
+      // No terrain - enforce minimum
+      camera.position.y = POST_CAM_MIN_Y;
+      if (cameraController && cameraController.currentPos) {
+        cameraController.currentPos.y = POST_CAM_MIN_Y;
       }
     }
   }
