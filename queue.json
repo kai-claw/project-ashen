@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v25 (619cc2a): PLAYER-SIDE FIX - Root cause was Player.js spawn safety using low offsets (5) while camera used high offsets (100+). Changes: (1) Player spawn safety offset: 50 in autostart (was 5), (2) Player min safe Y: 100 in autostart (was 5), (3) Player fallback Y: 150 in autostart (was 50), (4) setWorld() now keeps player HIGH in autostart mode, doesn't snap to terrain, (5) Extended safety frames to 600 (~10s) in Player.js, (6) CRITICAL: Skip aggressive gravity during spawn safety period - prevents gravity from pulling player into terrain, (7) Gradual descent with 1/10th gravity after first 5 seconds, (8) Force 3x3 chunk terrain generation in setWorld(). Now player AND camera both stay high until terrain is confirmed. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v26 (a977273): AGGRESSIVE CAMERA SAFETY - Camera starts at Y=300 in autostart. Changes: (1) Camera initial Y: 300 (was 250), (2) CameraController tracks terrain confirmation (60 consecutive valid frames), (3) Gradual 30-second descent from Y=300 to normal after terrain confirmed, (4) Spawn safety extended to 1800 frames (~30s), (5) All safety check offsets increased to 200+ in autostart, (6) Absolute min camera Y: 250 in autostart, (7) Player offsets increased to 50 in autostart. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T07:05:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v25 complete (619cc2a) - PLAYER-SIDE FIX. Root cause: Player.js used low spawn offsets (5) while camera used high (100+). Now Player.js uses autostart-aware offsets (50), skips aggressive gravity during safety period, forces 3x3 chunk terrain generation. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T07:10:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v26 complete (a977273) - AGGRESSIVE CAMERA SAFETY. Camera starts Y=300 in autostart, requires terrain confirmation (60 valid frames), gradual 30s descent, all offsets 200+. Build verified, deployed. Ready for confirmer verification."
 }
