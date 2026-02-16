@@ -129,16 +129,11 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);  // Initial sky blue (will be overridden)
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
-// Initial camera position - will be adjusted by IIFE before first render
-// CRITICAL FIX (P0 GREEN BLOB): Both player AND camera must start at SAME high Y
-// Previous bug: camera at Y=1500 looking at player at Y=800 = 89.5° downward angle
-// This extreme angle made terrain fill entire view even though camera was "above" it
-// NEW APPROACH: Player at Y=300, camera at Y=310 (only 10 units above) - normal viewing angle
-// Both descend together once terrain is confirmed safe
+// Initial camera position - will be adjusted by IIFE after terrain generates
+// Per task spec: Camera positioned relative to player at terrain height + offset
 const isAutostartInit = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
-const initialCamY = isAutostartInit ? 310 : 60;
-camera.position.set(0, initialCamY, isAutostartInit ? 20 : 11);
-camera.lookAt(0, isAutostartInit ? 300 : (initialCamY - 10), 5);
+camera.position.set(0, 60, 11);
+camera.lookAt(0, 50, 5);
 
 // DEBUG objects removed - terrain now rendering with MeshBasicMaterial
 
@@ -661,57 +656,28 @@ window.addEventListener('resize', () => {
 });
 
 // --- Game Loop ---
-// Track spawn safety frames - check multiple frames to catch race conditions
-// Extended to handle autostart mode which needs longer safety periods
-// CRITICAL: These frames guarantee player/camera stay ABOVE terrain until gravity naturally brings them down
-// In autostart mode, use 3600 frames (~60 seconds at 60fps) for reliable terrain safety
-// FIX (P0): Extended from 1800 to 3600 for extra safety
-const spawnSafetyInitial = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true) ? 3600 : 300;
-let spawnSafetyFramesRemaining = spawnSafetyInitial;
-let isFirstAnimateFrame = true;  // Track very first frame for aggressive safety
-
-// FIX (P0): Track actual time in autostart mode for time-based safety (more reliable than frame count)
-const autostartSpawnTime = Date.now();
-const AUTOSTART_MINIMUM_SAFE_MS = 10000; // 10 seconds of guaranteed safety in autostart mode
+// Track spawn safety frames - simple terrain height checks for initial frames
+let spawnSafetyFramesRemaining = 300;
+let isFirstAnimateFrame = true;
 
 function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
-  // ==== CRITICAL SPAWN SAFETY - RUNS EVERY FRAME BEFORE ANYTHING ELSE ====
-  // This MUST run before cameraController.update() or any other code that might move camera
-  // FIX for "green blob" bug: camera spawning inside terrain mesh in autostart mode
-  {
-    // Check if we're in autostart mode for extra aggressive safety
-    const isAutostart = window.AUTOSTART_MODE === true;
-    
-    // FIX (P0): Use BOTH frame count AND time-based safety check
-    // This ensures safety even if frame rate varies
-    const timeSinceStart = Date.now() - autostartSpawnTime;
-    const inTimeSafetyPeriod = isAutostart && timeSinceStart < AUTOSTART_MINIMUM_SAFE_MS;
-    
-    // AUTOSTART SPAWN SAFETY (P0 GREEN BLOB FIX):
-    // Previous bug: camera at Y=1500 looking at player at Y=800 = extreme 89° downward angle
-    // This made terrain fill entire view even though camera was technically "above" it
-    // NEW APPROACH: Player at Y=300, camera at Y=310 - normal viewing angle while above terrain
-    // Use moderate safety margins that decrease over time as terrain proves stable
-    const safetyProgress = inTimeSafetyPeriod ? 0 : Math.min(1, (timeSinceStart - AUTOSTART_MINIMUM_SAFE_MS) / 20000);
-    const TERRAIN_SAFETY_OFFSET = isAutostart ? Math.max(15, 100 * (1 - safetyProgress)) : 15;
-    const ABSOLUTE_MIN_CAM_Y = isAutostart ? Math.max(50, 200 * (1 - safetyProgress)) : 30;
-    const PLAYER_OFFSET = isAutostart ? Math.max(5, 50 * (1 - safetyProgress)) : 5;
-    const PLAYER_FALLBACK_Y = isAutostart ? Math.max(50, 200 * (1 - safetyProgress)) : 50;
-    
-    // Force terrain generation at current positions
-    if (world.terrain && world.terrain.forceGenerateAt) {
-      world.terrain.forceGenerateAt(player.mesh.position.x, player.mesh.position.z);
-      world.terrain.forceGenerateAt(camera.position.x, camera.position.z);
-    }
+  // ==== SPAWN SAFETY - Ensure player/camera above terrain ====
+  // Per task spec: Use terrain height + 5 for player, terrain height + 15 for camera
+  // If terrain not ready, use fallback y=50 (or higher for autostart)
+  // FIX (P0 TERRAIN SPAWN): Use higher values in autostart mode to prevent green blob bug
+  const isAutostartLoop = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
+  if (spawnSafetyFramesRemaining > 0) {
+    const PLAYER_OFFSET = isAutostartLoop ? 10 : 5;
+    const CAMERA_OFFSET = isAutostartLoop ? 30 : 15;
+    const FALLBACK_Y = isAutostartLoop ? 100 : 50;
     
     const getHeight = world.terrain ? (world.terrain.getHeightAt || world.terrain.getTerrainHeight) : null;
     
-    // PLAYER SAFETY: Ensure player is above terrain
-    // Per task spec: Use TerrainManager.getHeightAt(x,z) + 5 for safe spawn height
     if (getHeight) {
+      // Check player position
       const playerTerrainY = getHeight.call(world.terrain, player.mesh.position.x, player.mesh.position.z);
       if (!isNaN(playerTerrainY) && isFinite(playerTerrainY) && playerTerrainY > -100) {
         const minPlayerY = playerTerrainY + PLAYER_OFFSET;
@@ -719,44 +685,25 @@ function animate() {
           player.mesh.position.y = minPlayerY;
           if (player.velocity) player.velocity.y = 0;
         }
-      } else if (player.mesh.position.y < PLAYER_FALLBACK_Y) {
-        // Per task spec: If terrain isn't ready, use safe default (y=50)
-        player.mesh.position.y = PLAYER_FALLBACK_Y;
+      } else if (player.mesh.position.y < FALLBACK_Y) {
+        player.mesh.position.y = FALLBACK_Y;
         if (player.velocity) player.velocity.y = 0;
       }
-    }
-    
-    // CAMERA SAFETY: Ensure camera is WELL above terrain - PRIMARY fix for green blob bug
-    if (getHeight) {
+      
+      // Check camera position
       const camTerrainY = getHeight.call(world.terrain, camera.position.x, camera.position.z);
       if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-        const minCamY = Math.max(camTerrainY + TERRAIN_SAFETY_OFFSET, ABSOLUTE_MIN_CAM_Y);
+        const minCamY = camTerrainY + CAMERA_OFFSET;
         if (camera.position.y < minCamY) {
-          console.warn(`[Main:SpawnSafety] Camera below safe height (Y=${camera.position.y.toFixed(2)}, terrain=${camTerrainY.toFixed(2)}), forcing to ${minCamY.toFixed(2)}${isAutostart ? ' [AUTOSTART]' : ''}`);
           camera.position.y = minCamY;
           if (cameraController && cameraController.currentPos) {
             cameraController.currentPos.y = minCamY;
           }
         }
-      } else {
-        // Terrain not ready - use absolute minimum
-        if (camera.position.y < ABSOLUTE_MIN_CAM_Y) {
-          console.warn(`[Main:SpawnSafety] Terrain not ready, forcing camera to ${ABSOLUTE_MIN_CAM_Y}${isAutostart ? ' [AUTOSTART]' : ''}`);
-          camera.position.y = ABSOLUTE_MIN_CAM_Y;
-          if (cameraController && cameraController.currentPos) {
-            cameraController.currentPos.y = ABSOLUTE_MIN_CAM_Y;
-          }
-        }
-      }
-    } else {
-      // No terrain reference - use absolute minimum
-      if (camera.position.y < ABSOLUTE_MIN_CAM_Y) {
-        camera.position.y = ABSOLUTE_MIN_CAM_Y;
-        if (cameraController && cameraController.currentPos) {
-          cameraController.currentPos.y = ABSOLUTE_MIN_CAM_Y;
-        }
       }
     }
+    
+    spawnSafetyFramesRemaining--;
   }
 
   // FIRST FRAME SAFETY: Additional aggressive check on first frame only
@@ -884,41 +831,19 @@ function animate() {
   cameraController.update(delta);
   
   // POST-CAMERA-UPDATE SAFETY: Ensure camera didn't get lerped into terrain
-  // CRITICAL: Use autostart-aware values to prevent "green blob" bug
-  // The bug occurs when cameraController.update() lerps camera into terrain
-  {
-    const isAutostartPostCam = window.AUTOSTART_MODE === true;
-    // FIX (P0 GREEN BLOB): Use moderate offsets with time-based decay
-    // Previous bug was camera angle, not height - so we don't need extreme heights anymore
-    const timeSinceStartPost = Date.now() - autostartSpawnTime;
-    const inTimeSafetyPost = isAutostartPostCam && timeSinceStartPost < AUTOSTART_MINIMUM_SAFE_MS;
-    const safetyProgressPost = inTimeSafetyPost ? 0 : Math.min(1, (timeSinceStartPost - AUTOSTART_MINIMUM_SAFE_MS) / 20000);
-    // Moderate offsets - enough to stay above terrain while maintaining normal camera angle
-    const POST_CAM_TERRAIN_OFFSET = isAutostartPostCam ? Math.max(15, 100 * (1 - safetyProgressPost)) : 10;
-    const POST_CAM_MIN_Y = isAutostartPostCam ? Math.max(50, 200 * (1 - safetyProgressPost)) : 30;
-    
-    if (world.terrain) {
-      const camTerrainY = world.terrain.getTerrainHeight(camera.position.x, camera.position.z);
+  if (world.terrain && spawnSafetyFramesRemaining > 0) {
+    const CAMERA_OFFSET = 15;
+    const getHeight = world.terrain.getHeightAt || world.terrain.getTerrainHeight;
+    if (getHeight) {
+      const camTerrainY = getHeight.call(world.terrain, camera.position.x, camera.position.z);
       if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-        const minCamY = Math.max(camTerrainY + POST_CAM_TERRAIN_OFFSET, POST_CAM_MIN_Y);
+        const minCamY = camTerrainY + CAMERA_OFFSET;
         if (camera.position.y < minCamY) {
           camera.position.y = minCamY;
           if (cameraController && cameraController.currentPos) {
             cameraController.currentPos.y = minCamY;
           }
         }
-      } else if (camera.position.y < POST_CAM_MIN_Y) {
-        // Terrain not ready - enforce minimum
-        camera.position.y = POST_CAM_MIN_Y;
-        if (cameraController && cameraController.currentPos) {
-          cameraController.currentPos.y = POST_CAM_MIN_Y;
-        }
-      }
-    } else if (camera.position.y < POST_CAM_MIN_Y) {
-      // No terrain - enforce minimum
-      camera.position.y = POST_CAM_MIN_Y;
-      if (cameraController && cameraController.currentPos) {
-        cameraController.currentPos.y = POST_CAM_MIN_Y;
       }
     }
   }
@@ -1182,71 +1107,38 @@ function animate() {
   }
 
   // FINAL SAFETY CHECK: Ensure player and camera are above terrain before render
-  // This is the LAST line of defense against the "green blob" bug
-  // Per task spec: Use TerrainManager.getHeightAt(x,z) + 5 for player
-  // If terrain not ready, use safe default (y=50 for player)
-  {
-    // Check if we're in autostart mode for extra aggressive safety
-    const isAutostart = window.AUTOSTART_MODE === true;
+  // Per task spec: Use terrain height + 5 for player, terrain height + 15 for camera
+  // If terrain not ready, use fallback y=50 (or higher for autostart)
+  // FIX (P0 TERRAIN SPAWN): Use higher values in autostart mode to prevent green blob bug
+  if (world.terrain) {
+    const PLAYER_OFFSET = isAutostartLoop ? 10 : 5;
+    const CAMERA_OFFSET = isAutostartLoop ? 30 : 15;
+    const FALLBACK_Y = isAutostartLoop ? 100 : 50;
     
-    // FIX (P0): Use time-based decay for final safety check
-    const timeSinceStartFinal = Date.now() - autostartSpawnTime;
-    const inTimeSafetyFinal = isAutostart && timeSinceStartFinal < AUTOSTART_MINIMUM_SAFE_MS;
-    const safetyProgressFinal = inTimeSafetyFinal ? 0 : Math.min(1, (timeSinceStartFinal - AUTOSTART_MINIMUM_SAFE_MS) / 20000);
-    
-    const getHeightFinal = world.terrain ? (world.terrain.getHeightAt || world.terrain.getTerrainHeight) : null;
-    
-    // FINAL SAFETY CHECK (P0 GREEN BLOB FIX):
-    // Use moderate values - the real fix was camera ANGLE not extreme heights
-    // Player Y=300, Camera Y=310 gives normal viewing angle while staying above terrain
-    const PLAYER_OFFSET = isAutostart ? Math.max(5, 50 * (1 - safetyProgressFinal)) : 5;
-    const CAMERA_OFFSET = isAutostart ? Math.max(15, 100 * (1 - safetyProgressFinal)) : 15;
-    const PLAYER_FALLBACK_Y = isAutostart ? Math.max(50, 200 * (1 - safetyProgressFinal)) : 50;
-    const MIN_CAMERA_Y = isAutostart ? Math.max(50, 200 * (1 - safetyProgressFinal)) : 30;
-    
-    if (getHeightFinal) {
-      // Check player - use TerrainManager.getHeightAt(x,z) + 5
-      const playerTerrainY = getHeightFinal.call(world.terrain, player.mesh.position.x, player.mesh.position.z);
+    const getHeight = world.terrain.getHeightAt || world.terrain.getTerrainHeight;
+    if (getHeight) {
+      // Check player
+      const playerTerrainY = getHeight.call(world.terrain, player.mesh.position.x, player.mesh.position.z);
       if (!isNaN(playerTerrainY) && isFinite(playerTerrainY) && playerTerrainY > -100) {
         const minPlayerY = playerTerrainY + PLAYER_OFFSET;
         if (player.mesh.position.y < minPlayerY) {
           player.mesh.position.y = minPlayerY;
           if (player.velocity) player.velocity.y = 0;
         }
-      } else if (player.mesh.position.y < PLAYER_FALLBACK_Y) {
-        player.mesh.position.y = PLAYER_FALLBACK_Y;
+      } else if (player.mesh.position.y < FALLBACK_Y) {
+        player.mesh.position.y = FALLBACK_Y;
         if (player.velocity) player.velocity.y = 0;
       }
       
-      // Check camera - CRITICAL to prevent "green blob" bug
-      const camTerrainY = getHeightFinal.call(world.terrain, camera.position.x, camera.position.z);
+      // Check camera
+      const camTerrainY = getHeight.call(world.terrain, camera.position.x, camera.position.z);
       if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-        const minCamY = Math.max(camTerrainY + CAMERA_OFFSET, MIN_CAMERA_Y);
+        const minCamY = camTerrainY + CAMERA_OFFSET;
         if (camera.position.y < minCamY) {
           camera.position.y = minCamY;
           if (cameraController && cameraController.currentPos) {
             cameraController.currentPos.y = minCamY;
           }
-        }
-      } else if (camera.position.y < MIN_CAMERA_Y) {
-        camera.position.y = MIN_CAMERA_Y;
-        if (cameraController && cameraController.currentPos) {
-          cameraController.currentPos.y = MIN_CAMERA_Y;
-        }
-      }
-    } else {
-      // No terrain available - use safe fallbacks (higher in autostart mode)
-      const fallbackPlayerY = 50;
-      const fallbackCameraY = MIN_CAMERA_Y;
-      
-      if (player.mesh.position.y < fallbackPlayerY) {
-        player.mesh.position.y = fallbackPlayerY;
-        if (player.velocity) player.velocity.y = 0;
-      }
-      if (camera.position.y < fallbackCameraY) {
-        camera.position.y = fallbackCameraY;
-        if (cameraController && cameraController.currentPos) {
-          cameraController.currentPos.y = fallbackCameraY;
         }
       }
     }
@@ -1260,114 +1152,55 @@ function animate() {
 // This runs ONCE before the first frame to guarantee safe positions
 // Critical for ?autostart=true mode where terrain/player might not be synced
 //
-// FIX: The "green blob" bug happens when camera renders INSIDE terrain mesh.
-// Solution: Calculate Y position AFTER terrain generates, use TerrainManager.getHeightAt(x,z) + 5.
-// If terrain isn't ready, wait for it or use a safe default (y=50).
+// FIX (P0 TERRAIN SPAWN): The "green blob" bug happens when camera renders INSIDE terrain mesh.
+// Solution: Calculate Y position AFTER terrain generates, use TerrainManager.getHeightAt(x,z) + offset.
+// If terrain isn't ready, use a safe default. In autostart mode, use much higher defaults.
 (function initializeSpawnSafety() {
   // Check if we're in autostart mode - use extra aggressive safety
   const isAutostart = window.AUTOSTART_MODE === true;
   
-  // CRITICAL FIX (P0): In autostart mode, use EXTREMELY aggressive safety margins
+  // FIX (P0 TERRAIN SPAWN): Use higher offsets in autostart mode
   // The green blob bug occurs when camera spawns inside terrain mesh
-  // 
-  // KEY INSIGHT: The bug happens because:
-  // 1. Terrain chunks haven't fully generated/meshed yet
-  // 2. We query terrain height and get an invalid/low value
-  // 3. Player/camera get moved DOWN from their safe initial positions
-  // 4. Pre-render happens with camera inside terrain = GREEN BLOB
-  //
-  // FIX STRATEGY: 
-  // - NEVER move player/camera DOWN from their initial high positions in autostart
-  // - Use EXTREMELY high values (800+) to guarantee safety
-  // - Let gravity naturally bring them down AFTER first render is safe
-  // FIX (P0): Doubled all values for extra safety margin
-  // P0 GREEN BLOB FIX: Use moderate offset - real fix is camera ANGLE not extreme height
-  // Player at Y=300, camera at Y=310 gives normal viewing angle while staying above terrain (max Y ~25)
-  const SAFE_OFFSET_ABOVE_TERRAIN = isAutostart ? 100 : 5;
-  // P0 GREEN BLOB FIX: Use moderate values - the real fix is maintaining normal camera ANGLE
-  // Previous values (500-1200) caused extreme downward camera angle, filling view with terrain
-  // New approach: player Y=300, camera Y=310 (only 10 above) - normal viewing angle
-  const FALLBACK_SAFE_Y = isAutostart ? 300 : 50;            // Match player initial Y
-  const CAMERA_OFFSET_ABOVE_PLAYER = isAutostart ? 10 : 20;  // Small offset for normal viewing angle
-  const MIN_CAMERA_HEIGHT = isAutostart ? 100 : 30;          // Moderate minimum, terrain max is ~25
-  const CAMERA_TERRAIN_OFFSET = isAutostart ? 50 : 15;       // Moderate offset above terrain
+  // In autostart mode, terrain chunks may not be fully ready, so use very safe defaults
+  const PLAYER_OFFSET = isAutostart ? 10 : 5;   // Higher offset for autostart
+  const CAMERA_OFFSET = isAutostart ? 30 : 15;  // Much higher camera offset for autostart
+  const FALLBACK_Y = isAutostart ? 100 : 50;    // Higher fallback for autostart
   
-  // Store initial positions BEFORE any modifications - we'll use these as minimums
-  const initialPlayerY = player.mesh.position.y;  // Should be ~200 in autostart
-  const initialCameraY = camera.position.y;       // Should be ~300 in autostart
-  
-  if (isAutostart) {
-    console.log(`[Main:Init] AUTOSTART MODE DETECTED - Using aggressive spawn safety`);
-    console.log(`[Main:Init] Initial positions: player.y=${initialPlayerY}, camera.y=${initialCameraY}`);
-  }
-  
-  // Step 1: Force terrain chunk generation at player position AND wide surrounding area
-  // This ensures terrain data exists BEFORE we query height - generate 5x5 grid of chunks
   const px = player.mesh.position.x;
   const pz = player.mesh.position.z;
   
-  if (world.terrain) {
-    // Force generate chunks in a 5x5 grid around player to ensure full coverage
-    if (world.terrain.forceGenerateAt) {
-      for (let dx = -2; dx <= 2; dx++) {
-        for (let dz = -2; dz <= 2; dz++) {
-          world.terrain.forceGenerateAt(px + dx * 64, pz + dz * 64);
-        }
+  // Step 1: Force terrain generation
+  if (world.terrain && world.terrain.forceGenerateAt) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        world.terrain.forceGenerateAt(px + dx * 64, pz + dz * 64);
       }
-    } else if (world.terrain.update) {
-      // Fallback: reset tracking to force update
-      world.terrain.lastPlayerChunkX = null;
-      world.terrain.lastPlayerChunkZ = null;
-      world.terrain.update(px, pz);
     }
   }
   
-  // Step 2: Query terrain height at player position using getHeightAt (per task requirements)
+  // Step 2: Get terrain height
   let terrainY = 0;
   let terrainReady = false;
   
-  // Use TerrainManager.getHeightAt(x,z) per task spec - try both method names
   if (world.terrain) {
     const getHeight = world.terrain.getHeightAt || world.terrain.getTerrainHeight;
     if (getHeight) {
-      const ty = getHeight.call(world.terrain, px, pz);
-      if (!isNaN(ty) && isFinite(ty) && ty > -100) {
-        terrainY = ty;
+      const height = getHeight.call(world.terrain, px, pz);
+      if (!isNaN(height) && isFinite(height) && height > -100) {
+        terrainY = height;
         terrainReady = true;
       }
     }
   }
   
-  // Step 3: Calculate safe player Y position
-  // Use TerrainManager.getHeightAt(x,z) + 5 for safe spawn height above terrain (per task spec)
-  // CRITICAL: In autostart mode, NEVER move player DOWN from initial position
-  // If terrain isn't ready when player spawns, use safe default (y=50) (per task spec)
-  let targetPlayerY;
-  if (terrainReady) {
-    targetPlayerY = terrainY + SAFE_OFFSET_ABOVE_TERRAIN;
-    console.log(`[Main:Init] Terrain ready at player pos, using height ${terrainY.toFixed(2)} + ${SAFE_OFFSET_ABOVE_TERRAIN} = ${targetPlayerY.toFixed(2)}`);
-  } else {
-    console.warn('[Main:Init] Terrain not ready, using fallback spawn height (y=50) per task spec');
-    targetPlayerY = FALLBACK_SAFE_Y;
-  }
+  // Step 3: Calculate safe player Y
+  const targetPlayerY = terrainReady ? (terrainY + PLAYER_OFFSET) : FALLBACK_Y;
   
-  // Ensure player is NEVER below minimum safe height
-  targetPlayerY = Math.max(targetPlayerY, SAFE_OFFSET_ABOVE_TERRAIN);
-  
-  // CRITICAL FIX: In autostart mode, NEVER move player DOWN from initial position
-  // This prevents the green blob bug where we move player into terrain before first render
-  if (isAutostart && targetPlayerY < initialPlayerY) {
-    console.log(`[Main:Init] BLOCKED lowering player from ${initialPlayerY.toFixed(2)} to ${targetPlayerY.toFixed(2)}`);
-    targetPlayerY = initialPlayerY;
-  }
-  
-  // Set player position IMMEDIATELY
-  console.log(`[Main:Init] Player spawn: Y=${player.mesh.position.y.toFixed(2)} -> ${targetPlayerY.toFixed(2)}${isAutostart ? ' (AUTOSTART MODE)' : ''}`);
+  console.log(`[Main:Init] Player spawn: Y=${targetPlayerY.toFixed(2)} (terrain=${terrainY.toFixed(2)}, ready=${terrainReady})${isAutostart ? ' [AUTOSTART]' : ''}`);
   player.mesh.position.y = targetPlayerY;
   if (player.velocity) player.velocity.y = 0;
-  if (player.grounded !== undefined) player.grounded = true;
   
-  // Step 4: Position camera WELL above player - this is critical for autostart
+  // Step 4: Calculate camera position relative to player
   const camDistance = cameraController?.distance || 6;
   const camYaw = cameraController?.yaw || 0;
   const camPitch = cameraController?.pitch || 0.3;
@@ -1379,75 +1212,34 @@ function animate() {
   const targetCamX = px + offsetX;
   const targetCamZ = pz + offsetZ;
   
-  // Start with camera well above player
-  let targetCamY = targetPlayerY + CAMERA_OFFSET_ABOVE_PLAYER + offsetY;
+  // Camera at player + camera offset + terrain offset
+  let targetCamY = targetPlayerY + offsetY + 8;
   
-  // Force generate terrain at camera position too
-  if (world.terrain && world.terrain.forceGenerateAt) {
-    world.terrain.forceGenerateAt(targetCamX, targetCamZ);
-  }
-  
-  // Check terrain height at camera position and ensure camera is above it
+  // Check terrain at camera position
   if (world.terrain) {
     const getHeight = world.terrain.getHeightAt || world.terrain.getTerrainHeight;
     if (getHeight) {
       const camTerrainY = getHeight.call(world.terrain, targetCamX, targetCamZ);
       if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-        // Ensure camera is well above terrain at camera position
-        const minCamAboveTerrain = camTerrainY + CAMERA_TERRAIN_OFFSET;
-        if (targetCamY < minCamAboveTerrain) {
-          console.log(`[Main:Init] Camera would be inside terrain (${targetCamY.toFixed(2)} < ${minCamAboveTerrain.toFixed(2)}), adjusting`);
-          targetCamY = minCamAboveTerrain;
-        }
+        const minCamY = camTerrainY + CAMERA_OFFSET;
+        targetCamY = Math.max(targetCamY, minCamY);
       }
     }
   }
   
-  // CRITICAL: Ensure camera is NEVER below absolute minimum height
-  // This is the PRIMARY safeguard against the "green blob" bug
-  targetCamY = Math.max(targetCamY, MIN_CAMERA_HEIGHT);
+  console.log(`[Main:Init] Camera spawn: Y=${targetCamY.toFixed(2)}`);
   
-  // CRITICAL FIX: In autostart mode, NEVER move camera DOWN from initial position
-  // This is the key fix for the green blob bug - camera must NEVER go down before first safe render
-  if (isAutostart && targetCamY < initialCameraY) {
-    console.log(`[Main:Init] BLOCKED lowering camera from ${initialCameraY.toFixed(2)} to ${targetCamY.toFixed(2)}`);
-    targetCamY = initialCameraY;
-  }
-  
-  console.log(`[Main:Init] Camera spawn: Y=${camera.position.y.toFixed(2)} -> ${targetCamY.toFixed(2)}`);
-  
-  // Set camera position DIRECTLY - bypass any lerping
+  // Set camera position
   camera.position.set(targetCamX, targetCamY, targetCamZ);
   
-  // CRITICAL: Update camera controller's internal state to match - prevent lerp from bad pos
+  // Update camera controller state
   if (cameraController) {
-    // Set currentPos to match so lerp doesn't move camera
     if (cameraController.currentPos) {
       cameraController.currentPos.set(targetCamX, targetCamY, targetCamZ);
     }
-    // Skip first-frame lerp since we positioned manually
     cameraController._firstFrame = false;
-    // Enable aggressive terrain clamping for extended safety period
-    // In autostart mode, use even longer safety period (60 seconds)
-    cameraController._spawnSafetyFrames = isAutostart ? 3600 : 300;
-    cameraController._terrainClampOffset = isAutostart ? 500 : 20;
-    cameraController._minCameraY = MIN_CAMERA_HEIGHT;
-    cameraController._isAutostart = isAutostart;
-    cameraController._terrainConfirmedReady = false;
-    cameraController._terrainReadyFrames = 0;
-    
-    // FIX (P0 GREEN BLOB): Store initial camera Y and enable Y-lock for autostart
-    // This ensures camera stays at safe height until terrain is proven ready
-    // CRITICAL: Use the ACTUAL targetCamY we calculated, which should be very high
-    cameraController._initialCamY = isAutostart ? targetCamY : null;
-    cameraController._lockToInitialY = isAutostart;
-    
-    // FIX (P0): Set the confirmation threshold high - need 600 frames of valid terrain
-    cameraController._terrainConfirmThreshold = isAutostart ? 600 : 60;
-    
-    // FIX (P0): Update spawn start time to now so timer is accurate
-    cameraController._spawnStartTime = Date.now();
-    cameraController._minimumSafetyMs = isAutostart ? 15000 : 1000;
+    cameraController._spawnSafetyFrames = 300;
+    cameraController._terrainClampOffset = 15;
   }
   
   // Point camera at player
@@ -1455,11 +1247,10 @@ function animate() {
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld(true);
   
-  // IMPORTANT: Do a pre-render to "warm up" the scene before real animation starts
-  // This ensures all positions are correctly set before first visible frame
+  // Pre-render to ensure positions are set
   renderer.render(scene, camera);
   
-  console.log(`[Main:Init] Spawn complete: player=(${px.toFixed(1)}, ${targetPlayerY.toFixed(1)}, ${pz.toFixed(1)}), camera=(${targetCamX.toFixed(1)}, ${targetCamY.toFixed(1)}, ${targetCamZ.toFixed(1)})${isAutostart ? ' [AUTOSTART]' : ''}`);
+  console.log(`[Main:Init] Spawn complete: player=(${px.toFixed(1)}, ${targetPlayerY.toFixed(1)}, ${pz.toFixed(1)}), camera=(${targetCamX.toFixed(1)}, ${targetCamY.toFixed(1)}, ${targetCamZ.toFixed(1)})`);
 })();
 
 animate();

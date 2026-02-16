@@ -25,31 +25,19 @@ export class CameraController {
     // Terrain reference for height clamping (set via setTerrain)
     this.terrain = null;
     
-    // Check for autostart mode - need MUCH higher safety values to prevent green blob bug
-    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    // P0 GREEN BLOB FIX: The real issue was camera ANGLE, not height
-    // Previous: player Y=800, camera Y=1500 = 89° downward angle (terrain fills view)
-    // New: player Y=300, camera Y=310 = normal viewing angle while above terrain (max Y ~25)
-    this._terrainClampOffset = isAutostart ? 50 : 15;   // Moderate offset, terrain max is ~25
-    this._spawnSafetyFrames = isAutostart ? 600 : 300;  // 10 seconds safety (terrain loads fast)
-    this._minCameraY = isAutostart ? 100 : 30;          // Moderate minimum, well above terrain max
-    this._isAutostart = isAutostart;                     // Cache for use in update
-    this._terrainConfirmedReady = false;                // Track when terrain returns valid heights consistently
-    this._terrainReadyFrames = 0;                       // Count consecutive frames with valid terrain height
+    this._terrainClampOffset = 15;      // Per task spec: camera offset above terrain
+    this._spawnSafetyFrames = 300;      // Safety frames for terrain clamping
     
-    // P0 GREEN BLOB FIX: Store initial camera Y for reference during spawn safety
-    this._initialCamY = isAutostart ? camera.position.y : null;
-    this._lockToInitialY = isAutostart;  // Lock camera to initial Y until terrain is ready
-    
-    // Time-based safety tracking - shorter period since using correct approach now
+    // FIX (P0 TERRAIN SPAWN): Initialize all spawn safety variables
+    // These were being referenced but never initialized, causing safety logic to fail
+    this._isAutostart = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
     this._spawnStartTime = Date.now();
-    this._minimumSafetyMs = isAutostart ? 5000 : 1000; // 5 seconds minimum safety in autostart
-    
-    // P0 GREEN BLOB FIX: Terrain confirmation threshold
-    this._terrainConfirmThreshold = isAutostart ? 180 : 60; // 3 seconds at 60fps for autostart
+    this._minimumSafetyMs = this._isAutostart ? 3000 : 1000;  // 3 sec for autostart, 1 sec normally
+    this._terrainReadyFrames = 0;
+    this._terrainConfirmedReady = false;
+    this._minCameraY = this._isAutostart ? 100 : 30;  // Higher minimum for autostart mode
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -88,82 +76,7 @@ export class CameraController {
   }
 
   update(delta) {
-    // P0 GREEN BLOB FIX: During spawn safety, keep camera at initial position
-    // Real fix: player Y=300, camera Y=310 = normal viewing angle (not extreme 89° downward)
-    // Lock camera Y until terrain is confirmed to prevent any descent into terrain
-    const timeSinceSpawn = Date.now() - this._spawnStartTime;
-    const inTimeSafety = timeSinceSpawn < this._minimumSafetyMs;
-    
-    // Stay locked until both time elapsed AND terrain confirmed
-    const shouldStayLocked = this._lockToInitialY && this._initialCamY !== null && 
-      (inTimeSafety || !this._terrainConfirmedReady);
-    
-    if (shouldStayLocked) {
-      // During lock period, keep camera at initial Y while following player X/Z
-      const targetPos = this.target.position.clone();
-      
-      // Calculate X/Z offset from player (for orbit camera)
-      const offsetX = Math.sin(this.yaw) * this.distance * Math.cos(this.pitch);
-      const offsetZ = Math.cos(this.yaw) * this.distance * Math.cos(this.pitch);
-      
-      // Lock Y to initial position (~310 in autostart, only ~10 above player Y=300)
-      this.currentPos.x = targetPos.x + offsetX;
-      this.currentPos.z = targetPos.z + offsetZ;
-      this.currentPos.y = this._initialCamY;  // Locked to initial Y
-      
-      // Update camera position
-      this.camera.position.copy(this.currentPos);
-      
-      // Look at player but from high position
-      this.camera.lookAt(targetPos.x, targetPos.y + this.height, targetPos.z);
-      
-      // Process mouse look
-      const mouseDelta = this.input.getMouseDelta();
-      this.yaw -= mouseDelta.x * this.sensitivity;
-      this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch + mouseDelta.y * this.sensitivity));
-      
-      // Check if terrain is ready - only unlock after MANY frames of valid terrain AND time elapsed
-      // This prevents unlocking before mesh is fully rendered
-      if (this.terrain && !inTimeSafety) {
-        const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
-        if (getHeight) {
-          const terrainY = getHeight.call(this.terrain, this.currentPos.x, this.currentPos.z);
-          if (!isNaN(terrainY) && isFinite(terrainY) && terrainY > -100) {
-            this._terrainReadyFrames++;
-            // Use configurable threshold - 600 frames in autostart mode (~10 seconds)
-            const threshold = this._terrainConfirmThreshold || 120;
-            if (this._terrainReadyFrames >= threshold) {
-              this._lockToInitialY = false;
-              this._terrainConfirmedReady = true;
-              console.log(`[CameraController] Terrain confirmed after ${this._terrainReadyFrames} frames - unlocking camera Y`);
-            }
-          } else {
-            this._terrainReadyFrames = 0;  // Reset counter on invalid terrain
-          }
-        }
-      }
-      
-      // DON'T decrement spawn safety frames during lock - keep full safety period
-      // Only start countdown after unlock
-      return;  // Skip normal camera update during Y-lock period
-    }
-    
-    // SPAWN SAFETY: For first N frames, clamp target above terrain before ANY calculations
-    // This prevents the "green blob" bug where camera spawns inside terrain mesh
-    if (this._spawnSafetyFrames > 0 && this.terrain) {
-      const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
-      if (getHeight) {
-        const targetTerrainY = getHeight.call(this.terrain, this.target.position.x, this.target.position.z);
-        if (!isNaN(targetTerrainY) && isFinite(targetTerrainY) && targetTerrainY > -100) {
-          const minTargetY = targetTerrainY + 5; // Player should be 5 units above terrain
-          if (this.target.position.y < minTargetY) {
-            this.target.position.y = minTargetY;
-          }
-        }
-      }
-    }
-    
-    // Mouse look (always process, even when locked - allows some camera adjustment)
+    // Mouse look
     const mouseDelta = this.input.getMouseDelta();
     this.yaw -= mouseDelta.x * this.sensitivity;
     this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch + mouseDelta.y * this.sensitivity));
