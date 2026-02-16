@@ -776,12 +776,12 @@ function animate() {
     } else if (isFirstFrame) {
       // Terrain not ready - use absolute safe fallback
       console.warn('[Main] Spawn safety: terrain unavailable, using safe defaults');
-      player.mesh.position.y = MIN_SAFE_HEIGHT;
+      player.mesh.position.y = MIN_PLAYER_Y;
       if (player.velocity) player.velocity.y = 0;
       
       const safeCamX = player.mesh.position.x;
       const safeCamZ = player.mesh.position.z + 6;
-      const safeCamY = MIN_SAFE_HEIGHT + 10;
+      const safeCamY = MIN_PLAYER_Y + 10;
       
       camera.position.set(safeCamX, safeCamY, safeCamZ);
       if (cameraController && cameraController.currentPos) {
