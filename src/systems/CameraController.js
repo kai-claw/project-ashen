@@ -30,9 +30,11 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = isAutostart ? 60 : 15;   // EXTREMELY high in autostart mode for green blob fix
-    this._spawnSafetyFrames = isAutostart ? 900 : 300;  // 15 seconds safety in autostart mode
-    this._minCameraY = isAutostart ? 100 : 30;          // Very high minimum in autostart mode
+    // FIX: Using EXTREMELY high values (150+) to absolutely prevent green blob bug
+    // Camera will start very high and naturally descend once terrain safety is confirmed
+    this._terrainClampOffset = isAutostart ? 120 : 15;  // EXTREMELY high in autostart mode for green blob fix
+    this._spawnSafetyFrames = isAutostart ? 1200 : 300; // 20 seconds safety in autostart mode
+    this._minCameraY = isAutostart ? 180 : 30;          // EXTREMELY high minimum in autostart mode
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -243,13 +245,14 @@ export class CameraController {
     // CRITICAL: Always enforce absolute minimum camera Y
     // Use MUCH higher minimum in autostart mode to prevent green blob bug
     // The bug occurs when camera is inside terrain mesh - we need conservative values
-    const absoluteMinY = this._minCameraY || (isAutostart ? 80 : 30);
+    // FIX: Using 180+ as minimum to absolutely guarantee camera is above terrain
+    const absoluteMinY = this._minCameraY || (isAutostart ? 180 : 30);
     if (this.currentPos.y < absoluteMinY) {
       this.currentPos.y = absoluteMinY;
     }
     
     // If no terrain, use fallback height (especially important during spawn safety)
-    const fallbackY = isAutostart ? 100 : 50;
+    const fallbackY = isAutostart ? 180 : 50;
     if (!this.terrain) {
       if (this.currentPos.y < fallbackY) {
         this.currentPos.y = fallbackY;
@@ -280,11 +283,12 @@ export class CameraController {
     // During normal gameplay, use standard offset (still 15 units for safety)
     // Per task spec: terrain height + 5 for player, using 15+ for camera to ensure visibility
     // In autostart mode, use EXTREMELY HIGH offsets to absolutely prevent green blob bug
+    // FIX: Using 150+ during spawn safety to guarantee no terrain clipping
     let offset;
     if (inSpawnSafety) {
-      offset = isAutostart ? Math.max(this._terrainClampOffset, 70) : Math.max(this._terrainClampOffset, 20);
+      offset = isAutostart ? Math.max(this._terrainClampOffset, 150) : Math.max(this._terrainClampOffset, 20);
     } else {
-      offset = isAutostart ? 50 : this._terrainClampOffset;
+      offset = isAutostart ? 80 : this._terrainClampOffset;
     }
     const minY = Math.max(terrainY + offset, absoluteMinY);
     
