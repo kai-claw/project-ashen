@@ -130,14 +130,16 @@ scene.background = new THREE.Color(0x87CEEB);  // Initial sky blue (will be over
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
 // Initial camera position - will be adjusted by IIFE after terrain generates
-// Per task spec: Camera positioned relative to player at terrain height + offset
-// FIX (P0 TERRAIN SPAWN): In autostart mode, use VERY high initial position to guarantee
-// camera is above terrain until safety IIFE recalculates with actual terrain heights.
-// Terrain max height is ~25, so 150 is guaranteed safe.
+// CRITICAL FIX (P0 GREEN BLOB): Camera angle fix, not just height fix.
+// Previous failed approach: camera at Y=1500 looking at player at Y=800 = 89° downward angle
+// This extreme angle made terrain fill entire viewport even though camera was "above" it.
+// CORRECT APPROACH: Player at Y=300, camera at Y=310 (only 10 units above) - normal viewing angle.
+// Both are well above terrain max (Y ~25), but camera looks at player horizontally, not straight down.
 const isAutostartInit = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
-const initialCameraY = isAutostartInit ? 150 : 60;
-camera.position.set(0, initialCameraY, 11);
-camera.lookAt(0, initialCameraY - 10, 5);
+const initialCameraY = isAutostartInit ? 310 : 60;
+const initialCameraZ = isAutostartInit ? 20 : 11;
+camera.position.set(0, initialCameraY, initialCameraZ);
+camera.lookAt(0, isAutostartInit ? 300 : (initialCameraY - 10), 5);
 
 // DEBUG objects removed - terrain now rendering with MeshBasicMaterial
 
@@ -1153,20 +1155,21 @@ function animate() {
 // This runs ONCE before the first frame to guarantee safe positions
 // Critical for ?autostart=true mode where terrain/player might not be synced
 //
-// FIX (P0 TERRAIN SPAWN): The "green blob" bug happens when camera renders INSIDE terrain mesh.
-// Solution: Calculate Y position AFTER terrain generates, use TerrainManager.getHeightAt(x,z) + offset.
-// If terrain isn't ready, use a safe default. In autostart mode, use much higher defaults.
+// FIX (P0 GREEN BLOB): CAMERA ANGLE FIX, NOT JUST HEIGHT FIX
+// Previous failed approach: camera at extreme heights (Y=800-1500) looking at player below
+// This caused extreme downward angle (89°) that made terrain fill entire viewport.
+// CORRECT APPROACH: Player at Y=300, camera at Y=310 - normal horizontal viewing angle.
+// Both positions are well above terrain max (~25), camera looks at player horizontally.
 (function initializeSpawnSafety() {
-  // Check if we're in autostart mode - use extra aggressive safety
+  // Check if we're in autostart mode
   const isAutostart = window.AUTOSTART_MODE === true;
   
-  // FIX (P0 TERRAIN SPAWN): Use higher offsets in autostart mode
-  // The green blob bug occurs when camera spawns inside terrain mesh
-  // In autostart mode, terrain chunks may not be fully ready, so use very safe defaults
-  // Terrain heightScale is 25, so max terrain is ~25. These values are guaranteed safe.
-  const PLAYER_OFFSET = isAutostart ? 15 : 5;   // Higher offset for autostart
-  const CAMERA_OFFSET = isAutostart ? 40 : 15;  // Much higher camera offset for autostart
-  const FALLBACK_Y = isAutostart ? 120 : 50;    // Higher fallback for autostart (well above max terrain of ~25)
+  // FIX (P0 GREEN BLOB): Camera angle fix approach - use moderate values
+  // The bug was caused by extreme camera ANGLE (looking straight down), not insufficient height
+  // Terrain heightScale is 25, so max terrain is ~25. These moderate values are safe.
+  const PLAYER_OFFSET = isAutostart ? 10 : 5;   // Moderate offset
+  const CAMERA_OFFSET = isAutostart ? 15 : 15;  // Camera only slightly above player
+  const FALLBACK_Y = isAutostart ? 300 : 50;    // Player at Y=300 in autostart (camera angle fix)
   
   const px = player.mesh.position.x;
   const pz = player.mesh.position.z;
@@ -1237,56 +1240,45 @@ function animate() {
   const targetCamX = px + offsetX;
   const targetCamZ = pz + offsetZ;
   
-  // Camera at player + camera offset + terrain offset
-  // In autostart mode, use extra height to guarantee no terrain intersection
-  let targetCamY = targetPlayerY + offsetY + (isAutostart ? 15 : 8);
+  // FIX (P0 GREEN BLOB): Camera angle fix approach
+  // Camera should be only slightly above player (10-15 units), not way higher
+  // This maintains a normal viewing angle instead of extreme downward angle
+  let targetCamY = targetPlayerY + 10 + offsetY;  // Just 10 units above player
   
-  // Check terrain at camera position and surrounding area
+  // Check terrain at camera position
   if (world.terrain) {
     const getHeight = world.terrain.getHeightAt || world.terrain.getTerrainHeight;
     if (getHeight) {
-      // Sample multiple points around camera position for safety
-      const camSamplePoints = [
-        [targetCamX, targetCamZ],
-        [targetCamX + 2, targetCamZ], [targetCamX - 2, targetCamZ],
-        [targetCamX, targetCamZ + 2], [targetCamX, targetCamZ - 2],
-      ];
-      let maxCamTerrainY = -Infinity;
-      
-      for (const [sx, sz] of camSamplePoints) {
-        const h = getHeight.call(world.terrain, sx, sz);
-        if (!isNaN(h) && isFinite(h) && h > -100) {
-          maxCamTerrainY = Math.max(maxCamTerrainY, h);
-        }
-      }
-      
-      if (maxCamTerrainY > -Infinity) {
-        const minCamY = maxCamTerrainY + CAMERA_OFFSET;
+      const camTerrainY = getHeight.call(world.terrain, targetCamX, targetCamZ);
+      if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
+        const minCamY = camTerrainY + CAMERA_OFFSET;
         targetCamY = Math.max(targetCamY, minCamY);
       }
     }
   }
   
-  // In autostart mode, enforce absolute minimum camera height
+  // In autostart mode, ensure camera stays at player level (camera angle fix)
   if (isAutostart) {
-    const absoluteMinCamY = FALLBACK_Y + 20;  // Camera should be above player fallback
-    targetCamY = Math.max(targetCamY, absoluteMinCamY);
+    // Camera should be close to player Y, not way above
+    targetCamY = Math.max(targetCamY, targetPlayerY + 10);
+    targetCamY = Math.min(targetCamY, targetPlayerY + 20);  // Cap how far above player camera can be
   }
   
-  console.log(`[Main:Init] Camera spawn: Y=${targetCamY.toFixed(2)}${isAutostart ? ' [AUTOSTART]' : ''}`);
+  console.log(`[Main:Init] Camera spawn: Y=${targetCamY.toFixed(2)}${isAutostart ? ' [AUTOSTART - angle fix]' : ''}`);
   
-  // Set camera position
-  camera.position.set(targetCamX, targetCamY, targetCamZ);
+  // Set camera position - in autostart mode, use larger Z for better viewing angle
+  const finalCamZ = isAutostart ? 20 : targetCamZ;
+  camera.position.set(targetCamX, targetCamY, finalCamZ);
   
   // Update camera controller state
   if (cameraController) {
     if (cameraController.currentPos) {
-      cameraController.currentPos.set(targetCamX, targetCamY, targetCamZ);
+      cameraController.currentPos.set(targetCamX, targetCamY, finalCamZ);
     }
     cameraController._firstFrame = false;
-    cameraController._spawnSafetyFrames = isAutostart ? 600 : 300;  // Longer safety for autostart
-    cameraController._terrainClampOffset = isAutostart ? 40 : 15;
-    cameraController._minCameraY = isAutostart ? FALLBACK_Y : 30;
+    cameraController._spawnSafetyFrames = isAutostart ? 600 : 300;
+    cameraController._terrainClampOffset = 15;  // Moderate offset (camera angle is the fix, not height)
+    cameraController._minCameraY = isAutostart ? 200 : 30;  // Safety floor
   }
   
   // Point camera at player

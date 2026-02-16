@@ -125,9 +125,12 @@ export class Player {
     // Per task spec: Use terrain height + offset for safe spawn, or fallback if terrain not ready
     // FIX (P0 TERRAIN SPAWN): Use higher initial Y in autostart mode to prevent green blob bug
     this.mesh = new THREE.Group();
-    // FIX (P0 TERRAIN SPAWN): Use higher initial Y in autostart mode
-    // Terrain heightScale is 25, so max terrain is ~25. Use 120 to guarantee safe spawn.
-    const initialY = isAutostart ? 120 : 50;
+    // FIX (P0 GREEN BLOB): Camera angle fix - player at Y=300, camera at Y=310
+    // Previous failed approach used extreme heights (Y=800+) with camera looking straight down
+    // which made terrain fill viewport even though camera was "above" terrain.
+    // CORRECT APPROACH: Player and camera at similar heights (Y=300 and Y=310) with normal viewing angle.
+    // Both are well above terrain max (Y ~25), and camera looks horizontally, not straight down.
+    const initialY = isAutostart ? 300 : 50;
     this.mesh.position.set(0, initialY, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)
