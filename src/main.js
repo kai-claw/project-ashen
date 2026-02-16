@@ -1405,6 +1405,11 @@ function animate() {
     cameraController._isAutostart = isAutostart;
     cameraController._terrainConfirmedReady = false;
     cameraController._terrainReadyFrames = 0;
+    
+    // FIX (P0 GREEN BLOB): Store initial camera Y and enable Y-lock for autostart
+    // This ensures camera stays at safe height until terrain is proven ready
+    cameraController._initialCamY = isAutostart ? targetCamY : null;
+    cameraController._lockToInitialY = isAutostart;
   }
   
   // Point camera at player

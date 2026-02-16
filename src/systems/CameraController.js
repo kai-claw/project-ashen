@@ -40,6 +40,12 @@ export class CameraController {
     this._terrainConfirmedReady = false;                // Track when terrain returns valid heights consistently
     this._terrainReadyFrames = 0;                       // Count consecutive frames with valid terrain height
     
+    // FIX (P0 GREEN BLOB): Store initial camera Y as an ABSOLUTE floor during spawn safety
+    // In autostart mode, camera MUST stay at this height until terrain is confirmed
+    // This prevents ANY descent that could put camera inside terrain
+    this._initialCamY = isAutostart ? camera.position.y : null;
+    this._lockToInitialY = isAutostart;  // Lock camera to initial Y until terrain is ready
+    
     // Smooth lock-on transition
     this.lockOnYaw = 0;
     this.lockOnTransition = 0; // 0 = free camera, 1 = fully locked
@@ -77,6 +83,56 @@ export class CameraController {
   }
 
   update(delta) {
+    // FIX (P0 GREEN BLOB): In autostart mode during spawn safety, LOCK camera to initial high position
+    // This is the PRIMARY defense against the green blob bug - do NOT descend until terrain is proven safe
+    if (this._lockToInitialY && this._initialCamY !== null && this._spawnSafetyFrames > 0) {
+      // During lock period, keep camera at initial Y regardless of player position
+      // Only allow X/Z movement to follow player, Y stays locked
+      const targetPos = this.target.position.clone();
+      
+      // Calculate X/Z offset from player (for orbit camera)
+      const offsetX = Math.sin(this.yaw) * this.distance * Math.cos(this.pitch);
+      const offsetZ = Math.cos(this.yaw) * this.distance * Math.cos(this.pitch);
+      
+      // Lock Y to initial position - do NOT calculate based on player Y
+      this.currentPos.x = targetPos.x + offsetX;
+      this.currentPos.z = targetPos.z + offsetZ;
+      this.currentPos.y = this._initialCamY;  // LOCKED to initial high Y
+      
+      // Update camera position
+      this.camera.position.copy(this.currentPos);
+      
+      // Look at player but from high position
+      this.camera.lookAt(targetPos.x, targetPos.y + this.height, targetPos.z);
+      
+      // Process mouse look
+      const mouseDelta = this.input.getMouseDelta();
+      this.yaw -= mouseDelta.x * this.sensitivity;
+      this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch + mouseDelta.y * this.sensitivity));
+      
+      // Check if terrain is ready - only unlock after 120+ frames of valid terrain
+      if (this.terrain) {
+        const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
+        if (getHeight) {
+          const terrainY = getHeight.call(this.terrain, this.currentPos.x, this.currentPos.z);
+          if (!isNaN(terrainY) && isFinite(terrainY) && terrainY > -100) {
+            this._terrainReadyFrames++;
+            // After 120 consecutive valid frames (~2 seconds), allow gradual descent
+            if (this._terrainReadyFrames >= 120) {
+              this._lockToInitialY = false;
+              this._terrainConfirmedReady = true;
+              console.log('[CameraController] Terrain confirmed - unlocking camera Y');
+            }
+          } else {
+            this._terrainReadyFrames = 0;  // Reset counter on invalid terrain
+          }
+        }
+      }
+      
+      this._spawnSafetyFrames--;
+      return;  // Skip normal camera update during Y-lock period
+    }
+    
     // SPAWN SAFETY: For first N frames, clamp target above terrain before ANY calculations
     // This prevents the "green blob" bug where camera spawns inside terrain mesh
     if (this._spawnSafetyFrames > 0 && this.terrain) {
