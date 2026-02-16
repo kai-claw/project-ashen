@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v26 (a977273): AGGRESSIVE CAMERA SAFETY - Camera starts at Y=300 in autostart. Changes: (1) Camera initial Y: 300 (was 250), (2) CameraController tracks terrain confirmation (60 consecutive valid frames), (3) Gradual 30-second descent from Y=300 to normal after terrain confirmed, (4) Spawn safety extended to 1800 frames (~30s), (5) All safety check offsets increased to 200+ in autostart, (6) Absolute min camera Y: 250 in autostart, (7) Player offsets increased to 50 in autostart. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v27 (121f19e): ROOT CAUSE FOUND - SaveIntegration.startNewGame() was overwriting main.js safe positions with lower values (Y=80 instead of Y=300). FIX: Aligned ALL autostart safety values across main.js IIFE, CameraController, SaveIntegration, and Player. Values: Camera min Y: 300, Camera terrain offset: 200, Player fallback Y: 200, Player min Y: 150, Safety frames: 1800 (~30s). Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T07:10:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v26 complete (a977273) - AGGRESSIVE CAMERA SAFETY. Camera starts Y=300 in autostart, requires terrain confirmation (60 valid frames), gradual 30s descent, all offsets 200+. Build verified, deployed. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T07:20:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v27 complete (121f19e) - ROOT CAUSE FIX. SaveIntegration.startNewGame() was overwriting safe positions with lower values. ALL systems now aligned: Camera min Y=300, Player fallback Y=200, Safety frames=1800. Build verified, deployed. Ready for confirmer verification."
 }
