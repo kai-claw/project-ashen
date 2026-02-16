@@ -127,12 +127,12 @@ export class Player {
     // Create mesh container
     // Initial position uses fallback height - will be adjusted by _ensureSafeSpawnHeight()
     // when world is set, or by main.js IIFE before first render.
-    // CRITICAL: In autostart mode, use EXTREMELY HIGH initial Y to prevent green blob bug
-    // FIX (P0): Using 800 to ensure player starts well above any terrain
-    // Must be high enough that camera (at player.y + offset) is also safe
-    // Camera starts at 1500, so player should be at 800+ to maintain good viewing angle
+    // CRITICAL FIX (P0 GREEN BLOB): Player and camera must start at SIMILAR heights
+    // Previous bug: player at Y=800, camera at Y=1500 = extreme downward camera angle
+    // This made terrain fill entire view even though camera was technically "above" it
+    // NEW APPROACH: Player at Y=300, camera at Y=310 - normal viewing angle, both above terrain
     this.mesh = new THREE.Group();
-    const initialY = isAutostart ? 800 : 50;  // EXTREMELY high in autostart mode (800)
+    const initialY = isAutostart ? 300 : 50;  // Safe height that maintains normal camera angle
     this.mesh.position.set(0, initialY, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)
@@ -517,17 +517,17 @@ export class Player {
       
       // ==================================================================================
       // AUTOSTART SPAWN SAFETY (P0 GREEN BLOB FIX):
-      // During autostart spawn safety period, keep player at initial high Y (800+).
+      // During autostart spawn safety period, keep player at initial Y (300).
       // DO NOT apply any gravity - let player float at safe height until terrain is confirmed.
       // The main.js animate() loop will gradually allow descent once terrain is proven ready.
       //
-      // The "green blob" bug occurs when player/camera descend before terrain mesh renders.
-      // Fix: Keep player at Y=800 (constructor initial) and camera at Y=1500 (main.js initial).
+      // The "green blob" bug was caused by extreme camera angle (player Y=800, camera Y=1500).
+      // Fix: Keep player at Y=300 (constructor initial) and camera at Y=310 (main.js initial).
+      // Both at similar heights = normal viewing angle while still being above terrain.
       // ==================================================================================
       if (isAutostart && inSpawnSafety) {
-        // CRITICAL: Use Y=800 to match constructor initial value
-        // This is the key fix - previous values (200-400) were way too low
-        const AUTOSTART_SAFE_Y = 800;
+        // Use Y=300 to match constructor initial value - maintains normal camera viewing angle
+        const AUTOSTART_SAFE_Y = 300;
         
         // Ensure player stays at safe height - NO downward movement allowed
         if (this.mesh.position.y < AUTOSTART_SAFE_Y) {
@@ -1527,9 +1527,10 @@ export class Player {
     // ==================================================================================
     
     if (isAutostart) {
-      // In autostart mode, just ensure player doesn't go below initial high position
-      // Player constructor sets Y=800, camera at Y=1500 - maintain these
-      const AUTOSTART_MIN_Y = 500; // Absolute floor - should never go below this
+      // In autostart mode, just ensure player doesn't go below initial position
+      // Player constructor sets Y=300, camera at Y=310 - both at similar heights for normal viewing angle
+      // Previous bug: Y=800/1500 caused extreme 89° downward angle, filling view with terrain
+      const AUTOSTART_MIN_Y = 200; // Absolute floor - allows some descent but stays above terrain
       
       if (this.mesh.position.y < AUTOSTART_MIN_Y) {
         console.warn(`[Player:SpawnSafety] AUTOSTART: Player below safe floor, correcting: ${this.mesh.position.y.toFixed(2)} -> ${AUTOSTART_MIN_Y}`);

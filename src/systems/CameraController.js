@@ -30,29 +30,26 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    // FIX (P0): Using EXTREMELY high values to absolutely prevent green blob bug
-    // Camera will start very high and gradually descend once terrain safety is confirmed
-    // These values must be high enough that camera NEVER renders inside terrain
-    this._terrainClampOffset = isAutostart ? 500 : 15;  // EXTREMELY high in autostart mode for green blob fix
-    this._spawnSafetyFrames = isAutostart ? 3600 : 300; // 60 seconds safety in autostart mode (3600 frames @ 60fps)
-    this._minCameraY = isAutostart ? 800 : 30;          // EXTREMELY high minimum in autostart mode (800)
+    // P0 GREEN BLOB FIX: The real issue was camera ANGLE, not height
+    // Previous: player Y=800, camera Y=1500 = 89° downward angle (terrain fills view)
+    // New: player Y=300, camera Y=310 = normal viewing angle while above terrain (max Y ~25)
+    this._terrainClampOffset = isAutostart ? 50 : 15;   // Moderate offset, terrain max is ~25
+    this._spawnSafetyFrames = isAutostart ? 600 : 300;  // 10 seconds safety (terrain loads fast)
+    this._minCameraY = isAutostart ? 100 : 30;          // Moderate minimum, well above terrain max
     this._isAutostart = isAutostart;                     // Cache for use in update
     this._terrainConfirmedReady = false;                // Track when terrain returns valid heights consistently
     this._terrainReadyFrames = 0;                       // Count consecutive frames with valid terrain height
     
-    // FIX (P0 GREEN BLOB): Store initial camera Y as an ABSOLUTE floor during spawn safety
-    // In autostart mode, camera MUST stay at this height until terrain is confirmed
-    // This prevents ANY descent that could put camera inside terrain
+    // P0 GREEN BLOB FIX: Store initial camera Y for reference during spawn safety
     this._initialCamY = isAutostart ? camera.position.y : null;
     this._lockToInitialY = isAutostart;  // Lock camera to initial Y until terrain is ready
     
-    // FIX (P0): Add time-based safety tracking for more reliable safety
+    // Time-based safety tracking - shorter period since using correct approach now
     this._spawnStartTime = Date.now();
-    this._minimumSafetyMs = isAutostart ? 15000 : 1000; // 15 seconds minimum safety in autostart
+    this._minimumSafetyMs = isAutostart ? 5000 : 1000; // 5 seconds minimum safety in autostart
     
-    // FIX (P0 GREEN BLOB): CRITICAL - require MANY more frames of terrain confirmation
-    // The mesh takes time to render after height queries work
-    this._terrainConfirmThreshold = isAutostart ? 600 : 60; // 10 seconds at 60fps for autostart
+    // P0 GREEN BLOB FIX: Terrain confirmation threshold
+    this._terrainConfirmThreshold = isAutostart ? 180 : 60; // 3 seconds at 60fps for autostart
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -91,30 +88,28 @@ export class CameraController {
   }
 
   update(delta) {
-    // FIX (P0 GREEN BLOB): In autostart mode during spawn safety, LOCK camera to initial high position
-    // This is the PRIMARY defense against the green blob bug - do NOT descend until terrain is proven safe
-    // Use BOTH frame count AND time-based check for reliability
+    // P0 GREEN BLOB FIX: During spawn safety, keep camera at initial position
+    // Real fix: player Y=300, camera Y=310 = normal viewing angle (not extreme 89° downward)
+    // Lock camera Y until terrain is confirmed to prevent any descent into terrain
     const timeSinceSpawn = Date.now() - this._spawnStartTime;
     const inTimeSafety = timeSinceSpawn < this._minimumSafetyMs;
     
-    // CRITICAL: Stay locked until BOTH conditions met: time elapsed AND terrain confirmed
-    // This prevents the green blob bug where camera descends before mesh is rendered
+    // Stay locked until both time elapsed AND terrain confirmed
     const shouldStayLocked = this._lockToInitialY && this._initialCamY !== null && 
       (inTimeSafety || !this._terrainConfirmedReady);
     
     if (shouldStayLocked) {
-      // During lock period, keep camera at initial Y regardless of player position
-      // Only allow X/Z movement to follow player, Y stays locked
+      // During lock period, keep camera at initial Y while following player X/Z
       const targetPos = this.target.position.clone();
       
       // Calculate X/Z offset from player (for orbit camera)
       const offsetX = Math.sin(this.yaw) * this.distance * Math.cos(this.pitch);
       const offsetZ = Math.cos(this.yaw) * this.distance * Math.cos(this.pitch);
       
-      // Lock Y to initial position - do NOT calculate based on player Y
+      // Lock Y to initial position (~310 in autostart, only ~10 above player Y=300)
       this.currentPos.x = targetPos.x + offsetX;
       this.currentPos.z = targetPos.z + offsetZ;
-      this.currentPos.y = this._initialCamY;  // LOCKED to initial high Y
+      this.currentPos.y = this._initialCamY;  // Locked to initial Y
       
       // Update camera position
       this.camera.position.copy(this.currentPos);
@@ -326,30 +321,28 @@ export class CameraController {
       this._spawnSafetyFrames--;
     }
     
-    // CRITICAL: Always enforce absolute minimum camera Y
-    // Use MUCH higher minimum in autostart mode to prevent green blob bug
-    // The bug occurs when camera is inside terrain mesh - we need conservative values
-    // FIX (P0): Using 500+ as minimum with time-based decay
-    const safetyProgress = inTimeSafety ? 0 : Math.min(1, (timeSinceSpawn - this._minimumSafetyMs) / 30000);
-    let absoluteMinY = this._minCameraY || (isAutostart ? 800 : 30);
+    // P0 GREEN BLOB FIX: Use moderate minimum - real fix is camera ANGLE not extreme height
+    // Previous: player Y=800, camera Y=1500 = 89° downward angle (terrain fills view)
+    // New: player Y=300, camera Y=310 = normal viewing angle, terrain max is ~25
+    const safetyProgress = inTimeSafety ? 0 : Math.min(1, (timeSinceSpawn - this._minimumSafetyMs) / 10000);
+    let absoluteMinY = this._minCameraY || (isAutostart ? 100 : 30);
     
-    // In autostart mode, only gradually lower minimum once terrain is confirmed working AND time elapsed
-    // This prevents the green blob bug where camera descends before terrain is ready
+    // In autostart mode, use moderate minimum that decreases as terrain is confirmed
     if (isAutostart && (!this._terrainConfirmedReady || inTimeSafety)) {
-      // Keep minimum VERY high until terrain proves reliable AND time elapsed
-      absoluteMinY = 800;
+      // Keep at safe level until terrain proves reliable
+      absoluteMinY = 100;
     } else if (isAutostart && this._terrainConfirmedReady && inSpawnSafety) {
-      // Gradually lower minimum as spawn safety winds down (smooth descent)
-      absoluteMinY = Math.max(100, 800 * (1 - safetyProgress)); // Descend from 800 to 100 over 30 seconds
+      // Gradually lower minimum as spawn safety winds down (smooth descent to normal gameplay)
+      absoluteMinY = Math.max(50, 100 * (1 - safetyProgress)); // Descend from 100 to 50 over 10 seconds
     }
     
     if (this.currentPos.y < absoluteMinY) {
       this.currentPos.y = absoluteMinY;
     }
     
-    // If no terrain, use fallback height (especially important during spawn safety)
-    // FIX (P0): Using much higher fallback in autostart mode
-    const fallbackY = isAutostart ? (inTimeSafety ? 800 : 250) : 50;
+    // If no terrain, use fallback height
+    // P0 GREEN BLOB FIX: Moderate fallback - terrain max is ~25
+    const fallbackY = isAutostart ? (inTimeSafety ? 100 : 75) : 50;
     if (!this.terrain) {
       this._terrainReadyFrames = 0;
       if (this.currentPos.y < fallbackY) {
@@ -387,19 +380,17 @@ export class CameraController {
       console.log(`[CameraController] Terrain confirmed ready after ${this._terrainReadyFrames} frames${isAutostart ? ' [AUTOSTART]' : ''}`);
     }
     
-    // Use EXTREMELY high offset during spawn safety to GUARANTEE camera is above terrain
-    // During normal gameplay, use standard offset (still 15 units for safety)
-    // Per task spec: terrain height + 5 for player, using 15+ for camera to ensure visibility
-    // In autostart mode, use EXTREMELY HIGH offsets to absolutely prevent green blob bug
-    // FIX (P0): Using 500+ during spawn safety with time-based decay
+    // P0 GREEN BLOB FIX: Use moderate offset during spawn safety
+    // Real fix is camera ANGLE, not extreme heights - terrain max is ~25
+    // Per task spec: terrain height + 5 for player, using 15+ for camera
     let offset;
     if (inSpawnSafety) {
       if (isAutostart && (!this._terrainConfirmedReady || inTimeSafety)) {
-        // Before terrain is confirmed OR within time safety, use MAXIMUM offset
-        offset = 500;
+        // Before terrain is confirmed OR within time safety, use moderate offset
+        offset = 50; // Terrain max is ~25, so 50 gives safe margin
       } else if (isAutostart) {
         // After terrain confirmed and time elapsed, gradually reduce offset
-        offset = Math.max(50, 500 * (1 - safetyProgress)); // From 500 to 50
+        offset = Math.max(20, 50 * (1 - safetyProgress)); // From 50 to 20
       } else {
         offset = Math.max(this._terrainClampOffset, 20);
       }
