@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v29 (8f7539f): CAMERA Y-LOCK mechanism. Root cause: CameraController.update() was lerping camera toward player position even during spawn safety, potentially descending before terrain was ready. FIX: (1) Added _initialCamY and _lockToInitialY flags to CameraController, (2) During autostart spawn safety, camera Y is LOCKED to initial position (500) - no lerp/descent allowed, (3) Camera only unlocks after 120+ consecutive frames of valid terrain heights (~2 seconds), (4) Only X/Z follow player during lock period, Y stays fixed, (5) This ensures camera NEVER renders inside terrain during initial load. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v30 (8e8f658): AGGRESSIVE TIME-BASED SAFETY. Previous fix wasn't aggressive enough. New fix: (1) Camera starts at Y=1000 (up from 500) in autostart mode, (2) 10-second TIME-BASED minimum safety in addition to frame count, (3) Extended spawn safety to 3600 frames (60 seconds), (4) Gradual descent from Y=800 over 30 seconds, (5) Higher terrain offsets (500+) during safety period, (6) Both main.js and CameraController.js hardened with safetyProgress calculations, (7) Time-based checks prevent race conditions with variable frame rates. Camera literally cannot be inside terrain until 10+ seconds have passed. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T07:40:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v29 complete (8f7539f) - CAMERA Y-LOCK mechanism. Camera Y locked to initial 500 during autostart spawn safety. Only unlocks after 120+ frames of valid terrain heights. Prevents any lerp that could put camera inside terrain. Build verified, deployed. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T07:50:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v30 complete (8e8f658) - AGGRESSIVE TIME-BASED SAFETY. Camera at Y=1000, 10-second minimum safety period, gradual descent over 30 seconds. Literally impossible for camera to be inside terrain during first 10 seconds. Build verified, deployed. Ready for confirmer verification."
 }
