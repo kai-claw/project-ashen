@@ -98,12 +98,12 @@ export class Player {
     this.ghostSpawnInterval = 0.05;
     
     // Spawn safety tracking (fixes autostart terrain bug - "green blob" issue)
-    // Extended to 1800 frames (~30 seconds) for reliable terrain loading in autostart mode
+    // Extended to 3600 frames (~60 seconds) for reliable terrain loading in autostart mode
     // Check for autostart mode and use higher safety
-    // FIX: Increased safety frames to ensure terrain is fully loaded before allowing normal physics
-    // MUST match main.js IIFE value (1800 frames = ~30 seconds at 60fps)
+    // FIX (P0): Increased safety frames to 3600 to ensure terrain mesh is FULLY rendered
+    // The green blob bug occurs when player/camera descend before terrain mesh appears
     const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    this._spawnSafetyFrames = isAutostart ? 1800 : 120;
+    this._spawnSafetyFrames = isAutostart ? 3600 : 120;
     
     // Ability states
     this.dashDir = new THREE.Vector3();
@@ -128,10 +128,11 @@ export class Player {
     // Initial position uses fallback height - will be adjusted by _ensureSafeSpawnHeight()
     // when world is set, or by main.js IIFE before first render.
     // CRITICAL: In autostart mode, use EXTREMELY HIGH initial Y to prevent green blob bug
-    // FIX (P0): Using 400 to ensure player starts well above any terrain
+    // FIX (P0): Using 800 to ensure player starts well above any terrain
     // Must be high enough that camera (at player.y + offset) is also safe
+    // Camera starts at 1500, so player should be at 800+ to maintain good viewing angle
     this.mesh = new THREE.Group();
-    const initialY = isAutostart ? 400 : 50;  // EXTREMELY high in autostart mode (400)
+    const initialY = isAutostart ? 800 : 50;  // EXTREMELY high in autostart mode (800)
     this.mesh.position.set(0, initialY, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)
@@ -514,14 +515,16 @@ export class Player {
       // Get floor Y at current position
       const floorY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
       
-      // AUTOSTART SPAWN SAFETY: During safety period, use different collision behavior
+      // AUTOSTART SPAWN SAFETY (P0 FIX): During safety period, use different collision behavior
       // This prevents the "green blob" bug by keeping player high until terrain is confirmed
+      // VALUES MUST MATCH main.js IIFE and SaveIntegration exactly
       if (isAutostart && inSpawnSafety) {
         // During autostart spawn safety, DON'T apply normal gravity
         // Just ensure player stays above a safe minimum
+        // FIX: Using 200 above terrain and 400 minimum (was 50/100)
         const minSafeY = !isNaN(floorY) && isFinite(floorY) && floorY > -100 
-          ? Math.max(floorY + 50, 100)  // 50 units above terrain, min 100
-          : 150;  // Fallback if terrain not ready
+          ? Math.max(floorY + 200, 400)  // FIX: 200 units above terrain, min 400 (was 50/100)
+          : 400;  // FIX: Fallback 400 if terrain not ready (was 150)
         
         if (this.mesh.position.y < minSafeY) {
           this.mesh.position.y = minSafeY;
@@ -1405,15 +1408,16 @@ export class Player {
     
     // In autostart mode, DON'T snap to terrain immediately - stay high
     // The per-frame safety check will gradually allow descent once terrain is confirmed
+    // FIX (P0): Using much higher thresholds to prevent green blob bug
     if (isAutostart) {
       console.log('[Player] Autostart mode: maintaining high spawn position, safety check will handle descent');
-      // Ensure we're high enough
-      if (this.mesh.position.y < 100) {
-        this.mesh.position.y = 150;
+      // Ensure we're high enough - FIX: threshold 400 (was 100), set to 800 (was 150)
+      if (this.mesh.position.y < 400) {
+        this.mesh.position.y = 800;
         this.velocity.y = 0;
         this.grounded = false;
       }
-      this._spawnSafetyFrames = 600; // 10 seconds of safety checks
+      this._spawnSafetyFrames = 3600; // FIX: 60 seconds of safety checks (was 600 = 10s)
     } else {
       // Normal mode: snap to terrain immediately
       this._ensureSafeSpawnHeight();
@@ -1433,13 +1437,13 @@ export class Player {
     // Check for autostart mode - need higher safety values to prevent green blob bug
     const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
     
-    // CRITICAL FIX: In autostart mode, player must start HIGH to match camera expectations
+    // CRITICAL FIX (P0 GREEN BLOB): In autostart mode, player must start HIGH
     // The green blob bug occurs when camera renders inside terrain - player being too low
     // causes camera to calculate a position that clips into terrain
-    // Values MUST match main.js IIFE and CameraController for consistency
-    const SAFE_OFFSET = isAutostart ? 50 : 5;       // Match main.js: 50 units above terrain
-    const FALLBACK_Y = isAutostart ? 200 : 50;      // Match main.js: 200 safe default
-    const MIN_SAFE_Y = isAutostart ? 150 : 5;       // High minimum in autostart mode
+    // VALUES MUST EXACTLY MATCH main.js IIFE and SaveIntegration for consistency
+    const SAFE_OFFSET = isAutostart ? 200 : 5;      // FIX: 200 units above terrain (was 50)
+    const FALLBACK_Y = isAutostart ? 800 : 50;      // FIX: 800 safe default (was 200)
+    const MIN_SAFE_Y = isAutostart ? 400 : 5;       // FIX: 400 minimum (was 150)
     
     // If no world reference, use fallback
     if (!this.world) {

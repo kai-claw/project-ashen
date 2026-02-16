@@ -48,7 +48,11 @@ export class CameraController {
     
     // FIX (P0): Add time-based safety tracking for more reliable safety
     this._spawnStartTime = Date.now();
-    this._minimumSafetyMs = isAutostart ? 10000 : 1000; // 10 seconds minimum safety in autostart
+    this._minimumSafetyMs = isAutostart ? 15000 : 1000; // 15 seconds minimum safety in autostart
+    
+    // FIX (P0 GREEN BLOB): CRITICAL - require MANY more frames of terrain confirmation
+    // The mesh takes time to render after height queries work
+    this._terrainConfirmThreshold = isAutostart ? 600 : 60; // 10 seconds at 60fps for autostart
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -93,7 +97,12 @@ export class CameraController {
     const timeSinceSpawn = Date.now() - this._spawnStartTime;
     const inTimeSafety = timeSinceSpawn < this._minimumSafetyMs;
     
-    if (this._lockToInitialY && this._initialCamY !== null && (this._spawnSafetyFrames > 0 || inTimeSafety)) {
+    // CRITICAL: Stay locked until BOTH conditions met: time elapsed AND terrain confirmed
+    // This prevents the green blob bug where camera descends before mesh is rendered
+    const shouldStayLocked = this._lockToInitialY && this._initialCamY !== null && 
+      (inTimeSafety || !this._terrainConfirmedReady);
+    
+    if (shouldStayLocked) {
       // During lock period, keep camera at initial Y regardless of player position
       // Only allow X/Z movement to follow player, Y stays locked
       const targetPos = this.target.position.clone();
@@ -118,18 +127,20 @@ export class CameraController {
       this.yaw -= mouseDelta.x * this.sensitivity;
       this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch + mouseDelta.y * this.sensitivity));
       
-      // Check if terrain is ready - only unlock after 120+ frames of valid terrain
-      if (this.terrain) {
+      // Check if terrain is ready - only unlock after MANY frames of valid terrain AND time elapsed
+      // This prevents unlocking before mesh is fully rendered
+      if (this.terrain && !inTimeSafety) {
         const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
         if (getHeight) {
           const terrainY = getHeight.call(this.terrain, this.currentPos.x, this.currentPos.z);
           if (!isNaN(terrainY) && isFinite(terrainY) && terrainY > -100) {
             this._terrainReadyFrames++;
-            // After 120 consecutive valid frames (~2 seconds), allow gradual descent
-            if (this._terrainReadyFrames >= 120) {
+            // Use configurable threshold - 600 frames in autostart mode (~10 seconds)
+            const threshold = this._terrainConfirmThreshold || 120;
+            if (this._terrainReadyFrames >= threshold) {
               this._lockToInitialY = false;
               this._terrainConfirmedReady = true;
-              console.log('[CameraController] Terrain confirmed - unlocking camera Y');
+              console.log(`[CameraController] Terrain confirmed after ${this._terrainReadyFrames} frames - unlocking camera Y`);
             }
           } else {
             this._terrainReadyFrames = 0;  // Reset counter on invalid terrain
@@ -137,7 +148,8 @@ export class CameraController {
         }
       }
       
-      this._spawnSafetyFrames--;
+      // DON'T decrement spawn safety frames during lock - keep full safety period
+      // Only start countdown after unlock
       return;  // Skip normal camera update during Y-lock period
     }
     
