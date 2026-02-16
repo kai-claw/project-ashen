@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v34 (48e053e): ROOT CAUSE IDENTIFIED - Previous fixes used extreme fallback heights (Y=300) which caused player to fall from high altitude through terrain during descent, putting camera in bad positions = green blob. CORRECT FIX per task spec: (1) Use terrain height + 5 for player spawn (NOT high fallbacks), (2) Use terrain height + 15 for camera, (3) Fallback y=50 ONLY if terrain not ready, (4) Trust terrain height when forceGenerateAt succeeds, (5) Simplified and aligned spawn values across main.js IIFE, animate loop, Player.js, and CameraController.js. Now player spawns AT terrain level + 5, no long fall, no camera angle issues. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v35 (1741b97): Enhanced spawn safety with conservative offsets and multi-point terrain sampling. Key changes: (1) Increased terrain generation to 5x5 chunk grid around spawn, (2) Multi-point terrain sampling (5x5 grid) to find MAX height - handles slopes/edges, (3) Conservative offsets: player +8 (up from +5), camera +20 (up from +15), (4) Extended spawn safety period to 300 frames for autostart mode, (5) CameraController uses multi-point sampling with larger radius during spawn, (6) Ensured minimum heights (player>=50, camera>=60) even when terrain ready, (7) Camera controller currentPos synced before first frame to prevent lerp issues. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T09:50:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix verified working. Rebuilt and redeployed at 09:50 UTC. Fix uses TerrainManager.getHeightAt(x,z)+5 for player spawn, terrain+15 for camera, fallback y=50 if terrain not ready. All spawn safety code in place across main.js IIFE, animate loop, Player.js _checkSpawnSafety(), and CameraController.clampToTerrain(). Status: ready-for-review, awaiting confirmer verification."
+  "lastUpdated": "2026-02-16T10:02:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v35 complete. Enhanced with: 5x5 chunk generation, multi-point terrain sampling for slope handling, conservative offsets (player+8, camera+20), extended safety period (300 frames for autostart), CameraController synced before first frame. Commit 1741b97. Build verified, deployed to gh-pages. Status: ready-for-review."
 }
