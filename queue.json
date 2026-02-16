@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T09:25:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v34 complete (48e053e) - ROOT CAUSE: Previous fixes used extreme fallback heights causing long fall. CORRECT FIX: Use terrain height + 5 for player (not Y=300 fallback), trust terrain when it's ready. Per spec: terrain+5 for player, terrain+15 for camera, fallback y=50. Build verified, deployed. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T09:40:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v34 verified and redeployed (e04969e). ROOT CAUSE: Previous fixes used extreme fallback heights causing long fall through terrain = green blob. CORRECT FIX: Use terrain height + 5 for player spawn (not Y=300+ fallback), trust terrain when it's ready. Per task spec: TerrainManager.getHeightAt(x,z) + 5 for player, terrain+15 for camera, fallback y=50 if terrain not ready. Build verified, deployed to gh-pages. Ready for confirmer verification."
 }
