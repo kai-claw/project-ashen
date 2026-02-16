@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v14 (a38e235): MAXIMUM SAFETY - All spawn heights dramatically increased. Player: Y=300 default, MIN_SAFE_HEIGHT=300. Camera: Y=350 initial, MIN_CAMERA_Y=320. IIFE: MIN_PLAYER_Y=300, TERRAIN_OFFSET=200. CameraController: _terrainClampOffset=150, _spawnSafetyFrames=240 (~4 seconds). Graduated safety in animate(): first 30 frames Y=280/300, frames 31-120 Y=200/220, frames 121-240 Y=80/100. SaveManager/SaveIntegration/SaveDataSchema all updated for consistency. Principle: start EXTREMELY high (Y=300+), let gravity bring down naturally. Extended safety period to 240 frames. All values consistent across entire codebase. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v15 (3ddb3c7): Fixed CRITICAL undefined variable bug. MIN_SAFE_HEIGHT was used in fallback case (lines 779, 784) but never defined - causing ReferenceError when terrain isn't ready on first frame. Changed to MIN_PLAYER_Y which is correctly scoped. This was the root cause of green blob bug in autostart mode - fallback code threw error instead of using safe height. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -69,5 +69,5 @@
     }
   ],
   "lastUpdated": "2026-02-15T18:30:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v14 complete (a38e235) - MAXIMUM SAFETY: All spawn values increased dramatically. Player default Y=300, camera Y=350, safety minimums Y=280-300 for first 30 frames. Extended safety period to 240 frames (~4 seconds at 60fps). Values now consistent across all files: main.js, Player.js, CameraController.js, SaveManager.js, SaveIntegration.js, SaveDataSchema.js. Principle: start EXTREMELY high, gravity brings player down naturally. Build verified, deployed to gh-pages. Ready for confirmer verification."
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v15 complete (3ddb3c7) - Fixed undefined variable MIN_SAFE_HEIGHT that was causing ReferenceError in fallback code. This was the root cause of green blob bug - fallback for unready terrain threw error instead of using safe Y position. Changed to MIN_PLAYER_Y (correctly scoped). Build verified, deployed. Ready for confirmer verification."
 }
