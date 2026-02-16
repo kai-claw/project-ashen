@@ -99,7 +99,9 @@ export class Player {
     
     // Spawn safety tracking - runs terrain height checks for initial frames
     // Per spec: terrain + 5 for spawn, fallback y=50 if terrain not ready
-    this._spawnSafetyFrames = 120;  // ~2 seconds at 60fps
+    // P0 FIX: Extended to 600 frames (~10 sec) for autostart mode
+    const isAutostart = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
+    this._spawnSafetyFrames = isAutostart ? 600 : 300;
     
     // Ability states
     this.dashDir = new THREE.Vector3();
