@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v15 (3ddb3c7): Fixed CRITICAL undefined variable bug. MIN_SAFE_HEIGHT was used in fallback case (lines 779, 784) but never defined - causing ReferenceError when terrain isn't ready on first frame. Changed to MIN_PLAYER_Y which is correctly scoped. This was the root cause of green blob bug in autostart mode - fallback code threw error instead of using safe height. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v16 (bb04dfb): Added ABSOLUTE MINIMUM enforcement - camera MUST stay above Y=250 during spawn safety period (240 frames). Added graduated terrain offsets (200/150/100) for early/mid/late safety frames. Enhanced CameraController.clampToTerrain() with bulletproof fallbacks. Added absolute minimum checks in main.js FINAL SAFETY and POST-CAMERA-UPDATE safety. Camera and player can NEVER render inside terrain during spawn safety - fixes 'green blob' bug definitively. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-15T18:30:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v15 complete (3ddb3c7) - Fixed undefined variable MIN_SAFE_HEIGHT that was causing ReferenceError in fallback code. This was the root cause of green blob bug - fallback for unready terrain threw error instead of using safe Y position. Changed to MIN_PLAYER_Y (correctly scoped). Build verified, deployed. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T02:50:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v16 complete (bb04dfb) - Added ABSOLUTE MINIMUM enforcement. Camera MUST stay above Y=250 during spawn safety (240 frames). Graduated terrain offsets (200/150/100). Enhanced CameraController.clampToTerrain() with bulletproof fallbacks. Added absolute minimum checks in main.js FINAL SAFETY and POST-CAMERA-UPDATE safety. Camera and player can NEVER render inside terrain - fixes green blob bug definitively. Build verified, deployed. Ready for confirmer verification."
 }
