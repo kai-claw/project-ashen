@@ -98,11 +98,12 @@ export class Player {
     this.ghostSpawnInterval = 0.05;
     
     // Spawn safety tracking (fixes autostart terrain bug - "green blob" issue)
-    // Extended to 1200 frames (~20 seconds) for reliable terrain loading in autostart mode
+    // Extended to 1800 frames (~30 seconds) for reliable terrain loading in autostart mode
     // Check for autostart mode and use higher safety
     // FIX: Increased safety frames to ensure terrain is fully loaded before allowing normal physics
+    // MUST match main.js IIFE value (1800 frames = ~30 seconds at 60fps)
     const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    this._spawnSafetyFrames = isAutostart ? 1200 : 120;
+    this._spawnSafetyFrames = isAutostart ? 1800 : 120;
     
     // Ability states
     this.dashDir = new THREE.Vector3();
@@ -1425,17 +1426,19 @@ export class Player {
    * 
    * FIX: This addresses the autostart terrain spawn bug where player spawns inside terrain.
    * In autostart mode, uses MUCH higher offsets to match camera safety expectations.
+   * Values MUST match main.js and CameraController to prevent green blob bug.
    */
   _ensureSafeSpawnHeight() {
     // Check for autostart mode - need higher safety values to prevent green blob bug
     const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
     
-    // CRITICAL: In autostart mode, player must start HIGH to match camera expectations
+    // CRITICAL FIX: In autostart mode, player must start HIGH to match camera expectations
     // The green blob bug occurs when camera renders inside terrain - player being too low
     // causes camera to calculate a position that clips into terrain
-    const SAFE_OFFSET = isAutostart ? 50 : 5;       // Much higher in autostart mode
-    const FALLBACK_Y = isAutostart ? 150 : 50;      // Very high safe default in autostart
-    const MIN_SAFE_Y = isAutostart ? 100 : 5;       // High minimum in autostart mode
+    // Values MUST match main.js IIFE and CameraController for consistency
+    const SAFE_OFFSET = isAutostart ? 50 : 5;       // Match main.js: 50 units above terrain
+    const FALLBACK_Y = isAutostart ? 200 : 50;      // Match main.js: 200 safe default
+    const MIN_SAFE_Y = isAutostart ? 150 : 5;       // High minimum in autostart mode
     
     // If no world reference, use fallback
     if (!this.world) {
@@ -1489,7 +1492,8 @@ export class Player {
     this.grounded = true; // On ground since we calculated proper height
     this.velocity.y = 0;
     // Extended safety frames - much longer in autostart mode to ensure terrain is fully loaded
-    this._spawnSafetyFrames = isAutostart ? 600 : 120; // 10 seconds in autostart, 2 seconds normally
+    // MUST match main.js IIFE value (1800 frames = ~30 seconds at 60fps)
+    this._spawnSafetyFrames = isAutostart ? 1800 : 120; // 30 seconds in autostart, 2 seconds normally
   }
   
   /**
@@ -1499,6 +1503,7 @@ export class Player {
    * 
    * FIX: This addresses the autostart terrain spawn bug where player spawns inside terrain.
    * In autostart mode, uses MUCH higher offsets and runs for longer to ensure terrain is ready.
+   * Values MUST match main.js and CameraController to prevent green blob bug.
    */
   _checkSpawnSafety() {
     if (this._spawnSafetyFrames <= 0) return;
@@ -1507,11 +1512,12 @@ export class Player {
     // Check for autostart mode - need higher safety values to prevent green blob bug
     const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
     
-    // CRITICAL: In autostart mode, keep player HIGH until terrain is confirmed stable
+    // CRITICAL FIX: In autostart mode, keep player HIGH until terrain is confirmed stable
     // This prevents camera from calculating positions that clip into terrain
-    const SAFE_OFFSET = isAutostart ? 50 : 5;       // Much higher in autostart mode
-    const FALLBACK_Y = isAutostart ? 150 : 50;      // Very high safe default in autostart
-    const MIN_SAFE_Y = isAutostart ? 100 : 5;       // High minimum in autostart mode
+    // Values MUST match main.js IIFE and CameraController for consistency
+    const SAFE_OFFSET = isAutostart ? 50 : 5;       // Match main.js: 50 units above terrain
+    const FALLBACK_Y = isAutostart ? 200 : 50;      // Match main.js: 200 safe default
+    const MIN_SAFE_Y = isAutostart ? 150 : 5;       // High minimum in autostart mode
     
     if (!this.world) {
       if (this.mesh.position.y < FALLBACK_Y) {

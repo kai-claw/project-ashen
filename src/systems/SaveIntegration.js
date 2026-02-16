@@ -952,15 +952,17 @@ class SaveIntegration {
     const defaultData = createDefaultSaveData(0);
     this.saveManager?.distributeGameState(defaultData);
     
-    // Spawn safety: Use terrain height + 5 or fallback to y=50
+    // Spawn safety: Use terrain height + offset or fallback
     // Per task spec: TerrainManager.getHeightAt(x,z) + 5 for safe spawn height
     // If terrain isn't ready, use safe default (y=50)
-    // CRITICAL: Use MUCH higher values in autostart mode to prevent green blob bug
-    const SAFE_OFFSET = isAutostart ? 10 : 5;
-    const FALLBACK_Y = isAutostart ? 80 : 50;
-    const CAMERA_OFFSET = isAutostart ? 50 : 15;           // MUCH higher in autostart mode
-    const MIN_CAMERA_Y = isAutostart ? 80 : 30;            // MUCH higher minimum in autostart mode
-    const CAMERA_TERRAIN_OFFSET = isAutostart ? 45 : 15;   // Camera WELL above terrain offset
+    // CRITICAL FIX: In autostart mode, use EXTREMELY HIGH values (matching main.js IIFE)
+    // The "green blob" bug occurs when camera spawns inside terrain mesh
+    // Values MUST match main.js to avoid overwriting the safe positioning
+    const SAFE_OFFSET = isAutostart ? 50 : 5;              // Match main.js: player 50 units above terrain
+    const FALLBACK_Y = isAutostart ? 200 : 50;             // Match main.js: high safe default
+    const CAMERA_OFFSET = isAutostart ? 150 : 15;          // Match main.js: camera WELL above player
+    const MIN_CAMERA_Y = isAutostart ? 300 : 30;           // Match main.js IIFE: 300 minimum in autostart
+    const CAMERA_TERRAIN_OFFSET = isAutostart ? 200 : 15;  // Match main.js: EXTREMELY high camera safety
     
     const playerMesh = this.systems.player;
     const gm = this.systems.gameManager;
@@ -1047,11 +1049,14 @@ class SaveIntegration {
           cameraController.currentPos.set(camX, safeCamY, camZ);
         }
         cameraController._firstFrame = false;
-        // CRITICAL: Use higher safety values in autostart mode
-        // Extended safety period (10 seconds in autostart mode) for reliable terrain safety
-        cameraController._spawnSafetyFrames = isAutostart ? 600 : 300;
-        cameraController._terrainClampOffset = isAutostart ? 30 : 20;
-        cameraController._minCameraY = MIN_CAMERA_Y;
+        // CRITICAL FIX: Match main.js values exactly to prevent green blob bug
+        // Extended safety period (30 seconds in autostart mode) for reliable terrain safety
+        cameraController._spawnSafetyFrames = isAutostart ? 1800 : 300;    // Match main.js: 1800 frames (~30s)
+        cameraController._terrainClampOffset = isAutostart ? 200 : 20;     // Match main.js: 200 offset
+        cameraController._minCameraY = MIN_CAMERA_Y;                       // 300 in autostart mode
+        cameraController._isAutostart = isAutostart;
+        cameraController._terrainConfirmedReady = false;
+        cameraController._terrainReadyFrames = 0;
       }
       
       camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1.5, playerMesh.position.z);
