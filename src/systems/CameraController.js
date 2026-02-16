@@ -30,11 +30,14 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    // FIX: Using EXTREMELY high values (150+) to absolutely prevent green blob bug
-    // Camera will start very high and naturally descend once terrain safety is confirmed
-    this._terrainClampOffset = isAutostart ? 120 : 15;  // EXTREMELY high in autostart mode for green blob fix
-    this._spawnSafetyFrames = isAutostart ? 1200 : 300; // 20 seconds safety in autostart mode
-    this._minCameraY = isAutostart ? 180 : 30;          // EXTREMELY high minimum in autostart mode
+    // FIX: Using EXTREMELY high values to absolutely prevent green blob bug
+    // Camera will start very high and gradually descend once terrain safety is confirmed
+    this._terrainClampOffset = isAutostart ? 150 : 15;  // EXTREMELY high in autostart mode for green blob fix
+    this._spawnSafetyFrames = isAutostart ? 1800 : 300; // 30 seconds safety in autostart mode (1800 frames @ 60fps)
+    this._minCameraY = isAutostart ? 250 : 30;          // EXTREMELY high minimum in autostart mode
+    this._isAutostart = isAutostart;                     // Cache for use in update
+    this._terrainConfirmedReady = false;                // Track when terrain returns valid heights consistently
+    this._terrainReadyFrames = 0;                       // Count consecutive frames with valid terrain height
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -233,8 +236,8 @@ export class CameraController {
    * If terrain isn't ready, use safe default (y=50).
    */
   clampToTerrain() {
-    // Check if we're in autostart mode for extra aggressive safety
-    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
+    // Use cached autostart flag for performance
+    const isAutostart = this._isAutostart;
     
     // Track spawn safety frames
     const inSpawnSafety = this._spawnSafetyFrames > 0;
@@ -245,15 +248,29 @@ export class CameraController {
     // CRITICAL: Always enforce absolute minimum camera Y
     // Use MUCH higher minimum in autostart mode to prevent green blob bug
     // The bug occurs when camera is inside terrain mesh - we need conservative values
-    // FIX: Using 180+ as minimum to absolutely guarantee camera is above terrain
-    const absoluteMinY = this._minCameraY || (isAutostart ? 180 : 30);
+    // FIX: Using 250+ as minimum to absolutely guarantee camera is above terrain in autostart
+    let absoluteMinY = this._minCameraY || (isAutostart ? 250 : 30);
+    
+    // In autostart mode, only gradually lower minimum once terrain is confirmed working
+    // This prevents the green blob bug where camera descends before terrain is ready
+    if (isAutostart && !this._terrainConfirmedReady) {
+      // Keep minimum VERY high until terrain proves reliable
+      absoluteMinY = 250;
+    } else if (isAutostart && this._terrainConfirmedReady && inSpawnSafety) {
+      // Gradually lower minimum as spawn safety winds down (smooth descent)
+      const progress = 1 - (this._spawnSafetyFrames / 1800);
+      absoluteMinY = 250 - (progress * 200); // Descend from 250 to 50 over spawn safety period
+      absoluteMinY = Math.max(absoluteMinY, 50);
+    }
+    
     if (this.currentPos.y < absoluteMinY) {
       this.currentPos.y = absoluteMinY;
     }
     
     // If no terrain, use fallback height (especially important during spawn safety)
-    const fallbackY = isAutostart ? 180 : 50;
+    const fallbackY = isAutostart ? 250 : 50;
     if (!this.terrain) {
+      this._terrainReadyFrames = 0;
       if (this.currentPos.y < fallbackY) {
         this.currentPos.y = fallbackY;
       }
@@ -263,6 +280,7 @@ export class CameraController {
     // Per task spec: use TerrainManager.getHeightAt(x,z)
     const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
     if (!getHeight) {
+      this._terrainReadyFrames = 0;
       if (this.currentPos.y < fallbackY) {
         this.currentPos.y = fallbackY;
       }
@@ -271,12 +289,21 @@ export class CameraController {
     
     const terrainY = getHeight.call(this.terrain, this.currentPos.x, this.currentPos.z);
     
-    // If terrain returns invalid value, use fallback
+    // If terrain returns invalid value, use fallback and reset terrain ready counter
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
+      this._terrainReadyFrames = 0;
       if (this.currentPos.y < fallbackY) {
         this.currentPos.y = fallbackY;
       }
       return;
+    }
+    
+    // Track consecutive frames with valid terrain height
+    // Only mark terrain as confirmed ready after 60 consecutive valid frames (~1 second)
+    this._terrainReadyFrames++;
+    if (this._terrainReadyFrames >= 60 && !this._terrainConfirmedReady) {
+      this._terrainConfirmedReady = true;
+      console.log(`[CameraController] Terrain confirmed ready after ${this._terrainReadyFrames} frames${isAutostart ? ' [AUTOSTART]' : ''}`);
     }
     
     // Use EXTREMELY high offset during spawn safety to GUARANTEE camera is above terrain
@@ -286,15 +313,26 @@ export class CameraController {
     // FIX: Using 150+ during spawn safety to guarantee no terrain clipping
     let offset;
     if (inSpawnSafety) {
-      offset = isAutostart ? Math.max(this._terrainClampOffset, 150) : Math.max(this._terrainClampOffset, 20);
+      if (isAutostart && !this._terrainConfirmedReady) {
+        // Before terrain is confirmed, use MAXIMUM offset
+        offset = 200;
+      } else if (isAutostart) {
+        // After terrain confirmed, gradually reduce offset
+        const progress = 1 - (this._spawnSafetyFrames / 1800);
+        offset = 200 - (progress * 185); // From 200 to 15
+        offset = Math.max(offset, 15);
+      } else {
+        offset = Math.max(this._terrainClampOffset, 20);
+      }
     } else {
-      offset = isAutostart ? 80 : this._terrainClampOffset;
+      offset = this._terrainClampOffset || 15;
     }
     const minY = Math.max(terrainY + offset, absoluteMinY);
     
     if (this.currentPos.y < minY) {
-      if (inSpawnSafety) {
-        console.warn(`[CameraController] Camera below terrain + offset (${this.currentPos.y.toFixed(2)} < ${minY.toFixed(2)}), correcting${isAutostart ? ' [AUTOSTART]' : ''}`);
+      if (inSpawnSafety && this._spawnSafetyFrames % 60 === 0) {
+        // Log only every second to reduce spam
+        console.warn(`[CameraController] Camera below safe height (${this.currentPos.y.toFixed(2)} < ${minY.toFixed(2)}), correcting. TerrainY=${terrainY.toFixed(2)}, offset=${offset.toFixed(0)}${isAutostart ? ' [AUTOSTART]' : ''}`);
       }
       this.currentPos.y = minY;
     }
