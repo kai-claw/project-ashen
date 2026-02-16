@@ -945,25 +945,47 @@ class SaveIntegration {
     const isAutostart = window.AUTOSTART_MODE === true;
     
     if (isAutostart) {
-      console.log('[SaveIntegration] AUTOSTART MODE - Using aggressive spawn safety');
+      console.log('[SaveIntegration] AUTOSTART MODE - Deferring spawn positioning to main.js IIFE');
     }
     
     // Reset all game state to defaults
     const defaultData = createDefaultSaveData(0);
     this.saveManager?.distributeGameState(defaultData);
     
-    // Spawn safety: Use terrain height + offset or fallback
-    // Per task spec: TerrainManager.getHeightAt(x,z) + 5 for safe spawn height
-    // If terrain isn't ready, use safe default (y=50)
-    // CRITICAL FIX (P0 GREEN BLOB): In autostart mode, use EXTREMELY HIGH values
-    // The "green blob" bug occurs when camera spawns inside terrain mesh
-    // VALUES MUST EXACTLY MATCH main.js IIFE - these were too low before!
-    // Previous bug: startNewGame() was overwriting main.js IIFE's safe Y=1000 with Y=300
-    const SAFE_OFFSET = isAutostart ? 200 : 5;             // FIX: 200 above terrain (was 50)
-    const FALLBACK_Y = isAutostart ? 800 : 50;             // FIX: 800 safe default (was 200)
-    const CAMERA_OFFSET = isAutostart ? 300 : 20;          // FIX: 300 above player (was 150)
-    const MIN_CAMERA_Y = isAutostart ? 900 : 30;           // FIX: 900 minimum (was 300) - MATCHES main.js
-    const CAMERA_TERRAIN_OFFSET = isAutostart ? 500 : 15;  // FIX: 500 above terrain (was 200)
+    // ==================================================================================
+    // CRITICAL FIX (P0 GREEN BLOB BUG):
+    // In AUTOSTART mode, DO NOT reposition player/camera here!
+    // main.js initializes them at VERY HIGH positions (player Y=800, camera Y=1500)
+    // and the main.js IIFE runs AFTER this function to finalize safe positioning.
+    // 
+    // Previously, this function was lowering camera from Y=1500 to Y=900, and then
+    // the main.js IIFE would capture the ALREADY-LOWERED position as "initial".
+    // 
+    // The fix: In autostart mode, only reset game STATE (inventory, stats, etc.).
+    // Let main.js IIFE handle all spawn positioning - it has the correct safety logic.
+    // ==================================================================================
+    
+    if (isAutostart) {
+      console.log('[SaveIntegration] Skipping spawn positioning in autostart mode - main.js IIFE will handle it');
+      
+      // Just update game state, don't touch positions
+      this.hideMainMenu();
+      this.gameStarted = true;
+      this.isPaused = false;
+      this.tutorialSaveShown = false;
+      localStorage.removeItem(TUTORIAL_FIRST_SAVE_SHOWN_KEY);
+      
+      this.showNotification('New game started', 'success');
+      return;
+    }
+    
+    // NON-AUTOSTART MODE: Normal spawn positioning
+    // Use terrain height + offset or fallback
+    const SAFE_OFFSET = 5;
+    const FALLBACK_Y = 50;
+    const CAMERA_OFFSET = 20;
+    const MIN_CAMERA_Y = 30;
+    const CAMERA_TERRAIN_OFFSET = 15;
     
     const playerMesh = this.systems.player;
     const gm = this.systems.gameManager;
@@ -1002,7 +1024,7 @@ class SaveIntegration {
       }
       
       const safeY = terrainReady ? terrainY + SAFE_OFFSET : FALLBACK_Y;
-      console.log(`[SaveIntegration] Player spawn: Y=${safeY} (terrain=${terrainY}, ready=${terrainReady})${isAutostart ? ' [AUTOSTART]' : ''}`);
+      console.log(`[SaveIntegration] Player spawn: Y=${safeY} (terrain=${terrainY}, ready=${terrainReady})`);
       playerMesh.position.y = safeY;
       
       if (gm?.player?.velocity) {
@@ -1011,8 +1033,6 @@ class SaveIntegration {
     }
     
     // Position camera above player with terrain-aware positioning
-    // CRITICAL: Must check terrain height at CAMERA position, not just player position
-    // This fixes the "green blob" bug where camera spawns inside terrain mesh
     if (camera && playerMesh) {
       const cameraController = gm?.cameraController;
       const camX = playerMesh.position.x;
@@ -1026,14 +1046,12 @@ class SaveIntegration {
       // Calculate camera Y: start with player Y + offset
       let safeCamY = playerMesh.position.y + CAMERA_OFFSET;
       
-      // CRITICAL: Also check terrain height AT CAMERA POSITION
-      // The terrain may be higher at camera's (x,z) than at player's (x,z)
+      // Also check terrain height at camera position
       if (terrain) {
         const getHeight = terrain.getHeightAt || terrain.getTerrainHeight;
         if (getHeight) {
           const camTerrainY = getHeight.call(terrain, camX, camZ);
           if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
-            // Camera must be at least CAMERA_TERRAIN_OFFSET above terrain AT ITS OWN POSITION
             const minCamY = Math.max(camTerrainY + CAMERA_TERRAIN_OFFSET, MIN_CAMERA_Y);
             safeCamY = Math.max(safeCamY, minCamY);
           }
@@ -1050,24 +1068,19 @@ class SaveIntegration {
           cameraController.currentPos.set(camX, safeCamY, camZ);
         }
         cameraController._firstFrame = false;
-        // CRITICAL FIX (P0): Match main.js IIFE values EXACTLY to prevent green blob bug
-        // Extended safety period (60 seconds in autostart mode) for reliable terrain safety
-        cameraController._spawnSafetyFrames = isAutostart ? 3600 : 300;    // FIX: 3600 frames (~60s) - was 1800
-        cameraController._terrainClampOffset = isAutostart ? 500 : 20;     // FIX: 500 offset - was 200
-        cameraController._minCameraY = MIN_CAMERA_Y;                       // 900 in autostart mode (fixed above)
-        cameraController._isAutostart = isAutostart;
+        cameraController._spawnSafetyFrames = 300;
+        cameraController._terrainClampOffset = 20;
+        cameraController._minCameraY = MIN_CAMERA_Y;
+        cameraController._isAutostart = false;
         cameraController._terrainConfirmedReady = false;
         cameraController._terrainReadyFrames = 0;
-        // FIX (P0): Enable Y-lock to prevent camera from descending until terrain confirmed
-        cameraController._initialCamY = safeCamY;
-        cameraController._lockToInitialY = isAutostart;
       }
       
       camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1.5, playerMesh.position.z);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld(true);
       
-      console.log(`[SaveIntegration] Camera positioned at Y=${safeCamY.toFixed(2)}${isAutostart ? ' [AUTOSTART]' : ''}`);
+      console.log(`[SaveIntegration] Camera positioned at Y=${safeCamY.toFixed(2)}`);
     }
     
     // Enable Player's spawn safety checks
