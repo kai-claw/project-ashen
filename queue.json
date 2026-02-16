@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v20 (3ae8769): EXTRA AGGRESSIVE SAFETY - ALL VALUES INCREASED: (1) MIN_CAMERA_Y increased from 20 to 30 across ALL checks, (2) CAMERA_OFFSET increased from 10 to 15 for terrain-relative checks, (3) Spawn safety frames extended from 180 to 300 (~5 seconds), (4) Added aggressive per-frame spawn safety check at START of animate() - runs EVERY frame before ANY other code, (5) Force terrain generation at BOTH player AND camera positions, (6) CameraController terrain clamp offset from 5 to 15, (7) CameraController spawn safety offset from 10 to 20, (8) SaveIntegration values updated to match (CAMERA_OFFSET=15, minCamY=30, spawnFrames=300, clampOffset=20), (9) Post-camera-update safety increased from 3 to 10 units + min 30, (10) Uses TerrainManager.getHeightAt(x,z) + 5 for player, + 15 for camera. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v21 (dcf6edd): AUTOSTART-AWARE SAFETY - Detects window.AUTOSTART_MODE and uses EXTRA aggressive margins: (1) Camera offset: 30 units above player in autostart (was 20), (2) Min camera Y: 50 in autostart (was 30), (3) Terrain offset: 25 units in autostart (was 15), (4) Safety frames: 600 (~10 seconds) in autostart (was 300), (5) SaveIntegration.startNewGame() now forces terrain in 3x3 grid + at camera position, (6) CameraController.clampToTerrain() now autostart-aware with higher offsets, (7) All per-frame safety checks detect autostart mode, (8) Uses TerrainManager.getHeightAt(x,z) + 5 for player per task spec, (9) Fallback y=50 if terrain not ready per task spec. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T05:50:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v20 complete (3ae8769) - EXTRA AGGRESSIVE SAFETY. All camera minimums increased to Y=30. All offsets increased. 300 frame safety period (~5s). Per-frame safety at START of animate(). Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T06:00:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v21 complete (dcf6edd) - AUTOSTART-AWARE SAFETY. Detects window.AUTOSTART_MODE for extra aggressive margins. Camera min Y=50, offset=30, terrain offset=25, 600 safety frames (~10s). Ready for confirmer verification."
 }
