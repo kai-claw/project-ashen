@@ -98,8 +98,8 @@ export class Player {
     this.ghostSpawnInterval = 0.05;
     
     // Spawn safety tracking - runs terrain height checks for initial frames
-    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    this._spawnSafetyFrames = isAutostart ? 300 : 120;
+    // Per spec: terrain + 5 for spawn, fallback y=50 if terrain not ready
+    this._spawnSafetyFrames = 120;  // ~2 seconds at 60fps
     
     // Ability states
     this.dashDir = new THREE.Vector3();
@@ -121,17 +121,11 @@ export class Player {
     this.gltfModel = null;
 
     // Create mesh container
-    // Initial position uses fallback height - will be adjusted by setWorld() using terrain height
-    // Per task spec: Use terrain height + offset for safe spawn, or fallback if terrain not ready
-    // FIX (P0 TERRAIN SPAWN): Use higher initial Y in autostart mode to prevent green blob bug
+    // Initial position uses fallback height - will be adjusted by main.js IIFE using terrain height
+    // Per task spec: Use terrain height + 5 for safe spawn, or fallback y=50 if terrain not ready
     this.mesh = new THREE.Group();
-    // FIX (P0 GREEN BLOB): Camera angle fix - player at Y=300, camera at Y=310
-    // Previous failed approach used extreme heights (Y=800+) with camera looking straight down
-    // which made terrain fill viewport even though camera was "above" terrain.
-    // CORRECT APPROACH: Player and camera at similar heights (Y=300 and Y=310) with normal viewing angle.
-    // Both are well above terrain max (Y ~25), and camera looks horizontally, not straight down.
-    const initialY = isAutostart ? 300 : 50;
-    this.mesh.position.set(0, initialY, 5);
+    // Initial Y will be corrected by main.js IIFE before first render
+    this.mesh.position.set(0, 50, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)
     this._createFallbackMesh();
@@ -509,15 +503,13 @@ export class Player {
       // Get floor Y at current position
       const floorY = this.world.getFloorY(this.mesh.position.x, this.mesh.position.z);
       
-      // FIX (P0 TERRAIN SPAWN): Simple safety check - ensure player is above terrain
-      // Per task spec: terrain height + offset for safe spawn, fallback if not ready
-      // Use higher values in autostart mode to prevent green blob bug
+      // Spawn safety check - ensure player is above terrain during initial frames
+      // Per task spec: terrain height + 5 for safe spawn, fallback y=50 if terrain not ready
       const inSpawnSafety = this._spawnSafetyFrames > 0;
       if (inSpawnSafety) {
-        const isAutostartCheck = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-        const SAFE_OFFSET = isAutostartCheck ? 15 : 5;
-        const MIN_Y = isAutostartCheck ? 100 : 50;
-        const minSafeY = !isNaN(floorY) && floorY > -100 ? Math.max(floorY + SAFE_OFFSET, MIN_Y) : MIN_Y;
+        const SAFE_OFFSET = 5;   // Per spec: terrain + 5
+        const FALLBACK_Y = 50;   // Per spec: fallback y=50
+        const minSafeY = !isNaN(floorY) && floorY > -100 ? (floorY + SAFE_OFFSET) : FALLBACK_Y;
         
         if (this.mesh.position.y < minSafeY) {
           this.mesh.position.y = minSafeY;
@@ -1365,9 +1357,6 @@ export class Player {
   setWorld(world) {
     this.world = world;
     
-    // Check for autostart mode - need to be more careful about spawn timing
-    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    
     // Force terrain chunk generation at player position FIRST
     // This ensures terrain data exists before we try to read it
     if (world && world.terrain) {
@@ -1386,11 +1375,9 @@ export class Player {
       }
     }
     
-    // FIX (P0 TERRAIN SPAWN): Calculate spawn Y AFTER terrain generates
-    // Per task spec: Use TerrainManager.getHeightAt(x,z) + offset for safe spawn height
-    // If terrain isn't ready, use safe default. Use higher values in autostart mode.
-    const SAFE_OFFSET = isAutostart ? 15 : 5;       // Higher offset for autostart
-    const SAFE_FALLBACK_Y = isAutostart ? 100 : 50; // Higher fallback for autostart
+    // Per task spec: terrain height + 5 for safe spawn, fallback y=50 if terrain not ready
+    const SAFE_OFFSET = 5;
+    const SAFE_FALLBACK_Y = 50;
     
     let terrainY = 0;
     let terrainReady = false;
@@ -1406,29 +1393,27 @@ export class Player {
       }
     }
     
-    // Calculate safe spawn Y - terrain height + offset, or fallback
+    // Calculate safe spawn Y - terrain height + 5, or fallback y=50
     const targetY = terrainReady ? (terrainY + SAFE_OFFSET) : SAFE_FALLBACK_Y;
     
-    console.log(`[Player] setWorld: terrain=${terrainY.toFixed(2)}, ready=${terrainReady}, targetY=${targetY.toFixed(2)}${isAutostart ? ' [AUTOSTART]' : ''}`);
+    console.log(`[Player] setWorld: terrain=${terrainY.toFixed(2)}, ready=${terrainReady}, targetY=${targetY.toFixed(2)}`);
     
     // Set player position to safe height
     this.mesh.position.y = targetY;
     this.velocity.y = 0;
     this.grounded = true;
     
-    // Extended safety frames for ongoing checks
-    this._spawnSafetyFrames = isAutostart ? 300 : 120;
+    // Safety frames for ongoing terrain height checks
+    this._spawnSafetyFrames = 120;
   }
   
   /**
    * Ensure player is spawned safely above terrain.
-   * Per task spec: Use terrain height + offset for safe spawn, or fallback if terrain not ready.
-   * FIX (P0 TERRAIN SPAWN): Use higher values in autostart mode.
+   * Per task spec: Use terrain height + 5 for safe spawn, fallback y=50 if terrain not ready.
    */
   _ensureSafeSpawnHeight() {
-    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    const SAFE_OFFSET = isAutostart ? 15 : 5;
-    const FALLBACK_Y = isAutostart ? 100 : 50;
+    const SAFE_OFFSET = 5;   // Per spec: terrain + 5
+    const FALLBACK_Y = 50;   // Per spec: fallback y=50
     
     if (!this.world) {
       console.warn('[Player] No world reference, using fallback spawn height');
@@ -1465,16 +1450,14 @@ export class Player {
   /**
    * Per-frame spawn safety check.
    * Ensures player stays above terrain during initial spawn period.
-   * Per task spec: Use terrain height + offset for safe spawn, fallback if not ready.
-   * FIX (P0 TERRAIN SPAWN): Use higher values in autostart mode.
+   * Per task spec: Use terrain height + 5 for safe spawn, fallback y=50 if not ready.
    */
   _checkSpawnSafety() {
     if (this._spawnSafetyFrames <= 0) return;
     this._spawnSafetyFrames--;
     
-    const isAutostart = typeof window !== 'undefined' && window.AUTOSTART_MODE === true;
-    const SAFE_OFFSET = isAutostart ? 15 : 5;
-    const FALLBACK_Y = isAutostart ? 100 : 50;
+    const SAFE_OFFSET = 5;   // Per spec: terrain + 5
+    const FALLBACK_Y = 50;   // Per spec: fallback y=50
     
     // Simple safety: ensure player is above terrain
     if (!this.world) {
@@ -1496,9 +1479,8 @@ export class Player {
       }
     }
     
-    // Per task spec: terrain height + offset for safe spawn, fallback if not ready
-    // FIX (P0 TERRAIN SPAWN): Use higher values in autostart mode
-    const minSafeY = terrainValid ? Math.max(terrainY + SAFE_OFFSET, FALLBACK_Y) : FALLBACK_Y;
+    // Per spec: terrain height + 5 for safe spawn, fallback y=50 if not ready
+    const minSafeY = terrainValid ? (terrainY + SAFE_OFFSET) : FALLBACK_Y;
     
     if (this.mesh.position.y < minSafeY) {
       this.mesh.position.y = minSafeY;
