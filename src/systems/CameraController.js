@@ -27,8 +27,9 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 3;    // Minimum units above terrain
-    this._spawnSafetyFrames = 60;    // Safety frames after spawn (~1 second at 60fps)
+    this._terrainClampOffset = 5;    // Minimum units above terrain (increased for safety)
+    this._spawnSafetyFrames = 180;   // Safety frames after spawn (~3 seconds at 60fps)
+    this._minCameraY = 20;           // Absolute minimum camera Y position
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -220,14 +221,23 @@ export class CameraController {
   
   /**
    * Ensure camera position is above terrain.
-   * Uses terrain height + offset (default 3 units, higher during spawn safety).
+   * Uses terrain height + offset (default 5 units, higher during spawn safety).
    * CRITICAL: This prevents the "green blob" bug where camera renders inside terrain.
+   * 
+   * Per task spec: Use TerrainManager.getHeightAt(x,z) + offset for safe height.
+   * If terrain isn't ready, use safe default.
    */
   clampToTerrain() {
     // Track spawn safety frames
     const inSpawnSafety = this._spawnSafetyFrames > 0;
     if (inSpawnSafety) {
       this._spawnSafetyFrames--;
+    }
+    
+    // CRITICAL: Always enforce absolute minimum camera Y
+    const absoluteMinY = this._minCameraY || 20;
+    if (this.currentPos.y < absoluteMinY) {
+      this.currentPos.y = absoluteMinY;
     }
     
     // If no terrain, use fallback height during spawn safety
@@ -238,6 +248,7 @@ export class CameraController {
       return;
     }
     
+    // Per task spec: use TerrainManager.getHeightAt(x,z)
     const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
     if (!getHeight) {
       if (inSpawnSafety && this.currentPos.y < 50) {
@@ -258,8 +269,9 @@ export class CameraController {
     
     // Use higher offset during spawn safety to guarantee camera is above terrain
     // During normal gameplay, use standard offset
-    const offset = inSpawnSafety ? Math.max(this._terrainClampOffset, 8) : this._terrainClampOffset;
-    const minY = terrainY + offset;
+    // Per task spec: terrain height + 5 for player, using higher offset for camera
+    const offset = inSpawnSafety ? Math.max(this._terrainClampOffset, 10) : this._terrainClampOffset;
+    const minY = Math.max(terrainY + offset, absoluteMinY);
     
     if (this.currentPos.y < minY) {
       this.currentPos.y = minY;

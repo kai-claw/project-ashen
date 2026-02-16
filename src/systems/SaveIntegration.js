@@ -850,11 +850,76 @@ class SaveIntegration {
     if (recent) {
       const result = await this.saveManager.load(recent.slotId);
       if (result.success) {
+        // Position camera safely above terrain after load
+        // This fixes the "green blob" bug where camera spawns inside terrain mesh
+        this._positionCameraSafely();
+        
         this.hideMainMenu();
         this.gameStarted = true;
         this.isPaused = false;
       }
     }
+  }
+  
+  /**
+   * Position camera safely above terrain.
+   * Call after loading saves or starting new game.
+   * Fixes "green blob" bug where camera renders inside terrain.
+   */
+  _positionCameraSafely() {
+    const CAMERA_OFFSET = 8;     // Units above terrain/player
+    const MIN_CAMERA_Y = 15;     // Absolute minimum camera height
+    
+    const playerMesh = this.systems.player;
+    const gm = this.systems.gameManager;
+    const camera = this.systems.camera;
+    const terrain = gm?.player?.world?.terrain || this.systems.terrain;
+    const cameraController = gm?.cameraController;
+    
+    if (!camera || !playerMesh) return;
+    
+    // Calculate camera position (behind player)
+    const camX = playerMesh.position.x;
+    const camZ = playerMesh.position.z + 6;
+    
+    // Start with player Y + offset
+    let safeCamY = playerMesh.position.y + CAMERA_OFFSET;
+    
+    // Check terrain height at camera position
+    if (terrain) {
+      const getHeight = terrain.getHeightAt || terrain.getTerrainHeight;
+      if (getHeight) {
+        // Force terrain generation at camera position
+        if (terrain.forceGenerateAt) {
+          terrain.forceGenerateAt(camX, camZ);
+        }
+        const camTerrainY = getHeight.call(terrain, camX, camZ);
+        if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
+          safeCamY = Math.max(safeCamY, camTerrainY + CAMERA_OFFSET);
+        }
+      }
+    }
+    
+    // Ensure minimum height
+    safeCamY = Math.max(safeCamY, MIN_CAMERA_Y);
+    
+    // Set camera position
+    camera.position.set(camX, safeCamY, camZ);
+    
+    if (cameraController) {
+      if (cameraController.currentPos) {
+        cameraController.currentPos.set(camX, safeCamY, camZ);
+      }
+      cameraController._firstFrame = false;
+      cameraController._spawnSafetyFrames = 120;  // ~2 seconds of safety
+      cameraController._terrainClampOffset = 8;
+    }
+    
+    camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1.5, playerMesh.position.z);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    
+    console.log(`[SaveIntegration] Camera positioned safely at Y=${safeCamY}`);
   }
   
   /**
@@ -923,21 +988,42 @@ class SaveIntegration {
       }
     }
     
-    // Position camera above player
+    // Position camera above player with terrain-aware positioning
+    // CRITICAL: Must check terrain height at CAMERA position, not just player position
+    // This fixes the "green blob" bug where camera spawns inside terrain mesh
     if (camera && playerMesh) {
       const cameraController = gm?.cameraController;
-      const safeCamY = playerMesh.position.y + CAMERA_OFFSET;
+      const camX = playerMesh.position.x;
       const camZ = playerMesh.position.z + 6;
       
-      camera.position.set(playerMesh.position.x, safeCamY, camZ);
+      // Calculate camera Y: start with player Y + offset
+      let safeCamY = playerMesh.position.y + CAMERA_OFFSET;
+      
+      // CRITICAL: Also check terrain height AT CAMERA POSITION
+      // The terrain may be higher at camera's (x,z) than at player's (x,z)
+      if (terrain) {
+        const getHeight = terrain.getHeightAt || terrain.getTerrainHeight;
+        if (getHeight) {
+          const camTerrainY = getHeight.call(terrain, camX, camZ);
+          if (!isNaN(camTerrainY) && isFinite(camTerrainY) && camTerrainY > -100) {
+            // Camera must be at least CAMERA_OFFSET above terrain AT ITS OWN POSITION
+            const minCamY = Math.max(camTerrainY + CAMERA_OFFSET, 15); // 15 = absolute minimum
+            safeCamY = Math.max(safeCamY, minCamY);
+          }
+        }
+      }
+      
+      camera.position.set(camX, safeCamY, camZ);
       
       if (cameraController) {
         if (cameraController.currentPos) {
-          cameraController.currentPos.set(playerMesh.position.x, safeCamY, camZ);
+          cameraController.currentPos.set(camX, safeCamY, camZ);
         }
         cameraController._firstFrame = false;
-        cameraController._spawnSafetyFrames = 60;
-        cameraController._terrainClampOffset = 3;
+        // CRITICAL: Use higher safety values to match main.js IIFE
+        // 120 frames (~2 seconds) and 8 unit offset for reliable terrain safety
+        cameraController._spawnSafetyFrames = 120;
+        cameraController._terrainClampOffset = 8;
       }
       
       camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1.5, playerMesh.position.z);
@@ -1131,6 +1217,9 @@ class SaveIntegration {
   async loadSlot(slotId) {
     const result = await this.saveManager?.load(slotId);
     if (result?.success) {
+      // Position camera safely above terrain after load
+      this._positionCameraSafely();
+      
       this.hideLoadMenu();
       this.hidePauseMenu();
       this.hideMainMenu();
@@ -1291,6 +1380,8 @@ class SaveIntegration {
     if (recent) {
       const result = await this.saveManager.load(recent.slotId);
       if (result?.success) {
+        // Position camera safely above terrain after load
+        this._positionCameraSafely();
         this.showNotification('Quick loaded', 'success');
       }
     } else {
