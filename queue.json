@@ -9,7 +9,7 @@
       "status": "ready-for-review",
       "worker": 1,
       "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v33 (a226d41): Found CameraController was missing initialization of critical spawn safety variables (_isAutostart, _spawnStartTime, _minimumSafetyMs, _terrainReadyFrames, _terrainConfirmedReady, _minCameraY). These were being referenced but undefined, causing safety logic to silently fail. Fix: (1) Initialize all variables in CameraController constructor with proper autostart detection, (2) Use higher spawn offsets in autostart mode (player +15, camera +30 vs normal +5/+15), (3) Use higher fallback Y values in autostart mode (100 vs 50), (4) Apply fixes consistently across Player.js, CameraController.js, and main.js, (5) Increase initial player Y position in autostart mode to 100. Build verified, deployed to gh-pages."
+      "workerNotes": "FIX v34 (48e053e): ROOT CAUSE IDENTIFIED - Previous fixes used extreme fallback heights (Y=300) which caused player to fall from high altitude through terrain during descent, putting camera in bad positions = green blob. CORRECT FIX per task spec: (1) Use terrain height + 5 for player spawn (NOT high fallbacks), (2) Use terrain height + 15 for camera, (3) Fallback y=50 ONLY if terrain not ready, (4) Trust terrain height when forceGenerateAt succeeds, (5) Simplified and aligned spawn values across main.js IIFE, animate loop, Player.js, and CameraController.js. Now player spawns AT terrain level + 5, no long fall, no camera angle issues. Build verified, deployed to gh-pages."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-16T08:20:00Z",
-  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v33 complete (a226d41) - ROOT CAUSE: CameraController missing variable initializations. Fix: Initialize _isAutostart, _spawnStartTime, _minimumSafetyMs, etc. Use higher offsets in autostart mode. Build verified, deployed. Ready for confirmer verification."
+  "lastUpdated": "2026-02-16T09:25:00Z",
+  "workerStatus": "Worker 1: P0 hotfix terrain-spawn-fix v34 complete (48e053e) - ROOT CAUSE: Previous fixes used extreme fallback heights causing long fall. CORRECT FIX: Use terrain height + 5 for player (not Y=300 fallback), trust terrain when it's ready. Per spec: terrain+5 for player, terrain+15 for camera, fallback y=50. Build verified, deployed. Ready for confirmer verification."
 }
