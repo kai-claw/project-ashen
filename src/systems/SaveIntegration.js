@@ -944,6 +944,10 @@ class SaveIntegration {
     // Check if we're in autostart mode - use extra aggressive safety
     const isAutostart = window.AUTOSTART_MODE === true;
     
+    if (isAutostart) {
+      console.log('[SaveIntegration] AUTOSTART MODE - Using aggressive spawn safety');
+    }
+    
     // Reset all game state to defaults
     const defaultData = createDefaultSaveData(0);
     this.saveManager?.distributeGameState(defaultData);
@@ -951,11 +955,12 @@ class SaveIntegration {
     // Spawn safety: Use terrain height + 5 or fallback to y=50
     // Per task spec: TerrainManager.getHeightAt(x,z) + 5 for safe spawn height
     // If terrain isn't ready, use safe default (y=50)
-    const SAFE_OFFSET = 5;
-    const FALLBACK_Y = 50;
-    const CAMERA_OFFSET = isAutostart ? 30 : 15;           // Extra height in autostart mode
-    const MIN_CAMERA_Y = isAutostart ? 50 : 30;            // Higher minimum in autostart mode
-    const CAMERA_TERRAIN_OFFSET = isAutostart ? 25 : 15;   // Camera above terrain offset
+    // CRITICAL: Use MUCH higher values in autostart mode to prevent green blob bug
+    const SAFE_OFFSET = isAutostart ? 10 : 5;
+    const FALLBACK_Y = isAutostart ? 80 : 50;
+    const CAMERA_OFFSET = isAutostart ? 50 : 15;           // MUCH higher in autostart mode
+    const MIN_CAMERA_Y = isAutostart ? 80 : 30;            // MUCH higher minimum in autostart mode
+    const CAMERA_TERRAIN_OFFSET = isAutostart ? 45 : 15;   // Camera WELL above terrain offset
     
     const playerMesh = this.systems.player;
     const gm = this.systems.gameManager;

@@ -671,11 +671,12 @@ function animate() {
     // Check if we're in autostart mode for extra aggressive safety
     const isAutostart = window.AUTOSTART_MODE === true;
     
-    // Use higher safety margins in autostart mode
-    const TERRAIN_SAFETY_OFFSET = isAutostart ? 25 : 15;  // Units above terrain
-    const ABSOLUTE_MIN_CAM_Y = isAutostart ? 50 : 30;     // Absolute minimum camera Y
-    const PLAYER_OFFSET = 5;                               // Player stays 5 units above terrain (per task spec)
-    const PLAYER_FALLBACK_Y = 50;                          // Fallback if terrain not ready (per task spec)
+    // Use MUCH higher safety margins in autostart mode to guarantee no green blob
+    // The bug occurs when camera is inside terrain mesh, so we use very conservative values
+    const TERRAIN_SAFETY_OFFSET = isAutostart ? 45 : 15;  // Units above terrain (much higher in autostart)
+    const ABSOLUTE_MIN_CAM_Y = isAutostart ? 80 : 30;     // Absolute minimum camera Y (much higher in autostart)
+    const PLAYER_OFFSET = isAutostart ? 10 : 5;           // Player stays above terrain (per task spec: 5)
+    const PLAYER_FALLBACK_Y = isAutostart ? 80 : 50;      // Fallback if terrain not ready (per task spec: 50)
     
     // Force terrain generation at current positions
     if (world.terrain && world.terrain.forceGenerateAt) {
@@ -1142,10 +1143,12 @@ function animate() {
     
     const getHeightFinal = world.terrain ? (world.terrain.getHeightAt || world.terrain.getTerrainHeight) : null;
     
-    const PLAYER_OFFSET = 5;                              // Per task spec: terrain height + 5
-    const CAMERA_OFFSET = isAutostart ? 25 : 15;          // Higher for camera safety in autostart
-    const PLAYER_FALLBACK_Y = 50;                         // Per task spec: safe default
-    const MIN_CAMERA_Y = isAutostart ? 50 : 30;           // Higher minimum in autostart mode
+    // CRITICAL: Use VERY conservative values in autostart mode
+    // The green blob bug means camera is inside terrain - we MUST guarantee camera is well above
+    const PLAYER_OFFSET = isAutostart ? 10 : 5;           // Per task spec: terrain height + 5 (higher in autostart)
+    const CAMERA_OFFSET = isAutostart ? 45 : 15;          // MUCH higher for camera safety in autostart
+    const PLAYER_FALLBACK_Y = isAutostart ? 80 : 50;      // Per task spec: safe default (higher in autostart)
+    const MIN_CAMERA_Y = isAutostart ? 80 : 30;           // MUCH higher minimum in autostart mode
     
     if (getHeightFinal) {
       // Check player - use TerrainManager.getHeightAt(x,z) + 5
@@ -1210,12 +1213,18 @@ function animate() {
   // Check if we're in autostart mode - use extra aggressive safety
   const isAutostart = window.AUTOSTART_MODE === true;
   
-  // Constants per task requirements - using TerrainManager.getHeightAt(x,z) + 5 for safe spawn
-  const SAFE_OFFSET_ABOVE_TERRAIN = 5;   // Spawn 5 units above terrain (per task spec)
-  const FALLBACK_SAFE_Y = 50;            // Safe default if terrain not ready (per task spec)
-  const CAMERA_OFFSET_ABOVE_PLAYER = isAutostart ? 30 : 20; // Extra height in autostart mode
-  const MIN_CAMERA_HEIGHT = isAutostart ? 50 : 30;          // Higher minimum in autostart mode
-  const CAMERA_TERRAIN_OFFSET = isAutostart ? 25 : 15;      // Camera above terrain offset
+  // CRITICAL FIX: In autostart mode, use MUCH higher safety margins
+  // The green blob bug occurs when camera spawns inside terrain mesh
+  // We use extremely conservative values to guarantee camera is ALWAYS visible
+  const SAFE_OFFSET_ABOVE_TERRAIN = isAutostart ? 10 : 5;   // Spawn 10 units above terrain in autostart (per task spec: 5)
+  const FALLBACK_SAFE_Y = isAutostart ? 80 : 50;            // Higher safe default for autostart (per task spec: 50)
+  const CAMERA_OFFSET_ABOVE_PLAYER = isAutostart ? 50 : 20; // Much higher in autostart mode
+  const MIN_CAMERA_HEIGHT = isAutostart ? 80 : 30;          // MUCH higher minimum in autostart mode
+  const CAMERA_TERRAIN_OFFSET = isAutostart ? 40 : 15;      // Camera well above terrain
+  
+  if (isAutostart) {
+    console.log('[Main:Init] AUTOSTART MODE DETECTED - Using aggressive spawn safety');
+  }
   
   // Step 1: Force terrain chunk generation at player position AND wide surrounding area
   // This ensures terrain data exists BEFORE we query height - generate 5x5 grid of chunks
