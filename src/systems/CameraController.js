@@ -213,8 +213,8 @@ export class CameraController {
   
   /**
    * Ensure camera position is above terrain.
-   * Uses terrain height + offset (default 15 units, MUCH higher during spawn safety).
-   * CRITICAL: This prevents the "green blob" bug where camera renders inside terrain.
+   * P0 TERRAIN SPAWN FIX: Critical for autostart mode where camera must stay above terrain.
+   * Uses terrain height + offset (15 units).
    * 
    * Per task spec: Use TerrainManager.getHeightAt(x,z) + offset for safe height.
    * If terrain isn't ready, use safe default (y=50).
@@ -229,19 +229,29 @@ export class CameraController {
       this._spawnSafetyFrames--;
     }
     
+    // During spawn safety period, be extra aggressive about clamping
+    const inSpawnSafety = this._spawnSafetyFrames > 0;
+    
     // If no terrain, use fallback height
     if (!this.terrain) {
-      if (this.currentPos.y < FALLBACK_Y) {
-        this.currentPos.y = FALLBACK_Y;
+      const minY = inSpawnSafety ? FALLBACK_Y + 10 : FALLBACK_Y;
+      if (this.currentPos.y < minY) {
+        this.currentPos.y = minY;
       }
       return;
+    }
+    
+    // Force terrain generation at camera position if available
+    if (inSpawnSafety && this.terrain.forceGenerateAt) {
+      this.terrain.forceGenerateAt(this.currentPos.x, this.currentPos.z);
     }
     
     // Per task spec: use TerrainManager.getHeightAt(x,z)
     const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
     if (!getHeight) {
-      if (this.currentPos.y < FALLBACK_Y) {
-        this.currentPos.y = FALLBACK_Y;
+      const minY = inSpawnSafety ? FALLBACK_Y + 10 : FALLBACK_Y;
+      if (this.currentPos.y < minY) {
+        this.currentPos.y = minY;
       }
       return;
     }
@@ -250,8 +260,9 @@ export class CameraController {
     
     // If terrain returns invalid value, use fallback
     if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-      if (this.currentPos.y < FALLBACK_Y) {
-        this.currentPos.y = FALLBACK_Y;
+      const minY = inSpawnSafety ? FALLBACK_Y + 10 : FALLBACK_Y;
+      if (this.currentPos.y < minY) {
+        this.currentPos.y = minY;
       }
       return;
     }

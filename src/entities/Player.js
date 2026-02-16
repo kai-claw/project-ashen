@@ -121,10 +121,11 @@ export class Player {
     this.gltfModel = null;
 
     // Create mesh container
-    // Initial position uses fallback height - will be adjusted by main.js IIFE using terrain height
+    // P0 TERRAIN SPAWN FIX: Initial position uses fallback height (50) which is safe above terrain max (~25)
+    // Position will be corrected by main.js IIFE using actual terrain height + 5
     // Per task spec: Use terrain height + 5 for safe spawn, or fallback y=50 if terrain not ready
     this.mesh = new THREE.Group();
-    // Initial Y will be corrected by main.js IIFE before first render
+    // Initial Y=50 is safe fallback - IIFE will correct to terrain + 5 after terrain generates
     this.mesh.position.set(0, 50, 5);
 
     // Create fallback primitive mesh (visible while GLTF loads)

@@ -130,16 +130,15 @@ scene.background = new THREE.Color(0x87CEEB);  // Initial sky blue (will be over
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
 // Initial camera position - will be adjusted by IIFE after terrain generates
-// CRITICAL FIX (P0 GREEN BLOB): Camera angle fix, not just height fix.
-// Previous failed approach: camera at Y=1500 looking at player at Y=800 = 89° downward angle
-// This extreme angle made terrain fill entire viewport even though camera was "above" it.
-// CORRECT APPROACH: Player at Y=300, camera at Y=310 (only 10 units above) - normal viewing angle.
-// Both are well above terrain max (Y ~25), but camera looks at player horizontally, not straight down.
+// P0 TERRAIN SPAWN FIX: Use reasonable initial values that won't cause issues.
+// The IIFE at bottom of file will recalculate proper positions after terrain generates.
+// Key insight: Start at modest height (50), not extreme (310) - avoids camera lerp issues.
 const isAutostartInit = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
-const initialCameraY = isAutostartInit ? 310 : 60;
-const initialCameraZ = isAutostartInit ? 20 : 11;
+// Use same initial values for both modes - IIFE will correct based on actual terrain
+const initialCameraY = 50;
+const initialCameraZ = 11;
 camera.position.set(0, initialCameraY, initialCameraZ);
-camera.lookAt(0, isAutostartInit ? 300 : (initialCameraY - 10), 5);
+camera.lookAt(0, initialCameraY - 10, 5);
 
 // DEBUG objects removed - terrain now rendering with MeshBasicMaterial
 
@@ -662,21 +661,35 @@ window.addEventListener('resize', () => {
 });
 
 // --- Game Loop ---
-// Track spawn safety frames - simple terrain height checks for initial frames
+// Track spawn safety frames - terrain height checks for initial frames
+// P0 TERRAIN SPAWN FIX: Extended to 300 frames (~5 sec) to ensure terrain fully loads
 let spawnSafetyFramesRemaining = 300;
 let isFirstAnimateFrame = true;
+const isAutostartMode = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
 
 function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.05); // Cap delta to prevent physics explosions
 
   // ==== SPAWN SAFETY - Ensure player/camera above terrain ====
-  // Per task spec: Use terrain height + 5 for player, terrain height + 15 for camera
+  // P0 TERRAIN SPAWN FIX: Critical for autostart mode where game starts instantly
+  // Per task spec: Use TerrainManager.getHeightAt(x,z) + 5 for safe spawn height
   // If terrain not ready, use fallback y=50
   if (spawnSafetyFramesRemaining > 0) {
     const PLAYER_OFFSET = 5;   // Per spec: terrain + 5
     const CAMERA_OFFSET = 15;  // Per spec: terrain + 15
     const FALLBACK_Y = 50;     // Per spec: fallback y=50
+    
+    // Force terrain generation around player if not already done
+    if (world.terrain && world.terrain.forceGenerateAt && spawnSafetyFramesRemaining > 290) {
+      const px = player.mesh.position.x;
+      const pz = player.mesh.position.z;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          world.terrain.forceGenerateAt(px + dx * 64, pz + dz * 64);
+        }
+      }
+    }
     
     const getHeight = world.terrain ? (world.terrain.getHeightAt || world.terrain.getTerrainHeight) : null;
     
@@ -706,21 +719,32 @@ function animate() {
           }
         }
       }
+    } else if (spawnSafetyFramesRemaining > 250) {
+      // No terrain height function available yet - use fallback
+      if (player.mesh.position.y < FALLBACK_Y) {
+        player.mesh.position.y = FALLBACK_Y;
+        if (player.velocity) player.velocity.y = 0;
+      }
+      if (camera.position.y < FALLBACK_Y + CAMERA_OFFSET) {
+        camera.position.y = FALLBACK_Y + CAMERA_OFFSET;
+        if (cameraController && cameraController.currentPos) {
+          cameraController.currentPos.y = FALLBACK_Y + CAMERA_OFFSET;
+        }
+      }
     }
     
     spawnSafetyFramesRemaining--;
   }
 
-  // FIRST FRAME SAFETY: Additional aggressive check on first frame only
+  // FIRST FRAME SAFETY: Log positions and force terrain at player location
   if (isFirstAnimateFrame) {
     isFirstAnimateFrame = false;
     console.log(`[Main:FirstFrame] Camera position: (${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)})`);
     console.log(`[Main:FirstFrame] Player position: (${player.mesh.position.x.toFixed(2)}, ${player.mesh.position.y.toFixed(2)}, ${player.mesh.position.z.toFixed(2)})`);
+    if (isAutostartMode) {
+      console.log(`[Main:FirstFrame] AUTOSTART MODE - spawn safety active for ${spawnSafetyFramesRemaining} frames`);
+    }
   }
-
-  // NOTE: spawnSafetyFramesRemaining is decremented in the safety check block above
-  // Do NOT decrement again here - that was causing the counter to run down twice as fast
-  // (P0 TERRAIN SPAWN FIX: removed duplicate decrement)
 
   inputManager.update(delta);
   
