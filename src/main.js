@@ -781,17 +781,13 @@ function animate() {
   // These always update regardless of hitstop
   cameraController.update(delta);
   
-  // Camera safety: ensure camera is above player and looking downward
-  // CameraController lerp can temporarily place camera below lookAt target
+  // Camera override: position behind/above player looking down
+  // The CameraController lerp causes terrain to be invisible for many seconds
+  // This guaranteed camera angle showed terrain in the nuclear test
   {
     const pp = player.mesh.position;
-    const lookY = pp.y + 1.5;
-    const minCamY = lookY + 4.0;
-    if (camera.position.y < minCamY) {
-      camera.position.y = minCamY;
-    }
-    // MUST re-aim after position adjustment (lookAt depends on position)
-    camera.lookAt(pp.x, lookY, pp.z);
+    camera.position.set(pp.x - 3, pp.y + 10, pp.z + 8);
+    camera.lookAt(pp.x, pp.y, pp.z);
   }
   
   itemManager.update(player.mesh.position);

@@ -370,15 +370,9 @@ export class DayNightLighting {
       this.scene.background = this.currentSkyColor.clone();
     }
     
-    // Fog
-    if (this.scene.fog && this.scene.fog.isExpFog2 || this.scene.fog && this.scene.fog.color) {
-      this.scene.fog.color.copy(this.currentFogColor);
-    } else {
-      this.scene.fog = new THREE.FogExp2(this.currentFogColor, this.currentFogDensity);
-    }
-    if (this.scene.fog) {
-      this.scene.fog.density = this.currentFogDensity;
-    }
+    // Fog — DISABLED: was washing out terrain, making green appear as sky color
+    // Re-enable once terrain visibility is fully confirmed
+    this.scene.fog = null;
     
     // Sun mesh color
     if (this.sunMesh) {
@@ -526,8 +520,9 @@ export class DayNightLighting {
     
     // Indoor fog (less dense)
     if (this.scene.fog) {
-      this.scene.fog.color.set(0x222222);
-      this.scene.fog.density = 0.005;
+      // Fog disabled for terrain visibility fix
+      // this.scene.fog.color.set(0x222222);
+      // this.scene.fog.density = 0.005;
     }
   }
   
