@@ -1047,7 +1047,8 @@ function animate() {
     gameManager.bloodstainMesh.material.opacity = pulse;
   }
 
-  composer.render();
+  // Bypass EffectComposer — direct render for reliable terrain colors
+  renderer.render(scene, camera);
 }
 
 // ========== SPAWN INITIALIZATION ==========
