@@ -322,11 +322,10 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // Terrain material — MeshLambertMaterial for reliable green coloring
-    // (MeshStandardMaterial was being washed cyan by blue-heavy lights + ACES tone mapping)
-    return new THREE.MeshLambertMaterial({
-      map: texture,
-      color: 0x5a7a40,
+    // Terrain material — BRIGHT GREEN MeshBasicMaterial for visibility debugging
+    // MeshBasicMaterial ignores lighting entirely — pure color output
+    return new THREE.MeshBasicMaterial({
+      color: 0x22aa22,
       side: THREE.DoubleSide,
     });
   }
