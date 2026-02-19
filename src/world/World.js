@@ -15,8 +15,6 @@ import { NPCManager } from './NPCManager.js';
 export class World {
   constructor(scene) {
     this.scene = scene;
-    console.log('DIAG [World]: this.scene === scene:', this.scene === scene);
-    console.log('DIAG [World]: scene is THREE.Scene:', scene.isScene);
     
     // Collision systems
     this.colliders = [];      // Wall/structure colliders

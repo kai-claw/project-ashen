@@ -255,7 +255,6 @@ export class TerrainGenerator {
     mesh.castShadow = false;
     
     this.scene.add(mesh);
-    console.log('DIAG [TerrainGen]: TERRAIN CHUNK ADDED at', mesh.position.toArray(), 'key:', key, 'total chunks:', this.chunks.size + 1);
     
     // Store chunk data
     this.chunks.set(key, { mesh, geometry });

@@ -5,6 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Ashen</title>
   <script>
+    // Global error overlay — catches uncaught exceptions so screenshot service can see them
+    window.__ashenShowError = function(msg) {
+      var el = document.getElementById('error-overlay');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'error-overlay';
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(180,0,0,0.92);color:#fff;font:14px/1.5 monospace;padding:16px 20px;max-height:40vh;overflow:auto;white-space:pre-wrap;pointer-events:none;';
+        document.body.appendChild(el);
+      }
+      el.textContent += (el.textContent ? '\n' : '') + msg;
+    };
+    window.onerror = function(msg, src, line, col, err) {
+      window.__ashenShowError('[onerror] ' + msg + ' (' + src + ':' + line + ':' + col + ')');
+    };
+    window.addEventListener('unhandledrejection', function(ev) {
+      window.__ashenShowError('[unhandledrejection] ' + (ev.reason && ev.reason.stack || ev.reason));
+    });
+  </script>
+  <script>
     // Autostart mode - hide menu and overlays for testing/screenshots
     (function() {
       const params = new URLSearchParams(window.location.search);
