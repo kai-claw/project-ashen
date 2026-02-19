@@ -8,8 +8,8 @@
       "priority": "P0",
       "status": "ready-for-review",
       "worker": 1,
-      "description": "Fix black screen / green sphere bug \u2014 EffectComposer render target misconfigured",
-      "workerNotes": "ROOT CAUSE FOUND: EffectComposer was constructed with a custom WebGLRenderTarget using colorSpace: SRGBColorSpace + RGBAFormat (8-bit). In Three.js r182, this creates a color space mismatch with UnrealBloomPass internal render targets (which default to LinearSRGBColorSpace), causing black output from frame 6 onward. FIX: Let EffectComposer create its own default render target (HalfFloatType, LinearSRGBColorSpace). Also removed 400+ lines of spawn-Y-tweaking code accumulated over 38 failed attempts that were treating the symptom not the cause. Cleaned up debug cubes, debug overlays, aggressive camera clamping (ABSOLUTE_MIN=60). Commit 4c88430."
+      "description": "Fix black screen — EffectComposer render target + missing OutputPass",
+      "workerNotes": "TWO ROOT CAUSES: (1) Commit 4c88430 fixed EffectComposer render target (custom SRGBColorSpace target -> default HalfFloat). (2) Commit 8390c25 added missing OutputPass — Three.js r182 REQUIRES OutputPass as final pass for tone mapping + color space conversion (linear -> sRGB). Without it, framebuffer stays in linear space and renders black. Pipeline: RenderPass -> UnrealBloomPass -> ColorGradingShader -> OutputPass. Also added global error overlay (window.onerror) in index.html for screenshot-visible JS errors. Wrapped spawn/animate in try/catch. Removed all diagnostic code."
     }
   ],
   "subtasks": [
@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-19T10:52:00Z",
-  "workerStatus": "Worker 1: DIAGNOSTIC DEPLOY (commit 9081934). Added: (1) Red MeshBasicMaterial 10x10x10 cube at (0,20,0) — visible regardless of lighting/fog. (2) scene.children count, camera near/far, player pos. (3) scene.background + scene.fog after DayNightLighting init. (4) renderer toneMapping/exposure/outputColorSpace. (5) composer passes list. (6) World constructor scene reference verify. (7) TerrainGenerator chunk-add logs. (8) DayNightLighting phase + light intensities. OBSERVATIONS FROM CODE REVIEW: scene.background starts 0x87CEEB (sky blue), DayNightLighting.setPhaseImmediate(DAY) sets it to 0x87ceeb — looks correct. Fog is FogExp2 with density 0.008 — reasonable. Camera near=0.1, far=500 — should show cube at y=20. World._createLighting adds DUPLICATE lights (sunLight, ambientLight, hemiLight, fillLight) on top of DayNightLighting's own lights — possible overexposure but not blackness. Need browser console output to proceed. Status: diagnostic deployed, awaiting console output."
+  "lastUpdated": "2026-02-19T12:45:00Z",
+  "workerStatus": "Worker 1: OutputPass fix deployed (commit 8390c25). Added OutputPass as final EffectComposer pass — required by Three.js r182 for tone mapping + sRGB conversion. Pipeline: RenderPass -> BloomPass -> ColorGrading -> OutputPass. Added global error overlay in index.html. Wrapped spawn/animate in try/catch. Removed all diagnostic code. Build verified, deployed to gh-pages. Status: ready-for-review."
 }
