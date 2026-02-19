@@ -227,7 +227,8 @@ export class CameraController {
   forcePosition(x, y, z) {
     this.currentPos.set(x, y, z);
     this.camera.position.set(x, y, z);
-    this._firstFrame = false; // Already positioned
+    // Keep _firstFrame = true so the next update() snaps to desiredPos
+    // (player may have moved since forcePosition was called)
   }
 
   getForwardDirection() {

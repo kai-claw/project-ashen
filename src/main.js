@@ -121,7 +121,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 2.0;  // Boosted to brighten dark environment
+renderer.toneMappingExposure = 1.2;  // Moderate exposure (ambient 0.6 + sun 1.2 + hemi 0.4 = 2.2 total light)
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
@@ -1040,17 +1040,6 @@ function animate() {
   }
 
   // Render with post-processing (bloom + color grading)
-  // DIAGNOSTIC: show scene info on screen every 60 frames
-  if (!window._diagFrameCount) window._diagFrameCount = 0;
-  window._diagFrameCount++;
-  if (window._diagFrameCount % 60 === 1) {
-    const meshCount = scene.children.filter(c => c.isMesh).length;
-    const lightCount = scene.children.filter(c => c.isLight).length;
-    const camDir = new THREE.Vector3();
-    camera.getWorldDirection(camDir);
-    const info = `Frame ${window._diagFrameCount} | Children: ${scene.children.length} | Meshes: ${meshCount} | Lights: ${lightCount} | Cam: (${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}) | Dir: (${camDir.x.toFixed(2)}, ${camDir.y.toFixed(2)}, ${camDir.z.toFixed(2)}) | Player: (${player.mesh.position.x.toFixed(1)}, ${player.mesh.position.y.toFixed(1)}, ${player.mesh.position.z.toFixed(1)})`;
-    window.__ashenShowError && window.__ashenShowError(info);
-  }
   composer.render();
 }
 
@@ -1070,15 +1059,6 @@ try {
   const safeH = (!isNaN(terrainH) && isFinite(terrainH)) ? terrainH : 0;
   player.mesh.position.y = safeH + 2;
   if (player.velocity) player.velocity.set(0, 0, 0);
-  
-  // DIAGNOSTIC: Large red box at player feet to test if ANY mesh renders
-  {
-    const testGeo = new THREE.BoxGeometry(20, 2, 20);
-    const testMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const testBox = new THREE.Mesh(testGeo, testMat);
-    testBox.position.set(player.mesh.position.x, safeH, player.mesh.position.z);
-    scene.add(testBox);
-  }
   
   // Force camera to correct position behind/above player (prevents first-frame sky-only render)
   // CameraController starts with currentPos = camera's initial (0,20,11) — must snap to player
