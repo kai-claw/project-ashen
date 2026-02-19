@@ -781,12 +781,15 @@ function animate() {
   // These always update regardless of hitstop
   cameraController.update(delta);
   
-  // OVERRIDE: Force camera behind/above player looking down at them
-  // This bypasses CameraController to diagnose if terrain is actually there
+  // Camera safety: ensure camera looks down toward terrain, not up at sky
+  // CameraController lerp can temporarily place camera below lookAt target
   {
     const pp = player.mesh.position;
-    camera.position.set(pp.x - 5, pp.y + 8, pp.z + 10);
-    camera.lookAt(pp);
+    const lookY = pp.y + 2.5;
+    if (camera.position.y < lookY + 1.0) {
+      // Camera is below or barely above lookAt target — force above
+      camera.position.y = lookY + 3.0;
+    }
   }
   
   itemManager.update(player.mesh.position);

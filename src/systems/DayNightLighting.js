@@ -124,7 +124,7 @@ export class DayNightLighting {
    */
   createLights() {
     // Ambient light (fills all shadows)
-    this.ambientLight = new THREE.AmbientLight(0x8899aa, 0.6);
+    this.ambientLight = new THREE.AmbientLight(0xcccccc, 0.5);  // Neutral white ambient (was blue 0x8899aa, washed terrain green→cyan)
     this.scene.add(this.ambientLight);
     
     // Sun directional light
