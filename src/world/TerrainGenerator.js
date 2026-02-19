@@ -322,12 +322,11 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // Proper terrain material with texture
-    return new THREE.MeshStandardMaterial({
+    // Terrain material — MeshLambertMaterial for reliable green coloring
+    // (MeshStandardMaterial was being washed cyan by blue-heavy lights + ACES tone mapping)
+    return new THREE.MeshLambertMaterial({
       map: texture,
-      color: 0x6a8a50,
-      roughness: 0.9,
-      metalness: 0.0,
+      color: 0x5a7a40,
       side: THREE.DoubleSide,
     });
   }

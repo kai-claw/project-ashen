@@ -120,7 +120,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.LinearToneMapping;  // Was ACES (shifted terrain green→cyan)
 renderer.toneMappingExposure = 1.0;  // Standard exposure
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 

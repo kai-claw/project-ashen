@@ -349,7 +349,7 @@ export class World {
     // NOTE: All scene lighting is now managed by DayNightLighting (Phase 24).
     // It creates sun, moon, and ambient lights with phase-based transitions.
     // Hemisphere + fill lights provide extra bounce that DayNightLighting doesn't cover.
-    const hemiLight = new THREE.HemisphereLight(0x99bbdd, 0x556644, 0.4);
+    const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x556644, 0.3);  // Warm sky (was blue 0x99bbdd→cyan terrain)
     this.scene.add(hemiLight);
   }
   
