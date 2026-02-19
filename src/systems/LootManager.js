@@ -765,7 +765,10 @@ export class LootManager {
    * Get all inventory data
    */
   getInventory() {
-    return { ...this.inventory };
+    return {
+      ...this.inventory,
+      items: this.inventory.items || {},
+    };
   }
   
   /**

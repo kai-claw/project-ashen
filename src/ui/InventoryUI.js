@@ -270,8 +270,9 @@ export class InventoryUI {
    */
   updateHotbar() {
     const inv = this.lootManager.getInventory();
-    const healthCount = inv.items['health-potion'] || 0;
-    const staminaCount = inv.items['stamina-potion'] || 0;
+    const items = inv.items || {};
+    const healthCount = items['health-potion'] || 0;
+    const staminaCount = items['stamina-potion'] || 0;
     
     // Get weapon quick slots if available
     const weaponSlots = this.weaponManager?.getQuickSlotsInfo?.() || [];
@@ -457,7 +458,7 @@ export class InventoryUI {
     const materials = [];
     
     // Categorize items
-    for (const [itemId, qty] of Object.entries(inv.items)) {
+    for (const [itemId, qty] of Object.entries(inv.items || {})) {
       const itemDef = Object.values(ITEM_TYPES).find(t => t.id === itemId);
       if (!itemDef) continue;
       
