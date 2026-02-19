@@ -1060,6 +1060,19 @@ try {
   player.mesh.position.y = safeH + 2;
   if (player.velocity) player.velocity.set(0, 0, 0);
   
+  // Force camera to correct position behind/above player (prevents first-frame sky-only render)
+  // CameraController starts with currentPos = camera's initial (0,20,11) — must snap to player
+  {
+    const camTargetY = player.mesh.position.y + 2.5; // CameraController.height
+    const camDist = 6;   // CameraController.distance
+    const camPitch = 0.3; // CameraController.pitch
+    const camX = player.mesh.position.x;
+    const camY = camTargetY + camDist * Math.sin(camPitch);
+    const camZ = player.mesh.position.z + camDist * Math.cos(camPitch);
+    cameraController.forcePosition(camX, camY, camZ);
+    camera.lookAt(player.mesh.position.x, camTargetY, player.mesh.position.z);
+  }
+  
   animate();
 } catch (e) {
   console.error('[ASHEN FATAL] Spawn/animate init failed:', e);

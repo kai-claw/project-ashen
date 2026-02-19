@@ -254,6 +254,10 @@ export class TerrainGenerator {
     mesh.receiveShadow = true;
     mesh.castShadow = false;
     
+    // Recompute bounding sphere after height modification — rotateX() computed it
+    // for the flat plane BEFORE heights were applied, causing stale frustum culling
+    geometry.computeBoundingSphere();
+    
     this.scene.add(mesh);
     
     // Store chunk data

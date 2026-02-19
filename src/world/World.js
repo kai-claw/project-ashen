@@ -346,33 +346,11 @@ export class World {
   }
   
   _createLighting() {
-    // Strong directional sunlight
-    const sunLight = new THREE.DirectionalLight(0xfffaf0, 2.0);
-    sunLight.position.set(50, 80, 30);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 200;
-    sunLight.shadow.camera.left = -80;
-    sunLight.shadow.camera.right = 80;
-    sunLight.shadow.camera.top = 80;
-    sunLight.shadow.camera.bottom = -80;
-    sunLight.shadow.bias = -0.001;
-    this.scene.add(sunLight);
-    
-    // Ambient light for shadows - increased for better visibility
-    const ambientLight = new THREE.AmbientLight(0x8899bb, 0.9);
-    this.scene.add(ambientLight);
-    
-    // Hemisphere light for natural sky/ground bounce - increased
-    const hemiLight = new THREE.HemisphereLight(0x99bbdd, 0x556644, 0.7);
+    // NOTE: All scene lighting is now managed by DayNightLighting (Phase 24).
+    // It creates sun, moon, and ambient lights with phase-based transitions.
+    // Hemisphere + fill lights provide extra bounce that DayNightLighting doesn't cover.
+    const hemiLight = new THREE.HemisphereLight(0x99bbdd, 0x556644, 0.4);
     this.scene.add(hemiLight);
-    
-    // Additional fill light from front for player visibility
-    const fillLight = new THREE.DirectionalLight(0xaabbcc, 0.6);
-    fillLight.position.set(-30, 40, 50);
-    this.scene.add(fillLight);
   }
   
   // ========================================
