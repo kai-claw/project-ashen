@@ -1060,6 +1060,15 @@ try {
   player.mesh.position.y = safeH + 2;
   if (player.velocity) player.velocity.set(0, 0, 0);
   
+  // DIAGNOSTIC: Large red box at player feet to test if ANY mesh renders
+  {
+    const testGeo = new THREE.BoxGeometry(20, 2, 20);
+    const testMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const testBox = new THREE.Mesh(testGeo, testMat);
+    testBox.position.set(player.mesh.position.x, safeH, player.mesh.position.z);
+    scene.add(testBox);
+  }
+  
   // Force camera to correct position behind/above player (prevents first-frame sky-only render)
   // CameraController starts with currentPos = camera's initial (0,20,11) — must snap to player
   {

@@ -241,6 +241,9 @@ export class TerrainGenerator {
       positions[i + 1] = height;
     }
     
+    // Mark position buffer as needing GPU re-upload after height modification
+    geometry.attributes.position.needsUpdate = true;
+    
     // Recompute normals for proper lighting
     geometry.computeVertexNormals();
     
