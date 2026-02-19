@@ -27,16 +27,6 @@ export class CameraController {
     
     // Skip lerp on first frame to prevent spawning inside terrain
     this._firstFrame = true;
-    this._terrainClampOffset = 15;      // Per task spec: camera at terrain + 15
-    this._spawnSafetyFrames = 180;      // Safety frames for terrain clamping (~3 sec at 60fps)
-    
-    // Spawn safety tracking
-    this._isAutostart = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
-    this._spawnStartTime = Date.now();
-    this._minimumSafetyMs = 2000;  // 2 seconds of guaranteed safety
-    this._terrainReadyFrames = 0;
-    this._terrainConfirmedReady = false;
-    this._minCameraY = 10;  // Absolute minimum (terrain-relative is primary)
     
     // Smooth lock-on transition
     this.lockOnYaw = 0;
@@ -212,76 +202,19 @@ export class CameraController {
   }
   
   /**
-   * Ensure camera position is above terrain.
-   * P0 TERRAIN SPAWN FIX: Critical for autostart mode where camera must stay above terrain.
-   * Uses terrain height + 25 during spawn safety, + 12 normally.
+   * Ensure camera position is above terrain to prevent seeing through ground.
    */
   clampToTerrain() {
-    // Track spawn safety frames
-    if (this._spawnSafetyFrames > 0) {
-      this._spawnSafetyFrames--;
-    }
-    
-    // During spawn safety period, be extra aggressive about clamping
-    const inSpawnSafety = this._spawnSafetyFrames > 0 || !this._terrainConfirmedReady;
-    const CAMERA_OFFSET = inSpawnSafety ? 25 : 12;  // Very conservative during spawn
-    const FALLBACK_Y = 50;  // Per spec: fallback y=50
-    const ABSOLUTE_MIN = inSpawnSafety ? 60 : 10;  // Absolute minimum camera Y
-    
-    // If no terrain, use fallback height
-    if (!this.terrain) {
-      const minY = Math.max(FALLBACK_Y + 15, ABSOLUTE_MIN);
-      if (this.currentPos.y < minY) {
-        this.currentPos.y = minY;
-      }
-      return;
-    }
-    
-    // Force terrain generation at camera position during spawn safety
-    if (inSpawnSafety && this.terrain.forceGenerateAt) {
-      this.terrain.forceGenerateAt(this.currentPos.x, this.currentPos.z);
-    }
+    if (!this.terrain) return;
     
     const getHeight = this.terrain.getHeightAt || this.terrain.getTerrainHeight;
-    if (!getHeight) {
-      const minY = Math.max(FALLBACK_Y + 15, ABSOLUTE_MIN);
-      if (this.currentPos.y < minY) {
-        this.currentPos.y = minY;
-      }
-      return;
-    }
+    if (!getHeight) return;
     
-    // Get terrain height at exact camera position
     const terrainY = getHeight.call(this.terrain, this.currentPos.x, this.currentPos.z);
+    if (isNaN(terrainY) || !isFinite(terrainY)) return;
     
-    // If terrain sampling failed, use fallback
-    if (isNaN(terrainY) || !isFinite(terrainY) || terrainY < -100) {
-      // Reset terrain ready counter
-      this._terrainReadyFrames = 0;
-      const minY = Math.max(FALLBACK_Y + 15, ABSOLUTE_MIN);
-      if (this.currentPos.y < minY) {
-        this.currentPos.y = minY;
-      }
-      return;
-    }
-    
-    // Track terrain ready state
-    if (!this._terrainConfirmedReady) {
-      this._terrainReadyFrames = (this._terrainReadyFrames || 0) + 1;
-      if (this._terrainReadyFrames >= 10) {
-        this._terrainConfirmedReady = true;
-      }
-    }
-    
-    // Calculate minimum camera Y - ensure above terrain + offset AND absolute minimum
-    // Also ensure camera is above the target (player) position
-    const targetMinY = this.target ? this.target.position.y + 3 : 0;
-    const minCamY = Math.max(
-      terrainY + CAMERA_OFFSET,
-      targetMinY,
-      ABSOLUTE_MIN
-    );
-    
+    // Camera must be at least 2 units above terrain at its position
+    const minCamY = terrainY + 2;
     if (this.currentPos.y < minCamY) {
       this.currentPos.y = minCamY;
     }
