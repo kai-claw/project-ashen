@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-19T13:12:00Z",
-  "workerStatus": "Worker 1: Runtime crash fix deployed (commit e74d745). Fixed 'Cannot read properties of undefined (reading health-potion)' — guarded inv.items access in InventoryUI.updateHotbar(), renderItemsTab(), and hardened LootManager.getInventory(). Canvas now renders + no error overlay. Build verified, deployed. Status: ready-for-review."
+  "lastUpdated": "2026-02-19T14:00:00Z",
+  "workerStatus": "Worker 1: Terrain visibility fix deployed (commit 37ea63b). Three fixes: (1) TerrainGenerator computeBoundingSphere() after vertex height modification — rotateX() left stale bounding sphere from flat plane, causing potential frustum culling issues. (2) Removed duplicate World._createLighting() lights (sun 2.0, ambient 0.9, fill 0.6) that overlapped with DayNightLighting's lights (sun 1.2, ambient 0.6, moon) — combined ~5x intensity likely washed terrain to near-white. Kept only reduced hemisphere light 0.4. (3) Force camera position in spawn init via cameraController.forcePosition() — camera was starting at (0,20,11) before CameraController update could snap it behind player. Build verified, deployed. Status: ready-for-review."
 }
