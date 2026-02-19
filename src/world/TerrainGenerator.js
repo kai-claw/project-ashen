@@ -322,10 +322,13 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // Terrain material — BRIGHT GREEN MeshBasicMaterial for visibility debugging
-    // MeshBasicMaterial ignores lighting entirely — pure color output
-    return new THREE.MeshBasicMaterial({
-      color: 0x22aa22,
+    // Terrain material — MeshLambertMaterial with emissive for guaranteed green visibility
+    // MeshBasicMaterial proved terrain renders; LambertMaterial adds shading for depth
+    return new THREE.MeshLambertMaterial({
+      map: texture,
+      color: 0x4a8a30,
+      emissive: 0x1a3a10,        // Self-illumination prevents terrain from going dark/cyan
+      emissiveIntensity: 0.4,
       side: THREE.DoubleSide,
     });
   }

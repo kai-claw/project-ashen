@@ -781,13 +781,12 @@ function animate() {
   // These always update regardless of hitstop
   cameraController.update(delta);
   
-  // Camera override: position behind/above player looking down
-  // The CameraController lerp causes terrain to be invisible for many seconds
-  // This guaranteed camera angle showed terrain in the nuclear test
+  // Camera override: 3rd-person behind/above player
+  // CameraController lerp was unreliable; this guarantees terrain + sky visibility
   {
     const pp = player.mesh.position;
-    camera.position.set(pp.x - 3, pp.y + 10, pp.z + 8);
-    camera.lookAt(pp.x, pp.y, pp.z);
+    camera.position.set(pp.x, pp.y + 8, pp.z + 12);
+    camera.lookAt(pp.x, pp.y + 1, pp.z);
   }
   
   itemManager.update(player.mesh.position);
