@@ -174,6 +174,11 @@ const hud = new HUD(gameManager);
 const timeManager = createTimeManager(scene);
 const dayNightLighting = createDayNightLighting(scene, renderer);
 dayNightLighting.initialize(timeManager);
+console.log('DIAG [DayNight]: After init - scene.background:', scene.background);
+console.log('DIAG [DayNight]: After init - scene.fog:', scene.fog);
+console.log('DIAG [DayNight]: dayPhase:', timeManager.dayPhase);
+console.log('DIAG [DayNight]: ambientLight intensity:', dayNightLighting.ambientLight?.intensity);
+console.log('DIAG [DayNight]: sunLight intensity:', dayNightLighting.sunLight?.intensity);
 const weatherManager = createWeatherManager(scene, particleManager, audioManager);
 weatherManager.initialize(timeManager);
 const timeWeatherGameplay = createTimeWeatherGameplay(gameManager);
@@ -1054,6 +1059,23 @@ function animate() {
   player.mesh.position.y = safeH + 2;
   if (player.velocity) player.velocity.set(0, 0, 0);
 }
+
+// === DIAGNOSTIC: Remove after confirming 3D renders ===
+const diagGeo = new THREE.BoxGeometry(10, 10, 10);
+const diagMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+const diagCube = new THREE.Mesh(diagGeo, diagMat);
+diagCube.position.set(0, 20, 0);
+scene.add(diagCube);
+console.log('DIAG: scene.children count:', scene.children.length);
+console.log('DIAG: camera pos:', camera.position);
+console.log('DIAG: camera near:', camera.near, 'far:', camera.far);
+console.log('DIAG: player pos:', player.mesh.position);
+console.log('DIAG: scene.background:', scene.background);
+console.log('DIAG: scene.fog:', scene.fog);
+console.log('DIAG: renderer.toneMapping:', renderer.toneMapping, 'exposure:', renderer.toneMappingExposure);
+console.log('DIAG: renderer.outputColorSpace:', renderer.outputColorSpace);
+console.log('DIAG: composer passes:', composer.passes.length, composer.passes.map(p => p.constructor.name));
+// === END DIAGNOSTIC ===
 
 animate();
 
