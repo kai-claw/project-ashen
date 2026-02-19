@@ -1040,7 +1040,9 @@ function animate() {
   }
 
   // Render with post-processing (bloom + color grading)
-  composer.render();
+  // DIAGNOSTIC: bypass EffectComposer to test if direct render shows meshes
+  renderer.render(scene, camera);
+  // composer.render();
 }
 
 // ========== SPAWN INITIALIZATION ==========
