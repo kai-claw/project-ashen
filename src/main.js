@@ -781,15 +781,17 @@ function animate() {
   // These always update regardless of hitstop
   cameraController.update(delta);
   
-  // Camera safety: ensure camera looks down toward terrain, not up at sky
+  // Camera safety: ensure camera is above player and looking downward
   // CameraController lerp can temporarily place camera below lookAt target
   {
     const pp = player.mesh.position;
-    const lookY = pp.y + 2.5;
-    if (camera.position.y < lookY + 1.0) {
-      // Camera is below or barely above lookAt target — force above
-      camera.position.y = lookY + 3.0;
+    const lookY = pp.y + 1.5;
+    const minCamY = lookY + 4.0;
+    if (camera.position.y < minCamY) {
+      camera.position.y = minCamY;
     }
+    // MUST re-aim after position adjustment (lookAt depends on position)
+    camera.lookAt(pp.x, lookY, pp.z);
   }
   
   itemManager.update(player.mesh.position);
