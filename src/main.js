@@ -1040,9 +1040,18 @@ function animate() {
   }
 
   // Render with post-processing (bloom + color grading)
-  // DIAGNOSTIC: bypass EffectComposer to test if direct render shows meshes
-  renderer.render(scene, camera);
-  // composer.render();
+  // DIAGNOSTIC: show scene info on screen every 60 frames
+  if (!window._diagFrameCount) window._diagFrameCount = 0;
+  window._diagFrameCount++;
+  if (window._diagFrameCount % 60 === 1) {
+    const meshCount = scene.children.filter(c => c.isMesh).length;
+    const lightCount = scene.children.filter(c => c.isLight).length;
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    const info = `Frame ${window._diagFrameCount} | Children: ${scene.children.length} | Meshes: ${meshCount} | Lights: ${lightCount} | Cam: (${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}) | Dir: (${camDir.x.toFixed(2)}, ${camDir.y.toFixed(2)}, ${camDir.z.toFixed(2)}) | Player: (${player.mesh.position.x.toFixed(1)}, ${player.mesh.position.y.toFixed(1)}, ${player.mesh.position.z.toFixed(1)})`;
+    window.__ashenShowError && window.__ashenShowError(info);
+  }
+  composer.render();
 }
 
 // ========== SPAWN INITIALIZATION ==========
