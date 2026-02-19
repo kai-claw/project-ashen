@@ -4,12 +4,12 @@
   "hotfixes": [
     {
       "id": "terrain-spawn-fix",
-      "name": "Terrain Spawn Fix",
+      "name": "Render Pipeline Fix (was: Terrain Spawn Fix)",
       "priority": "P0",
       "status": "ready-for-review",
       "worker": 1,
-      "description": "Fix player spawning inside terrain mesh in autostart mode",
-      "workerNotes": "FIX v38 (2a5c609): Extended spawn safety to 600 frames (~10 sec) for autostart. Added terrainConfirmedReady flag requiring 10 consecutive valid terrain readings. Raised absolute minimum camera Y to 60 during spawn safety. More aggressive camera enforcement: terrain+25, player+5, absolute min 60. Force terrain generation for first 100 frames in autostart (was 20). All three safety checks now consistent. Player spawn safety frames extended to 600. Per spec: terrain+5 for player, fallback y=50. Build verified, deployed to gh-pages."
+      "description": "Fix black screen / green sphere bug \u2014 EffectComposer render target misconfigured",
+      "workerNotes": "ROOT CAUSE FOUND: EffectComposer was constructed with a custom WebGLRenderTarget using colorSpace: SRGBColorSpace + RGBAFormat (8-bit). In Three.js r182, this creates a color space mismatch with UnrealBloomPass internal render targets (which default to LinearSRGBColorSpace), causing black output from frame 6 onward. FIX: Let EffectComposer create its own default render target (HalfFloatType, LinearSRGBColorSpace). Also removed 400+ lines of spawn-Y-tweaking code accumulated over 38 failed attempts that were treating the symptom not the cause. Cleaned up debug cubes, debug overlays, aggressive camera clamping (ABSOLUTE_MIN=60). Commit 4c88430."
     }
   ],
   "subtasks": [
