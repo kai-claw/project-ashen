@@ -97,11 +97,9 @@ export class Player {
     this.lastGhostSpawnTime = 0;
     this.ghostSpawnInterval = 0.05;
     
-    // Spawn safety tracking - runs terrain height checks for initial frames
-    // Per spec: terrain + 5 for spawn, fallback y=50 if terrain not ready
-    // P0 FIX: Extended to 600 frames (~10 sec) for autostart mode
+    // Spawn safety tracking - terrain height checks for initial frames
     const isAutostart = (typeof window !== 'undefined' && window.AUTOSTART_MODE === true);
-    this._spawnSafetyFrames = isAutostart ? 600 : 300;
+    this._spawnSafetyFrames = isAutostart ? 120 : 60;  // 2 sec / 1 sec (was 600/300 — way too long)
     
     // Ability states
     this.dashDir = new THREE.Vector3();
@@ -510,8 +508,8 @@ export class Player {
       // Per spec: terrain height + 5 for safe spawn, fallback y=50 if terrain not ready
       const inSpawnSafety = this._spawnSafetyFrames > 0;
       if (inSpawnSafety) {
-        const SAFE_OFFSET = 5;   // Per spec: terrain + 5
-        const FALLBACK_Y = 50;   // Per spec: fallback y=50
+        const SAFE_OFFSET = 3;
+        const FALLBACK_Y = 5;
         
         // Get terrain at exact position, not floor (floor includes buildings etc)
         let terrainY = null;
@@ -1392,9 +1390,9 @@ export class Player {
       }
     }
     
-    // Use conservative offset
-    const SAFE_OFFSET = 8;
-    const SAFE_FALLBACK_Y = 50;
+    // Use reasonable offset above terrain
+    const SAFE_OFFSET = 3;
+    const SAFE_FALLBACK_Y = 5;
     
     // Sample terrain at multiple points to find max height
     let maxTerrainY = -Infinity;
@@ -1477,9 +1475,9 @@ export class Player {
     if (this._spawnSafetyFrames <= 0) return;
     this._spawnSafetyFrames--;
     
-    // Per spec: terrain + 5 for safe spawn, fallback y=50
-    const SAFE_OFFSET = 5;   // Per spec: terrain + 5
-    const FALLBACK_Y = 50;   // Per spec: fallback y=50
+    // Keep player above terrain during initial frames
+    const SAFE_OFFSET = 3;
+    const FALLBACK_Y = 5;
     
     // If no world, use fallback
     if (!this.world) {
