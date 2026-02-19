@@ -121,7 +121,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;  // Moderate exposure (ambient 0.6 + sun 1.2 + hemi 0.4 = 2.2 total light)
+renderer.toneMappingExposure = 1.0;  // Standard exposure
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
@@ -1039,10 +1039,7 @@ function animate() {
     gameManager.bloodstainMesh.material.opacity = pulse;
   }
 
-  // NUCLEAR TEST: bypass everything, raw render
-  scene.fog = null;  // Kill fog
-  renderer.toneMapping = THREE.NoToneMapping;  // Kill tone mapping
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 // ========== SPAWN INITIALIZATION ==========

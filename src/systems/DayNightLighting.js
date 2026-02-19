@@ -40,7 +40,7 @@ const PHASE_COLORS = {
     moon: new THREE.Color(0x000000),            // No moon
     sky: new THREE.Color(0x87ceeb),             // Sky blue
     fog: new THREE.Color(0xaabbcc),             // Light blue fog
-    fogDensity: 0.008,
+    fogDensity: 0.003,                          // Reduced: was 0.008, washed out terrain
     ambientIntensity: 0.6,
     sunIntensity: 1.2,
     moonIntensity: 0

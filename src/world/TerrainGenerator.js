@@ -322,9 +322,12 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // NUCLEAR TEST: bright red MeshBasicMaterial (no lights needed, impossible to miss)
-    return new THREE.MeshBasicMaterial({
-      color: 0xff0000,
+    // Proper terrain material with texture
+    return new THREE.MeshStandardMaterial({
+      map: texture,
+      color: 0x6a8a50,
+      roughness: 0.9,
+      metalness: 0.0,
       side: THREE.DoubleSide,
     });
   }
