@@ -781,6 +781,14 @@ function animate() {
   // These always update regardless of hitstop
   cameraController.update(delta);
   
+  // OVERRIDE: Force camera behind/above player looking down at them
+  // This bypasses CameraController to diagnose if terrain is actually there
+  {
+    const pp = player.mesh.position;
+    camera.position.set(pp.x - 5, pp.y + 8, pp.z + 10);
+    camera.lookAt(pp);
+  }
+  
   itemManager.update(player.mesh.position);
   lootManager.update(player.mesh.position);
   
