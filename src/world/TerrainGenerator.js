@@ -322,14 +322,9 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // Terrain material with texture
-    // DoubleSide: prevents backface culling from hiding terrain if normals
-    // flip after rotateX() + height modification + computeVertexNormals()
-    return new THREE.MeshStandardMaterial({
-      map: texture,
-      color: 0x6a8a50,
-      roughness: 0.9,
-      metalness: 0.0,
+    // NUCLEAR TEST: bright red MeshBasicMaterial (no lights needed, impossible to miss)
+    return new THREE.MeshBasicMaterial({
+      color: 0xff0000,
       side: THREE.DoubleSide,
     });
   }

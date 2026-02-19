@@ -1039,8 +1039,10 @@ function animate() {
     gameManager.bloodstainMesh.material.opacity = pulse;
   }
 
-  // Render with post-processing (bloom + color grading)
-  composer.render();
+  // NUCLEAR TEST: bypass everything, raw render
+  scene.fog = null;  // Kill fog
+  renderer.toneMapping = THREE.NoToneMapping;  // Kill tone mapping
+  renderer.render(scene, camera);
 }
 
 // ========== SPAWN INITIALIZATION ==========
