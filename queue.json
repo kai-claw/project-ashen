@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-20T02:25:00Z",
-  "workerStatus": "Worker 1: CameraController fix deployed (commit 0634249). Params now match working override: distance 6→14, height 2.5→1, pitch 0.3→0.53. Removed hard camera override from animate(). Spawn init forcePosition updated. Terrain untouched. Status: ready-for-review."
+  "lastUpdated": "2026-02-20T02:55:00Z",
+  "workerStatus": "Worker 1: Procedural foliage deployed (commit 4e733be). Trees (3 types, brown trunk + green canopy) and rocks (dodecahedron, gray) placed per chunk using deterministic hash. Biome-density: meadow 4+2, grassland 8+4, dense_woods 14+3, dark_frontier 10+6. MeshBasicMaterial, LOD within 2 chunks, skips castle zone + steep slopes. Shared geo+mats. Status: ready-for-review."
 }
