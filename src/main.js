@@ -781,14 +781,6 @@ function animate() {
   // These always update regardless of hitstop
   cameraController.update(delta);
   
-  // Camera override: 3rd-person behind/above player
-  // CameraController lerp was unreliable; this guarantees terrain + sky visibility
-  {
-    const pp = player.mesh.position;
-    camera.position.set(pp.x, pp.y + 8, pp.z + 12);
-    camera.lookAt(pp.x, pp.y + 1, pp.z);
-  }
-  
   itemManager.update(player.mesh.position);
   lootManager.update(player.mesh.position);
   
@@ -1068,11 +1060,11 @@ try {
   if (player.velocity) player.velocity.set(0, 0, 0);
   
   // Force camera to correct position behind/above player (prevents first-frame sky-only render)
-  // CameraController starts with currentPos = camera's initial (0,20,11) — must snap to player
+  // Must match CameraController params: distance=14, height=1, pitch=0.53
   {
-    const camTargetY = player.mesh.position.y + 2.5; // CameraController.height
-    const camDist = 6;   // CameraController.distance
-    const camPitch = 0.3; // CameraController.pitch
+    const camTargetY = player.mesh.position.y + 1; // CameraController.height
+    const camDist = 14;    // CameraController.distance
+    const camPitch = 0.53; // CameraController.pitch
     const camX = player.mesh.position.x;
     const camY = camTargetY + camDist * Math.sin(camPitch);
     const camZ = player.mesh.position.z + camDist * Math.cos(camPitch);

@@ -6,15 +6,15 @@ export class CameraController {
     this.target = target;
     this.input = inputManager;
 
-    this.distance = 6;
-    this.minDistance = 3;
-    this.maxDistance = 12;
-    this.height = 2.5;
+    this.distance = 14;        // Was 6 — matches working camera override (sqrt(8²+12²)≈14)
+    this.minDistance = 6;
+    this.maxDistance = 20;
+    this.height = 1;           // Was 2.5 — lookAt target is player.y + 1 (matches override)
     this.sensitivity = 0.002;
 
     this.yaw = 0;
-    this.pitch = 0.3;
-    this.minPitch = -0.5;
+    this.pitch = 0.53;         // Was 0.3 — atan(7/12)≈0.53 rad matches override's +8Y/+12Z
+    this.minPitch = -0.3;
     this.maxPitch = 1.2;
 
     this.smoothing = 8;
