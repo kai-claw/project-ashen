@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-19T18:55:00Z",
-  "workerStatus": "Worker 1: DIAGNOSTIC camera override deployed (commit 5f8149d). Forces camera to (playerX-5, playerY+8, playerZ+10) lookAt(player) every frame, bypassing CameraController entirely. Screenshot at 18:39 confirmed some 3D geometry renders (gray domes, blue polygon) but camera pointing at sky — this override will determine if terrain meshes are actually in the scene or if CameraController is the problem. Awaiting next screenshot. Status: diagnosing."
+  "lastUpdated": "2026-02-20T01:10:00Z",
+  "workerStatus": "Worker 1: Phase 29 lighting pipeline fix deployed (commit 81a8701). ROOT CAUSE: DAY ambient 0x8899aa was blue-gray (B>G>R), tinting green terrain toward gray-teal. FIX: Changed DAY ambient to 0xfff8e8 (warm neutral), sun to 0xfff4dd (warm white), fog to 0xc8d8c0 (warm green-gray). Reduced ambient intensity 0.6→0.5, bumped sun 1.2→1.4 so directional light drives true color. Restored terrain to MeshStandardMaterial(color:0x88aa66, map:grassTexture, vertexColors:true, roughness:0.92). Re-enabled fog with warm colors. Also fixed DAWN phase ambient/sun. Status: ready-for-review."
 }
