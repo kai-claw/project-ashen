@@ -24,25 +24,25 @@ const PHASE_COLORS = {
     moonIntensity: 0.3
   },
   [DAY_PHASES.DAWN]: {
-    ambient: new THREE.Color(0x886644),         // Warm amber (was 0x4a3525 too dark)
+    ambient: new THREE.Color(0x4a3525),         // Warm orange-brown
     sun: new THREE.Color(0xff8844),             // Orange sunrise
     moon: new THREE.Color(0x2244aa),            // Fading moon
     sky: new THREE.Color(0xff9966),             // Orange-pink sky
-    fog: new THREE.Color(0xaa7744),             // Warm amber fog (was 0xaa6644)
-    fogDensity: 0.012,
+    fog: new THREE.Color(0xaa6644),             // Warm fog
+    fogDensity: 0.015,
     ambientIntensity: 0.4,
-    sunIntensity: 0.8,                          // Bumped from 0.6 for better dawn visibility
+    sunIntensity: 0.6,
     moonIntensity: 0.1
   },
   [DAY_PHASES.DAY]: {
-    ambient: new THREE.Color(0xfff8e8),         // Warm neutral (was 0x8899aa blue-gray → tinted green terrain teal)
-    sun: new THREE.Color(0xfff4dd),             // Warm white sun (slight warmth preserves green)
+    ambient: new THREE.Color(0x8899aa),         // Neutral daylight
+    sun: new THREE.Color(0xffffff),             // Bright white sun
     moon: new THREE.Color(0x000000),            // No moon
     sky: new THREE.Color(0x87ceeb),             // Sky blue
-    fog: new THREE.Color(0xc8d8c0),             // Warm green-gray fog (was 0xaabbcc blue → teal bleed)
-    fogDensity: 0.003,
-    ambientIntensity: 0.5,                      // Reduced from 0.6 — less ambient = less color tint
-    sunIntensity: 1.4,                          // Bumped from 1.2 — sun is white, drives true color
+    fog: new THREE.Color(0xaabbcc),             // Light blue fog
+    fogDensity: 0.003,                          // Reduced: was 0.008, washed out terrain
+    ambientIntensity: 0.6,
+    sunIntensity: 1.2,
     moonIntensity: 0
   },
   [DAY_PHASES.DUSK]: {
@@ -370,13 +370,9 @@ export class DayNightLighting {
       this.scene.background = this.currentSkyColor.clone();
     }
     
-    // Fog — re-enabled with warm colors (was disabled when blue fog washed terrain teal)
-    if (!this.scene.fog) {
-      this.scene.fog = new THREE.FogExp2(this.currentFogColor, this.currentFogDensity);
-    } else {
-      this.scene.fog.color.copy(this.currentFogColor);
-      this.scene.fog.density = this.currentFogDensity;
-    }
+    // Fog — DISABLED: was washing out terrain, making green appear as sky color
+    // Re-enable once terrain visibility is fully confirmed
+    this.scene.fog = null;
     
     // Sun mesh color
     if (this.sunMesh) {

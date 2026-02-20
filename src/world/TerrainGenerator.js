@@ -334,17 +334,12 @@ export class TerrainGenerator {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
-    texture.colorSpace = THREE.SRGBColorSpace; // Ensure texture is treated as sRGB input
     
-    // MeshStandardMaterial with warm-neutral lighting (Phase 29 fix)
-    // Previously washed gray-teal because DAY ambient was 0x8899aa (blue-gray).
-    // Now ambient is 0xfff8e8 (warm neutral) — preserves green.
-    return new THREE.MeshStandardMaterial({
-      map: texture,
-      color: 0x88aa66,          // Bright green base — multiplied with texture
-      roughness: 0.92,          // Very rough (grass/dirt)
-      metalness: 0.0,
-      vertexColors: true,       // Height-based shading from vertex colors
+    // Terrain material — MeshBasicMaterial with vertex colors for height-based shading
+    // Lighting-independent: vertex colors provide depth cues without lighting dependency
+    // (MeshStandardMaterial/LambertMaterial were washed gray-teal by light color interactions)
+    return new THREE.MeshBasicMaterial({
+      vertexColors: true,
       side: THREE.DoubleSide,
     });
   }
