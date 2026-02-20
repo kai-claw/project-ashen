@@ -8,55 +8,55 @@ import * as THREE from 'three';
 // Color palettes for enemy types
 // DANGER LEVELS: lighter = weaker, darker = stronger (more dangerous)
 const ENEMY_PALETTES = {
-  // Danger Level 1: Standard grunt - visible ashen gray (brightened for MeshBasicMaterial)
+  // Danger Level 1: Standard grunt - lighter grays
   standard: {
-    body: 0x6a6a62,      // Medium ashen gray (brighter for visibility)
-    accent: 0x5a5048,    // Medium brown
+    body: 0x4a4a45,      // Medium ashen gray (lightest body)
+    accent: 0x3a3530,    // Medium brown
     glow: 0xff3333,      // Red glow
-    corruption: 0x4a4a42 // Dark gray
+    corruption: 0x2a2a25 // Dark gray
   },
-  // Danger Level 2: Berserker - aggressive reds
+  // Danger Level 2: Berserker - aggressive reds, medium dark
   berserker: {
-    body: 0x6a3030,      // Angry red-brown (brightened)
-    accent: 0x883333,    // Brighter red
+    body: 0x4a2020,      // Angry red-brown
+    accent: 0x662222,    // Brighter red
     glow: 0xff6600,      // Orange glow (frenzied)
-    corruption: 0x401010 // Dark blood
+    corruption: 0x200808 // Dark blood
   },
   // Danger Level 2: Revenant - bone/undead theme
   revenant: {
-    body: 0xaa9a7a,      // Bone color (brightened)
-    accent: 0x7a6a5a,    // Darker bone
+    body: 0x8a7a5a,      // Bone color (unique - recognizable)
+    accent: 0x5a4a3a,    // Darker bone
     glow: 0x44ff44,      // Eerie green (poison/death)
-    corruption: 0x5a5040 // Decayed brown
+    corruption: 0x3a3020 // Decayed brown
   },
   // Danger Level 3: Ranged - sickly, corrupted, thin
   ranged: {
-    body: 0x5a6a5a,      // Sickly gray-green (brightened)
-    accent: 0x4a5a4a,    // Gray-green
+    body: 0x3a4a3a,      // Sickly gray-green
+    accent: 0x2a3a2a,    // Darker green-gray
     glow: 0x88ff44,      // Toxic green glow
-    corruption: 0x3a4a3a // Green-gray
+    corruption: 0x1a2a1a // Deep green-black
   },
   // Danger Level 3: Sentinel/Tank - armored blue-steel
   sentinel: {
-    body: 0x5a5a6a,      // Blue-gray (armored, brightened)
-    accent: 0x4a4a55,    // Blue-gray
+    body: 0x3a3a4a,      // Blue-gray (armored)
+    accent: 0x2a2a35,    // Darker blue-gray
     glow: 0x4444ff,      // Blue glow (cold/defensive)
-    corruption: 0x3a3a45 // Blue-gray
+    corruption: 0x1a1a25 // Deep blue-black
   },
-  // Danger Level 4: Elite - crimson (brightened from near-black)
+  // Danger Level 4: Elite - darkest non-boss, crimson
   elite: {
-    body: 0x4a2525,      // Dark crimson (visible)
-    accent: 0x3a1515,    // Deep red
+    body: 0x2a1515,      // Dark crimson (very dark)
+    accent: 0x1a0a0a,    // Near-black red
     glow: 0xff4400,      // Orange-red glow (danger!)
-    corruption: 0x2a1010 // Crimson-dark
+    corruption: 0x150a0a // Deep crimson-black
   },
-  // Danger Level 5: BOSS - deep purple, imposing
+  // Danger Level 5: BOSS - darkest, most intimidating
   boss: {
-    body: 0x3a2040,      // Deep purple (brightened from near-black)
-    accent: 0x2a1830,    // Dark purple
+    body: 0x1a1020,      // Deep purple-black
+    accent: 0x0a0810,    // Near-black purple
     glow: 0xff2222,      // Intense red glow
-    corruption: 0x1a1020,// Deep purple
-    secondary: 0x5a2060  // Purple accent for cape/details
+    corruption: 0x050408,// Abyss black
+    secondary: 0x3a1040  // Purple accent for cape/details
   }
 };
 
@@ -78,8 +78,10 @@ export function buildEnemyModel(config = {}) {
   // Enemies have different proportions: hunched, wider, longer arms
   
   // Main torso - wider, shorter, hunched forward
-  const torsoMat = new THREE.MeshBasicMaterial({
+  const torsoMat = new THREE.MeshStandardMaterial({
     color: colors.body,
+    roughness: 0.85,
+    metalness: 0.15,
   });
   
   // Torso is a deformed capsule - wider and hunched
@@ -101,8 +103,10 @@ export function buildEnemyModel(config = {}) {
   
   // === HEAD ===
   // Smaller, forward-jutting, almost neckless
-  const headMat = new THREE.MeshBasicMaterial({
+  const headMat = new THREE.MeshStandardMaterial({
     color: colors.accent,
+    roughness: 0.8,
+    metalness: 0.1,
   });
   
   const headGeo = new THREE.SphereGeometry(0.2, 12, 10);
@@ -114,8 +118,10 @@ export function buildEnemyModel(config = {}) {
   
   // === GLOWING EYES ===
   // The signature corruption indicator
-  const eyeMat = new THREE.MeshBasicMaterial({
+  const eyeMat = new THREE.MeshStandardMaterial({
     color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 4,
   });
   
   // Left eye
@@ -138,12 +144,13 @@ export function buildEnemyModel(config = {}) {
   group.userData.eyes = [leftEye, rightEye];
   group.userData.eyeLight = eyeLight;
   group.userData.eyeMaterial = eyeMat;
-  group.userData.eyeBaseColor = new THREE.Color(colors.glow);
   
   // === ARMS ===
   // Longer, dangling arms - more ape-like
-  const limbMat = new THREE.MeshBasicMaterial({
+  const limbMat = new THREE.MeshStandardMaterial({
     color: colors.body,
+    roughness: 0.85,
+    metalness: 0.1,
   });
   
   // Upper arms
@@ -180,8 +187,10 @@ export function buildEnemyModel(config = {}) {
   
   // Clawed hands
   const handGeo = new THREE.SphereGeometry(0.08, 8, 6);
-  const clawMat = new THREE.MeshBasicMaterial({
+  const clawMat = new THREE.MeshStandardMaterial({
     color: colors.corruption,
+    roughness: 0.7,
+    metalness: 0.3,
   });
   
   const leftHand = new THREE.Mesh(handGeo, clawMat);
@@ -248,8 +257,10 @@ export function buildEnemyModel(config = {}) {
  * Add corruption spikes to the enemy's back
  */
 function addCorruptionSpikes(group, colors) {
-  const spikeMat = new THREE.MeshBasicMaterial({
+  const spikeMat = new THREE.MeshStandardMaterial({
     color: colors.corruption,
+    roughness: 0.6,
+    metalness: 0.4,
   });
   
   const spikeGeo = new THREE.ConeGeometry(0.06, 0.2, 5);
@@ -326,8 +337,10 @@ export function buildEliteEnemyModel(config = {}) {
   });
   
   // Add extra armor plates
-  const armorMat = new THREE.MeshBasicMaterial({
+  const armorMat = new THREE.MeshStandardMaterial({
     color: 0x2a2020,
+    roughness: 0.4,
+    metalness: 0.7,
   });
   
   // Shoulder plates
@@ -346,8 +359,12 @@ export function buildEliteEnemyModel(config = {}) {
   baseModel.add(rightShoulder);
   
   // Larger back spikes
-  const bigSpikeMat = new THREE.MeshBasicMaterial({
+  const bigSpikeMat = new THREE.MeshStandardMaterial({
     color: 0x1a0a0a,
+    roughness: 0.5,
+    metalness: 0.5,
+    emissive: 0x330000,
+    emissiveIntensity: 0.3,
   });
   
   const bigSpikeGeo = new THREE.ConeGeometry(0.1, 0.4, 5);
@@ -373,14 +390,16 @@ export function buildBerserkerModel(config = {}) {
     scale: (config.scale || 1.0) * 0.95 // Slightly smaller but faster-looking
   });
   
-  // Make eyes brighter (berserker = more intense)
-  if (baseModel.userData.eyeBaseColor) {
-    baseModel.userData.eyeBaseColor.multiplyScalar(1.5);
+  // Make eyes pulse more intensely
+  if (baseModel.userData.eyeMaterial) {
+    baseModel.userData.eyeMaterial.emissiveIntensity = 6;
   }
   
   // Add claw-like protrusions on hands
-  const clawMat = new THREE.MeshBasicMaterial({
+  const clawMat = new THREE.MeshStandardMaterial({
     color: 0x200808,
+    roughness: 0.5,
+    metalness: 0.6,
   });
   
   const clawGeo = new THREE.ConeGeometry(0.03, 0.15, 4);
@@ -421,8 +440,10 @@ export function buildRevenantModel(config = {}) {
   });
   
   // Add rib-like protrusions
-  const ribMat = new THREE.MeshBasicMaterial({
+  const ribMat = new THREE.MeshStandardMaterial({
     color: 0x6a5a4a,
+    roughness: 0.7,
+    metalness: 0.2,
   });
   
   const ribGeo = new THREE.CapsuleGeometry(0.02, 0.2, 4, 6);
@@ -459,8 +480,10 @@ export function buildSentinelModel(config = {}) {
   });
   
   // Add shield-like growth on left arm
-  const shieldMat = new THREE.MeshBasicMaterial({
+  const shieldMat = new THREE.MeshStandardMaterial({
     color: 0x3a3a4a,
+    roughness: 0.3,
+    metalness: 0.8,
   });
   
   const shieldGeo = new THREE.BoxGeometry(0.4, 0.5, 0.1);
@@ -471,8 +494,10 @@ export function buildSentinelModel(config = {}) {
   baseModel.add(shield);
   
   // Armored plating on torso
-  const plateMat = new THREE.MeshBasicMaterial({
+  const plateMat = new THREE.MeshStandardMaterial({
     color: 0x2a2a35,
+    roughness: 0.35,
+    metalness: 0.75,
   });
   
   const plateGeo = new THREE.BoxGeometry(0.5, 0.4, 0.12);
@@ -496,8 +521,10 @@ export function buildRangedEnemyModel(config = {}) {
   const group = new THREE.Group();
   
   // === BODY - Thin, almost emaciated torso ===
-  const torsoMat = new THREE.MeshBasicMaterial({
+  const torsoMat = new THREE.MeshStandardMaterial({
     color: colors.body,
+    roughness: 0.8,
+    metalness: 0.2,
   });
   
   // Thin elongated torso
@@ -509,8 +536,10 @@ export function buildRangedEnemyModel(config = {}) {
   group.add(torso);
   
   // === HEAD - Small, hunched forward, predatory ===
-  const headMat = new THREE.MeshBasicMaterial({
+  const headMat = new THREE.MeshStandardMaterial({
     color: colors.accent,
+    roughness: 0.75,
+    metalness: 0.1,
   });
   
   // Elongated skull shape
@@ -522,8 +551,10 @@ export function buildRangedEnemyModel(config = {}) {
   group.add(head);
   
   // === GLOWING EYES - Toxic green ===
-  const eyeMat = new THREE.MeshBasicMaterial({
+  const eyeMat = new THREE.MeshStandardMaterial({
     color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 5,
   });
   
   const eyeGeo = new THREE.SphereGeometry(0.04, 8, 6);
@@ -544,11 +575,12 @@ export function buildRangedEnemyModel(config = {}) {
   group.userData.eyes = [leftEye, rightEye];
   group.userData.eyeLight = eyeLight;
   group.userData.eyeMaterial = eyeMat;
-  group.userData.eyeBaseColor = new THREE.Color(colors.glow);
   
   // === ARMS - Extremely long, thin, projectile-like forearms ===
-  const limbMat = new THREE.MeshBasicMaterial({
+  const limbMat = new THREE.MeshStandardMaterial({
     color: colors.body,
+    roughness: 0.8,
+    metalness: 0.15,
   });
   
   // Upper arms - thin
@@ -586,8 +618,12 @@ export function buildRangedEnemyModel(config = {}) {
   group.add(rightLowerArm);
   
   // === PROJECTILE ARM TIPS - Glowing 'cannons' ===
-  const cannonMat = new THREE.MeshBasicMaterial({
+  const cannonMat = new THREE.MeshStandardMaterial({
     color: colors.corruption,
+    roughness: 0.4,
+    metalness: 0.6,
+    emissive: colors.glow,
+    emissiveIntensity: 1.5,
   });
   
   const cannonGeo = new THREE.CylinderGeometry(0.06, 0.03, 0.15, 8);
@@ -607,8 +643,10 @@ export function buildRangedEnemyModel(config = {}) {
   group.add(rightCannon);
   
   // Cannon glow orbs (projectile charge)
-  const orbMat = new THREE.MeshBasicMaterial({
+  const orbMat = new THREE.MeshStandardMaterial({
     color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 3,
     transparent: true,
     opacity: 0.8,
   });
@@ -658,8 +696,10 @@ export function buildRangedEnemyModel(config = {}) {
   
   // Feet
   const footGeo = new THREE.BoxGeometry(0.1, 0.05, 0.2);
-  const footMat = new THREE.MeshBasicMaterial({
+  const footMat = new THREE.MeshStandardMaterial({
     color: colors.corruption,
+    roughness: 0.7,
+    metalness: 0.2,
   });
   
   const leftFoot = new THREE.Mesh(footGeo, footMat);
@@ -673,8 +713,10 @@ export function buildRangedEnemyModel(config = {}) {
   group.add(rightFoot);
   
   // === CORRUPTION TENDRILS - Energy wisps ===
-  const tendrilMat = new THREE.MeshBasicMaterial({
+  const tendrilMat = new THREE.MeshStandardMaterial({
     color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 2,
     transparent: true,
     opacity: 0.6,
   });
@@ -722,8 +764,10 @@ export function buildBossModel(config = {}) {
   const group = new THREE.Group();
   
   // === TORSO - Massive, broad, powerful ===
-  const torsoMat = new THREE.MeshBasicMaterial({
+  const torsoMat = new THREE.MeshStandardMaterial({
     color: colors.body,
+    roughness: 0.7,
+    metalness: 0.3,
   });
   
   // Wide powerful torso
@@ -743,13 +787,19 @@ export function buildBossModel(config = {}) {
   group.add(chest);
   
   // === ARMOR PLATES - Boss has heavy armor ===
-  const armorMat = new THREE.MeshBasicMaterial({
+  const armorMat = new THREE.MeshStandardMaterial({
     color: 0x1a1a25,
+    roughness: 0.3,
+    metalness: 0.8,
   });
   
   // Chest plate
-  const chestPlateMat = new THREE.MeshBasicMaterial({
+  const chestPlateMat = new THREE.MeshStandardMaterial({
     color: 0x2a1a30,
+    roughness: 0.35,
+    metalness: 0.7,
+    emissive: colors.glow,
+    emissiveIntensity: 0.15,
   });
   
   const chestPlateGeo = new THREE.BoxGeometry(0.7, 0.5, 0.15);
@@ -775,8 +825,10 @@ export function buildBossModel(config = {}) {
   
   // Pauldron spikes
   const spikeGeo = new THREE.ConeGeometry(0.08, 0.3, 5);
-  const spikeMat = new THREE.MeshBasicMaterial({
+  const spikeMat = new THREE.MeshStandardMaterial({
     color: colors.corruption,
+    roughness: 0.5,
+    metalness: 0.6,
   });
   
   [[-0.7, 1.7, 0], [0.7, 1.7, 0], [-0.5, 1.75, -0.1], [0.5, 1.75, -0.1]].forEach(pos => {
@@ -788,8 +840,10 @@ export function buildBossModel(config = {}) {
   });
   
   // === HEAD - Smaller relative to body, skull-like, CROWNED ===
-  const headMat = new THREE.MeshBasicMaterial({
+  const headMat = new THREE.MeshStandardMaterial({
     color: colors.accent,
+    roughness: 0.75,
+    metalness: 0.2,
   });
   
   const headGeo = new THREE.SphereGeometry(0.22, 12, 10);
@@ -800,8 +854,12 @@ export function buildBossModel(config = {}) {
   group.add(head);
   
   // === CROWN - Jagged, corrupted crown ===
-  const crownMat = new THREE.MeshBasicMaterial({
+  const crownMat = new THREE.MeshStandardMaterial({
     color: 0x2a1a10,
+    roughness: 0.4,
+    metalness: 0.85,
+    emissive: 0x3a1a20,
+    emissiveIntensity: 0.3,
   });
   
   const crownBase = new THREE.Mesh(
@@ -827,8 +885,10 @@ export function buildBossModel(config = {}) {
   }
   
   // === GLOWING EYES - Intense red ===
-  const eyeMat = new THREE.MeshBasicMaterial({
+  const eyeMat = new THREE.MeshStandardMaterial({
     color: colors.glow,
+    emissive: colors.glow,
+    emissiveIntensity: 6,
   });
   
   const eyeGeo = new THREE.SphereGeometry(0.05, 8, 6);
@@ -849,11 +909,12 @@ export function buildBossModel(config = {}) {
   group.userData.eyes = [leftEye, rightEye];
   group.userData.eyeLight = eyeLight;
   group.userData.eyeMaterial = eyeMat;
-  group.userData.eyeBaseColor = new THREE.Color(colors.glow);
   
   // === CAPE/CLOAK - Flowing behind ===
-  const capeMat = new THREE.MeshBasicMaterial({
+  const capeMat = new THREE.MeshStandardMaterial({
     color: colors.secondary || 0x2a1030,
+    roughness: 0.8,
+    metalness: 0.1,
     side: THREE.DoubleSide,
   });
   
@@ -878,8 +939,10 @@ export function buildBossModel(config = {}) {
   group.userData.cape = cape; // For animation
   
   // === ARMS - Powerful, armored ===
-  const limbMat = new THREE.MeshBasicMaterial({
+  const limbMat = new THREE.MeshStandardMaterial({
     color: colors.body,
+    roughness: 0.75,
+    metalness: 0.25,
   });
   
   const upperArmGeo = new THREE.CapsuleGeometry(0.14, 0.4, 8, 12);
@@ -911,8 +974,10 @@ export function buildBossModel(config = {}) {
   group.add(rightLowerArm);
   
   // Gauntlets
-  const gauntletMat = new THREE.MeshBasicMaterial({
+  const gauntletMat = new THREE.MeshStandardMaterial({
     color: 0x1a1a20,
+    roughness: 0.35,
+    metalness: 0.75,
   });
   
   const gauntletGeo = new THREE.SphereGeometry(0.12, 10, 8);
@@ -958,8 +1023,12 @@ export function buildBossModel(config = {}) {
   // === GREATSWORD (optional - carried by boss) ===
   const swordGroup = new THREE.Group();
   
-  const bladeMat = new THREE.MeshBasicMaterial({
+  const bladeMat = new THREE.MeshStandardMaterial({
     color: 0x3a3a45,
+    roughness: 0.25,
+    metalness: 0.9,
+    emissive: 0x200010,
+    emissiveIntensity: 0.2,
   });
   
   const bladeGeo = new THREE.BoxGeometry(0.08, 1.4, 0.02);
@@ -974,8 +1043,10 @@ export function buildBossModel(config = {}) {
   swordGroup.add(edge);
   
   // Hilt
-  const hiltMat = new THREE.MeshBasicMaterial({
+  const hiltMat = new THREE.MeshStandardMaterial({
     color: 0x2a1a15,
+    roughness: 0.5,
+    metalness: 0.7,
   });
   
   const hiltGeo = new THREE.CylinderGeometry(0.03, 0.035, 0.25, 8);
@@ -1086,10 +1157,10 @@ export function updateEnemyModel(model, delta) {
     particles.geometry.attributes.position.needsUpdate = true;
   }
   
-  // Pulse eye glow (brighten/dim eye color since MeshBasicMaterial has no emissive)
-  if (model.userData.eyeMaterial && model.userData.eyeBaseColor) {
-    const pulse = 0.7 + Math.sin(Date.now() * 0.003) * 0.3;
-    model.userData.eyeMaterial.color.copy(model.userData.eyeBaseColor).multiplyScalar(pulse);
+  // Pulse eye glow
+  if (model.userData.eyeMaterial) {
+    const pulse = 3 + Math.sin(Date.now() * 0.003) * 1.5;
+    model.userData.eyeMaterial.emissiveIntensity = pulse;
   }
   
   if (model.userData.eyeLight) {
@@ -1107,14 +1178,17 @@ export function flashEnemyModel(model, color = 0xff0000, duration = 150) {
   const flashColor = new THREE.Color(color);
   
   model.traverse(child => {
-    if (child.isMesh && child.material && child.material.color) {
-      const origColor = child.material.color.clone();
+    if (child.isMesh && child.material && child.material.emissive) {
+      const origEmissive = child.material.emissive.clone();
+      const origIntensity = child.material.emissiveIntensity;
       
-      child.material.color.copy(flashColor);
+      child.material.emissive.copy(flashColor);
+      child.material.emissiveIntensity = 2;
       
       setTimeout(() => {
         if (child.material) {
-          child.material.color.copy(origColor);
+          child.material.emissive.copy(origEmissive);
+          child.material.emissiveIntensity = origIntensity;
         }
       }, duration);
     }

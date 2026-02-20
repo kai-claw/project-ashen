@@ -3465,6 +3465,12 @@ export class Enemy {
       // No world reference - move without collision (fallback)
       this.mesh.position.addScaledVector(dir, moveAmount);
     }
+    
+    // Snap Y to terrain height (prevent enemies floating or sinking)
+    if (this.world && this.world.terrain && this.world.terrain.getTerrainHeight) {
+      const terrainY = this.world.terrain.getTerrainHeight(this.mesh.position.x, this.mesh.position.z);
+      this.mesh.position.y = terrainY + 0.3;
+    }
   }
   
   // Find a direction to slide along an obstacle

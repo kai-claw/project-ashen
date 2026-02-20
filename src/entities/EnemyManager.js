@@ -169,8 +169,8 @@ export class EnemyManager {
       // Performance limit
       if (this.enemies.length >= this.maxEnemies) break;
       
-      // Spawn enemy
-      const y = terrain.getTerrainHeight(x, z);
+      // Spawn enemy (Y offset +0.3 to sit ON terrain, not clipped into it)
+      const y = terrain.getTerrainHeight(x, z) + 0.3;
       this._spawnEnemyAtPosition(x, y, z, zone, castleDist);
     }
   }
@@ -349,7 +349,7 @@ export class EnemyManager {
         const dist = 25 + Math.random() * 30; // 25-55 units away
         const x = playerPos.x + Math.cos(angle) * dist;
         const z = playerPos.z + Math.sin(angle) * dist;
-        const y = this.world?.terrain?.getTerrainHeight(x, z) ?? 0;
+        const y = (this.world?.terrain?.getTerrainHeight(x, z) ?? 0) + 0.3;
         
         // Use enemy data to create config
         const nightConfig = {
