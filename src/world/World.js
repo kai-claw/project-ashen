@@ -35,7 +35,9 @@ export class World {
     };
     
     // === CREATE WORLD COMPONENTS ===
-    this._createSkybox();
+    // _createSkybox() REMOVED — it created SphereGeometry(500) at origin with BackSide shader
+    // that appeared as a giant cyan dome artifact blocking the view.
+    // scene.background (managed by DayNightLighting) already provides sky color.
     this.terrain = new TerrainGenerator(scene);
     this._createStartingCastle();
     this.foliage = new FoliageManager(scene, this.terrain);
