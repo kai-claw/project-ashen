@@ -68,6 +68,6 @@
       "workerNotes": "Added polish features: (1) Minimap opacity/transparency control with localStorage persistence, (2) Map legend already exists with all icon types, (3) Coordinate display on hover in world map, (4) Waypoint distance display below minimap, (5) Quest path lines (dashed gold lines from player to objectives), (6) Map ping system (Ctrl+click to ping location, syncs between minimap and world map), (7) Pings pulse and fade over 3-5 seconds, (8) Mobile-friendly controls via touch events for pan, (9) Build verified, deployed to gh-pages"
     }
   ],
-  "lastUpdated": "2026-02-19T18:55:00Z",
-  "workerStatus": "Worker 1: DIAGNOSTIC camera override deployed (commit 5f8149d). Forces camera to (playerX-5, playerY+8, playerZ+10) lookAt(player) every frame, bypassing CameraController entirely. Screenshot at 18:39 confirmed some 3D geometry renders (gray domes, blue polygon) but camera pointing at sky — this override will determine if terrain meshes are actually in the scene or if CameraController is the problem. Awaiting next screenshot. Status: diagnosing."
+  "lastUpdated": "2026-02-20T01:55:00Z",
+  "workerStatus": "Worker 1: Removed cyan dome artifact (commit d0c2ba9). World._createSkybox() SphereGeometry(500) with BackSide shader was rendering as giant cyan circle. scene.background already provides sky. Terrain untouched (MeshBasicMaterial+vertexColors 7/10). Status: ready-for-review."
 }
