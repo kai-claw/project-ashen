@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Ashen</title>
+  <script>
+    // Global error overlay — catches uncaught exceptions so screenshot service can see them
+    window.__ashenShowError = function(msg) {
+      var el = document.getElementById('error-overlay');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'error-overlay';
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(180,0,0,0.92);color:#fff;font:14px/1.5 monospace;padding:16px 20px;max-height:40vh;overflow:auto;white-space:pre-wrap;pointer-events:none;';
+        document.body.appendChild(el);
+      }
+      el.textContent += (el.textContent ? '\n' : '') + msg;
+    };
+    window.onerror = function(msg, src, line, col, err) {
+      window.__ashenShowError('[onerror] ' + msg + ' (' + src + ':' + line + ':' + col + ')');
+    };
+    window.addEventListener('unhandledrejection', function(ev) {
+      window.__ashenShowError('[unhandledrejection] ' + (ev.reason && ev.reason.stack || ev.reason));
+    });
+  </script>
+  <script>
+    // Autostart mode - hide menu and overlays for testing/screenshots
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autostart') === 'true' || params.get('autostart') === '1') {
+        window.AUTOSTART_MODE = true;
+        // Inject styles to hide menu AND world map overlay
+        const style = document.createElement('style');
+        style.textContent = `
+          #main-menu-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+          .world-map-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+          #world-map-overlay { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+        `;
+        document.head.appendChild(style);
+        // Watch for overlays and hide them
+        const observer = new MutationObserver(function(mutations) {
+          const menu = document.getElementById('main-menu-overlay');
+          if (menu) {
+            menu.style.display = 'none';
+            menu.style.visibility = 'hidden';
+          }
+          // Also close world map if it's showing
+          const worldMap = document.querySelector('.world-map-overlay') || document.getElementById('world-map-overlay');
+          if (worldMap) {
+            worldMap.style.display = 'none';
+            worldMap.style.visibility = 'hidden';
+          }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        
+        // After game loads, ensure world map is closed
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            if (window.gameManager?.worldMapUI) {
+              window.gameManager.worldMapUI.hide();
+            }
+          }, 2000);
+        });
+      }
+    })();
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #0a0a0f; }
+    canvas { 
+      display: block;
+    }
+    #hud {
+      position: fixed; top: 20px; left: 20px; z-index: 10;
+      font-family: 'Courier New', monospace; color: #c8c0b0;
+    }
+    .bar-container {
+      width: 300px; height: 20px; background: #1a1a24;
+      border: 1px solid #333; margin: 4px 0; position: relative;
+    }
+    .bar-fill { height: 100%; transition: width 0.15s ease; }
+    .health-fill { background: linear-gradient(90deg, #8b1a1a, #cc3333); }
+    .stamina-fill { background: linear-gradient(90deg, #1a5c1a, #33aa33); }
+    .posture-fill { background: linear-gradient(90deg, #8b6914, #ccaa33); }
+    .mana-fill { background: linear-gradient(90deg, #1a3a8b, #3366cc); }
+    .bar-label {
+      position: absolute; top: 0; left: 8px; line-height: 20px;
+      font-size: 11px; text-shadow: 1px 1px 2px #000;
+    }
+    #remnant {
+      margin-top: 8px; font-size: 14px;
+      color: #d4af37; text-shadow: 0 0 8px rgba(212,175,55,0.4);
+    }
+    #death-screen {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.85); color: #8b1a1a;
+      font-family: 'Georgia', serif; font-size: 48px;
+      justify-content: center; align-items: center;
+      flex-direction: column; text-align: center;
+    }
+    #death-screen.visible { display: flex; }
+    #death-screen .sub { font-size: 16px; color: #666; margin-top: 16px; }
+    #crosshair {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 4px; height: 4px; background: rgba(200,192,176,0.3);
+      border-radius: 50%; z-index: 5; pointer-events: none;
+    }
+    #lock-on-indicator {
+      display: none; position: fixed; z-index: 5; pointer-events: none;
+      width: 40px; height: 40px; border: 2px solid #cc3333;
+      border-radius: 50%; transform: translate(-50%, -50%);
+    }
+    #controls-hint {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      font-family: 'Courier New', monospace; font-size: 12px;
+      color: #555; z-index: 10; text-align: center;
+    }
+    /* Boss health bar at bottom center */
+    #boss-container {
+      display: none;
+      position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+      width: 600px; z-index: 10;
+      font-family: 'Georgia', serif;
+    }
+    #boss-name {
+      text-align: center; font-size: 18px; color: #c8c0b0;
+      text-shadow: 0 0 10px rgba(139, 26, 26, 0.8);
+      margin-bottom: 6px; letter-spacing: 2px;
+    }
+    #boss-phase {
+      text-align: center; font-size: 12px; color: #ffcc00;
+      text-shadow: 0 0 8px rgba(255, 68, 0, 0.8);
+      margin-bottom: 4px; font-weight: bold;
+    }
+    #boss-health-container {
+      width: 100%; height: 24px; background: #1a1a24;
+      border: 2px solid #4a2222; position: relative;
+      box-shadow: 0 0 20px rgba(139, 26, 26, 0.5);
+    }
+    #boss-health-bar {
+      height: 100%; width: 100%;
+      background: linear-gradient(90deg, #cc2222, #ff4444);
+      transition: width 0.2s ease;
+    }
+    #boss-posture-container {
+      width: 100%; height: 8px; background: #1a1a14;
+      border: 1px solid #333; margin-top: 2px;
+    }
+    #boss-posture-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #ccaa33, #ffcc00);
+      transition: width 0.15s ease;
+    }
+    
+    /* Item pickup notification */
+    #item-notification {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Georgia', serif;
+      font-size: 20px;
+      color: #88ffaa;
+      text-shadow: 0 0 15px rgba(136, 255, 170, 0.6);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 12px 32px;
+      border: 1px solid #88ffaa;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 60;
+    }
+    #item-notification.visible {
+      opacity: 1;
+    }
+    
+    /* Door prompt */
+    #door-prompt {
+      position: fixed;
+      bottom: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 14px;
+      color: #cc8844;
+      text-shadow: 0 0 10px rgba(200, 100, 50, 0.5);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 20px;
+      border: 1px solid #cc8844;
+      border-radius: 4px;
+      display: none;
+      z-index: 40;
+    }
+    #door-prompt .key {
+      display: inline-block;
+      background: #cc8844;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    #door-prompt.locked {
+      border-color: #aa3333;
+      color: #aa5555;
+    }
+    #door-prompt.locked .key {
+      background: #aa3333;
+    }
+    
+    /* Ladder prompt */
+    #ladder-prompt {
+      position: fixed;
+      bottom: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 14px;
+      color: #88cc88;
+      text-shadow: 0 0 10px rgba(100, 200, 100, 0.5);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 20px;
+      border: 1px solid #88cc88;
+      border-radius: 4px;
+      display: none;
+      z-index: 40;
+    }
+    #ladder-prompt .key {
+      display: inline-block;
+      background: #88cc88;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    
+    /* Shortcut prompt */
+    #shortcut-prompt {
+      position: fixed;
+      bottom: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 14px;
+      color: #cc88cc;
+      text-shadow: 0 0 10px rgba(200, 100, 200, 0.5);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 20px;
+      border: 1px solid #cc88cc;
+      border-radius: 4px;
+      display: none;
+      z-index: 40;
+    }
+    #shortcut-prompt .key {
+      display: inline-block;
+      background: #cc88cc;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    
+    /* Illusory wall notification */
+    #illusory-notification {
+      position: fixed;
+      top: 200px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 20px;
+      color: #ffdd88;
+      text-shadow: 0 0 15px rgba(255, 200, 100, 0.7);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px 30px;
+      border: 1px solid #ffdd88;
+      border-radius: 4px;
+      display: none;
+      z-index: 100;
+      animation: illusoryFadeIn 0.5s ease-out;
+    }
+    @keyframes illusoryFadeIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    
+    /* Crucible UI */
+    #crucible-container {
+      position: fixed;
+      z-index: 50;
+    }
+    #crucible-prompt {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Georgia', serif;
+      font-size: 16px;
+      color: #d4af37;
+      text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 12px 24px;
+      border: 1px solid #d4af37;
+      border-radius: 4px;
+    }
+    #crucible-prompt .key {
+      display: inline-block;
+      background: #d4af37;
+      color: #0a0a0f;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    #crucible-menu {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 10, 20, 0.95);
+      border: 2px solid #d4af37;
+      border-radius: 8px;
+      padding: 24px;
+      min-width: 400px;
+      font-family: 'Georgia', serif;
+      box-shadow: 0 0 40px rgba(212, 175, 55, 0.3);
+    }
+    .crucible-header {
+      text-align: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 16px;
+    }
+    .crucible-title {
+      font-size: 24px;
+      color: #d4af37;
+      text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+    #crucible-remnant {
+      font-size: 14px;
+      color: #aaa;
+    }
+    .crucible-tracks {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .crucible-track {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      background: rgba(30, 30, 40, 0.8);
+      border: 1px solid #333;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .crucible-track:hover,
+    .crucible-track.selected {
+      border-color: #d4af37;
+      background: rgba(50, 50, 60, 0.9);
+      box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+    }
+    .crucible-track.selected {
+      border-width: 2px;
+    }
+    .crucible-track.maxed {
+      opacity: 0.6;
+      border-color: #666;
+    }
+    .crucible-track.maxed .track-cost {
+      color: #4caf50;
+    }
+    .crucible-track.affordable .track-cost {
+      color: #d4af37;
+    }
+    .crucible-track:not(.affordable):not(.maxed) .track-cost {
+      color: #aa3333;
+    }
+    .track-icon {
+      font-size: 28px;
+      width: 40px;
+      text-align: center;
+    }
+    .track-info {
+      flex: 1;
+    }
+    .track-name {
+      font-size: 16px;
+      color: #e0e0e0;
+      font-weight: bold;
+    }
+    .track-level {
+      font-size: 12px;
+      color: #888;
+    }
+    .track-bonus {
+      font-size: 12px;
+      color: #8bc34a;
+      margin-top: 2px;
+    }
+    .track-cost {
+      font-size: 14px;
+      font-weight: bold;
+      min-width: 80px;
+      text-align: right;
+    }
+    .crucible-footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      border-top: 1px solid #333;
+      padding-top: 12px;
+    }
+  </style>
+  <script type="module" crossorigin src="/project-ashen/assets/index-BjxUgV0F.js"></script>
+</head>
+<body>
+  <div id="hud">
+    <div class="bar-container">
+      <div class="bar-fill health-fill" id="health-bar" style="width: 100%"></div>
+      <div class="bar-label">HP</div>
+    </div>
+    <div class="bar-container" style="width: 250px; height: 16px;">
+      <div class="bar-fill stamina-fill" id="stamina-bar" style="width: 100%"></div>
+      <div class="bar-label" style="line-height:16px; font-size:10px">STAMINA</div>
+    </div>
+    <div class="bar-container" style="width: 200px; height: 12px;">
+      <div class="bar-fill posture-fill" id="posture-bar" style="width: 0%"></div>
+      <div class="bar-label" style="line-height:12px; font-size:9px">POSTURE</div>
+    </div>
+    <div class="bar-container" style="width: 220px; height: 14px; margin-top: 8px;">
+      <div class="bar-fill mana-fill" id="mana-bar" style="width: 100%"></div>
+      <div class="bar-label" style="line-height:14px; font-size:10px">MANA</div>
+    </div>
+    <div id="remnant">Remnant: 0</div>
+    <div id="lost-remnant" style="display:none; font-size:12px; color:#aa3333; margin-top:4px;">Lost: 0</div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="lock-on-indicator"></div>
+  <div id="death-screen">
+    <div>YOU DIED</div>
+    <div class="sub">Death is research. You learned something.</div>
+  </div>
+  <div id="controls-hint">
+    WASD Move · Space Dodge · LMB Attack · RMB Heavy · Shift Block · Q Lock-on · E Interact · Click to start
+  </div>
+  
+  <!-- Item pickup notification -->
+  <div id="item-notification"></div>
+  
+  <!-- Door interaction prompt -->
+  <div id="door-prompt">
+    Press <span class="key">E</span> to open <span id="door-name">Door</span>
+  </div>
+  
+  <!-- Ladder interaction prompt -->
+  <div id="ladder-prompt">
+    Press <span class="key">E</span> to climb <span id="ladder-name">Ladder</span>
+  </div>
+  
+  <!-- Shortcut door prompt -->
+  <div id="shortcut-prompt">
+    Press <span class="key">E</span> to <span id="shortcut-action">unlock</span> <span id="shortcut-name">Shortcut</span>
+  </div>
+  
+  <!-- Illusory wall reveal notification -->
+  <div id="illusory-notification">Illusory wall revealed!</div>
+  
+  <!-- Crucible UI (Infusion Menu) -->
+  <div id="crucible-container">
+    <div id="crucible-prompt" style="display:none;">
+      Press <span class="key">E</span> to access the Crucible
+    </div>
+    <div id="crucible-menu" style="display:none;">
+      <div class="crucible-header">
+        <div class="crucible-title">⚗️ THE CRUCIBLE</div>
+        <div id="crucible-remnant">Remnant: 0</div>
+      </div>
+      <div class="crucible-tracks">
+        <div id="track-strength" class="crucible-track">
+          <div class="track-icon">💪</div>
+          <div class="track-info">
+            <div class="track-name">Strength</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0% damage</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+        <div id="track-vitality" class="crucible-track">
+          <div class="track-icon">❤️</div>
+          <div class="track-info">
+            <div class="track-name">Vitality</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0 HP</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+        <div id="track-stamina" class="crucible-track">
+          <div class="track-icon">⚡</div>
+          <div class="track-info">
+            <div class="track-name">Stamina</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0 stamina</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+        <div id="track-spirit" class="crucible-track">
+          <div class="track-icon">👁️</div>
+          <div class="track-info">
+            <div class="track-name">Spirit</div>
+            <div class="track-level">Lv. 0/5</div>
+            <div class="track-bonus">+0% resist</div>
+          </div>
+          <div class="track-cost">Cost: 100</div>
+        </div>
+      </div>
+      <div class="crucible-footer">
+        ↑↓ Navigate · Enter/F Purchase · Esc Close
+      </div>
+    </div>
+  </div>
+  
+  <!-- Boss health bar (bottom center) -->
+  <div id="boss-container">
+    <div id="boss-phase"></div>
+    <div id="boss-name">The Failed Experiment</div>
+    <div id="boss-health-container">
+      <div id="boss-health-bar"></div>
+    </div>
+    <div id="boss-posture-container">
+      <div id="boss-posture-bar"></div>
+    </div>
+  </div>
+  
+</body>
+</html>
