@@ -39,8 +39,8 @@ const PHASE_COLORS = {
     sun: new THREE.Color(0xffffff),             // Bright white sun
     moon: new THREE.Color(0x000000),            // No moon
     sky: new THREE.Color(0x87ceeb),             // Sky blue
-    fog: new THREE.Color(0xaabbcc),             // Light blue fog
-    fogDensity: 0.003,                          // Reduced: was 0.008, washed out terrain
+    fog: new THREE.Color(0x99bb88),             // Warm green-gray fog (was 0xaabbcc blue → teal bleed)
+    fogDensity: 0.002,                          // Very gentle — distance haze only
     ambientIntensity: 0.6,
     sunIntensity: 1.2,
     moonIntensity: 0
@@ -370,9 +370,13 @@ export class DayNightLighting {
       this.scene.background = this.currentSkyColor.clone();
     }
     
-    // Fog — DISABLED: was washing out terrain, making green appear as sky color
-    // Re-enable once terrain visibility is fully confirmed
-    this.scene.fog = null;
+    // Fog — re-enabled with green-tinted color (density 0.002 is very gentle)
+    if (!this.scene.fog) {
+      this.scene.fog = new THREE.FogExp2(this.currentFogColor, this.currentFogDensity);
+    } else {
+      this.scene.fog.color.copy(this.currentFogColor);
+      this.scene.fog.density = this.currentFogDensity;
+    }
     
     // Sun mesh color
     if (this.sunMesh) {

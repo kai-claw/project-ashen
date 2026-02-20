@@ -183,9 +183,30 @@ export class DiscoveryManager {
   }
   
   /**
-   * Show discovery notification
+   * Show discovery notification (queued — max 1 visible at a time)
    */
   _showNotification(type, name, xpReward = 0) {
+    // Queue the notification
+    if (!this._notifQueue) this._notifQueue = [];
+    if (!this._notifActive) this._notifActive = false;
+    
+    this._notifQueue.push({ type, name, xpReward });
+    
+    // Only show if nothing is currently displayed
+    if (!this._notifActive) {
+      this._showNextNotification();
+    }
+  }
+  
+  _showNextNotification() {
+    if (!this._notifQueue || this._notifQueue.length === 0) {
+      this._notifActive = false;
+      return;
+    }
+    
+    this._notifActive = true;
+    const { type, name, xpReward } = this._notifQueue.shift();
+    
     const notification = document.createElement('div');
     notification.style.cssText = `
       padding: 12px 24px;
@@ -248,13 +269,22 @@ export class DiscoveryManager {
         break;
     }
     
+    // Show remaining queue count if > 0
+    const queueRemaining = this._notifQueue.length;
+    const queueBadge = queueRemaining > 0 
+      ? `<div style="font-size: 10px; color: #886644; margin-top: 4px;">+${queueRemaining} more</div>` 
+      : '';
+    
     notification.innerHTML = `
       <div style="font-size: 24px; margin-bottom: 4px;">${icon}</div>
       <div style="font-size: 12px; color: #a08060; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px;">${title}</div>
       <div style="font-size: 16px; color: #fff; text-shadow: 0 0 10px rgba(255, 200, 100, 0.5);">${name}</div>
       ${xpReward > 0 ? `<div style="font-size: 11px; color: #8aff8a; margin-top: 6px;">+${xpReward} XP</div>` : ''}
+      ${queueBadge}
     `;
     
+    // Clear container before showing (only 1 at a time)
+    this.notificationContainer.innerHTML = '';
     this.notificationContainer.appendChild(notification);
     
     // Animate in
@@ -266,7 +296,7 @@ export class DiscoveryManager {
     // Play discovery sound if available
     this._playDiscoverySound(type);
     
-    // Remove after delay
+    // Auto-dismiss after 3 seconds, then show next
     setTimeout(() => {
       notification.style.opacity = '0';
       notification.style.transform = 'translateY(-20px) scale(0.9)';
@@ -274,8 +304,10 @@ export class DiscoveryManager {
         if (notification.parentNode) {
           notification.parentNode.removeChild(notification);
         }
+        // Show next queued notification
+        this._showNextNotification();
       }, 400);
-    }, 3500);
+    }, 3000);
   }
   
   /**
@@ -297,8 +329,14 @@ export class DiscoveryManager {
     
     if (!this.player) return;
     
+    // Grace period: skip discovery checks for first 5 seconds to avoid
+    // notification spam during spawn (player falls through multiple regions)
+    if (!this._startTime) this._startTime = now;
+    const elapsed = now - this._startTime;
+    
     // Update visible chunks and check for discoveries
     this._revealAroundPlayer();
+    if (elapsed < 5000) return; // Skip POI/region checks during grace period
     this._checkPOIDiscoveries();
     this._checkRegionDiscoveries();
     this._updateRegionProgress();
