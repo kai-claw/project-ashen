@@ -244,7 +244,20 @@ export class TerrainGenerator {
     // Mark position buffer as needing GPU re-upload after height modification
     geometry.attributes.position.needsUpdate = true;
     
-    // Recompute normals for proper lighting
+    // Add vertex colors based on height for visual depth (MeshBasicMaterial has no shading)
+    const vertCount = positions.length / 3;
+    const colors = new Float32Array(vertCount * 3);
+    for (let i = 0; i < vertCount; i++) {
+      const h = positions[i * 3 + 1];  // Y = height
+      const t = Math.max(0, Math.min(1, (h + 5) / 30));  // Normalize height range
+      // Low = dark green (0.15, 0.35, 0.1), High = light green-brown (0.55, 0.65, 0.25)
+      colors[i * 3]     = 0.15 + t * 0.40;  // R
+      colors[i * 3 + 1] = 0.35 + t * 0.30;  // G
+      colors[i * 3 + 2] = 0.10 + t * 0.15;  // B
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    
+    // Recompute normals for potential future lit material use
     geometry.computeVertexNormals();
     
     // Create mesh
@@ -322,13 +335,11 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // Terrain material — MeshLambertMaterial with emissive for guaranteed green visibility
-    // MeshBasicMaterial proved terrain renders; LambertMaterial adds shading for depth
-    return new THREE.MeshLambertMaterial({
-      map: texture,
-      color: 0x4a8a30,
-      emissive: 0x1a3a10,        // Self-illumination prevents terrain from going dark/cyan
-      emissiveIntensity: 0.4,
+    // Terrain material — MeshBasicMaterial with vertex colors for height-based shading
+    // Lighting-independent: vertex colors provide depth cues without lighting dependency
+    // (MeshStandardMaterial/LambertMaterial were washed gray-teal by light color interactions)
+    return new THREE.MeshBasicMaterial({
+      vertexColors: true,
       side: THREE.DoubleSide,
     });
   }
