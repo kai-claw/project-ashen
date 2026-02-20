@@ -335,10 +335,12 @@ export class TerrainGenerator {
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(4, 4); // Tile across each chunk
     
-    // Terrain material — MeshBasicMaterial with vertex colors for height-based shading
-    // Lighting-independent: vertex colors provide depth cues without lighting dependency
-    // (MeshStandardMaterial/LambertMaterial were washed gray-teal by light color interactions)
-    return new THREE.MeshBasicMaterial({
+    // MeshLambertMaterial with emissive-only — emissive bypasses scene lights entirely
+    // so green color is preserved (like MeshBasicMaterial) but with Lambert shading capability.
+    // No diffuse color: avoids the gray-teal issue caused by blue-tinted ambient lights.
+    return new THREE.MeshLambertMaterial({
+      emissive: 0x44aa44,
+      emissiveIntensity: 0.8,
       vertexColors: true,
       side: THREE.DoubleSide,
     });
