@@ -826,13 +826,15 @@ export class Player {
     }
     
     // Also flash visor
-    if (this.visor && this.visor.material) {
+    if (this.visor && this.visor.material && this.visor.material.emissive) {
       const origColor = this.visor.material.emissive.getHex();
       this.visor.material.emissive.setHex(color);
       this.visor.material.emissiveIntensity = 8;
       setTimeout(() => {
-        this.visor.material.emissive.setHex(origColor);
-        this.visor.material.emissiveIntensity = 3;
+        if (this.visor?.material?.emissive) {
+          this.visor.material.emissive.setHex(origColor);
+          this.visor.material.emissiveIntensity = 3;
+        }
       }, duration);
     }
   }

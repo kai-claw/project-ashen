@@ -927,7 +927,7 @@ export class DungeonRenderer {
       metalness: definition.metallic ? 0.7 : 0.1,
     });
     
-    if (definition.emissive) {
+    if (definition.emissive && mat.emissive) {
       mat.emissive = new THREE.Color(definition.emissive);
       mat.emissiveIntensity = 1.5;
     }
@@ -1757,7 +1757,7 @@ export class DungeonRenderer {
       if (child.userData.isExitPortal) {
         child.userData.isActive = true;
         child.material.opacity = 0.8;
-        child.material.emissiveIntensity = 2;
+        if (child.material.emissive) child.material.emissiveIntensity = 2;
         
         // Add portal light
         const portalLight = new THREE.PointLight(0x44ff88, 2, 8);

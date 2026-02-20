@@ -151,8 +151,8 @@ export class WeaponRenderer {
       roughness: config.roughness || 0.5,
     });
     
-    // Add emissive for higher rarities
-    if (isBladeOrMain && rarity.glowIntensity > 0) {
+    // Add emissive for higher rarities (only if material supports it)
+    if (isBladeOrMain && rarity.glowIntensity > 0 && mat.emissive) {
       mat.emissive = new THREE.Color(rarity.hexColor);
       mat.emissiveIntensity = rarity.glowIntensity * 0.3;
     }

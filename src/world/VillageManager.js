@@ -665,8 +665,7 @@ export class VillageManager {
     bottlePositions.forEach(([x, y, z], i) => {
       const mat = bottleMat.clone();
       mat.color.setHex(bottleColors[i]);
-      mat.emissive.setHex(bottleColors[i]);
-      mat.emissiveIntensity = 0.5;
+      if (mat.emissive) { mat.emissive.setHex(bottleColors[i]); mat.emissiveIntensity = 0.5; }
       const bottle = new THREE.Mesh(bottleGeo, mat);
       bottle.position.set(x, y, z);
       alchemyTable.add(bottle);

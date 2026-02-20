@@ -1634,16 +1634,14 @@ export class BossRenderer {
     // Update phase indicator
     if (bossModel.userData.phaseIndicator) {
       bossModel.userData.phaseIndicator.material.color.setHex(phaseColor);
-      bossModel.userData.phaseIndicator.material.emissive.setHex(phaseColor);
-      bossModel.userData.phaseIndicator.material.emissiveIntensity = 2 + phase;
+      if (bossModel.userData.phaseIndicator.material.emissive) { bossModel.userData.phaseIndicator.material.emissive.setHex(phaseColor); bossModel.userData.phaseIndicator.material.emissiveIntensity = 2 + phase; }
     }
 
     // Update eye color
     if (bossModel.userData.eyes) {
       bossModel.userData.eyes.forEach((eye) => {
         eye.material.color.setHex(phaseColor);
-        eye.material.emissive.setHex(phaseColor);
-        eye.material.emissiveIntensity = 4 + phase * 2;
+        if (eye.material.emissive) { eye.material.emissive.setHex(phaseColor); eye.material.emissiveIntensity = 4 + phase * 2; }
       });
     }
 
@@ -1655,8 +1653,7 @@ export class BossRenderer {
 
     // Update core
     if (bossModel.userData.core) {
-      bossModel.userData.core.material.emissive.setHex(phaseColor);
-      bossModel.userData.core.material.emissiveIntensity = 2 + phase;
+      if (bossModel.userData.core.material.emissive) { bossModel.userData.core.material.emissive.setHex(phaseColor); bossModel.userData.core.material.emissiveIntensity = 2 + phase; }
     }
 
     if (bossModel.userData.coreLight) {
@@ -1702,14 +1699,14 @@ export class BossRenderer {
     if (bossModel.userData.eyes) {
       const pulse = 4 + Math.sin(time * 3) * 2;
       bossModel.userData.eyes.forEach((eye) => {
-        eye.material.emissiveIntensity = pulse;
+        if (eye.material.emissive) eye.material.emissiveIntensity = pulse;
       });
     }
 
     // Core pulsing
     if (bossModel.userData.core) {
       const corePulse = 2 + Math.sin(time * 2.5) * 1;
-      bossModel.userData.core.material.emissiveIntensity = corePulse;
+      if (bossModel.userData.core.material.emissive) bossModel.userData.core.material.emissiveIntensity = corePulse;
     }
 
     // Aura rotation
@@ -1831,7 +1828,7 @@ export class BossRenderer {
     if (body.userData.crystals) {
       body.userData.crystals.forEach((crystal, i) => {
         const pulse = 1 + Math.sin(time * 2 + i) * 0.3;
-        crystal.material.emissiveIntensity = pulse;
+        if (crystal.material.emissive) crystal.material.emissiveIntensity = pulse;
       });
     }
   }
@@ -2061,7 +2058,7 @@ export class BossRenderer {
       // Fade eyes and lights
       if (bossModel.userData.eyes) {
         bossModel.userData.eyes.forEach((eye) => {
-          eye.material.emissiveIntensity = 5 * (1 - t);
+          if (eye.material.emissive) eye.material.emissiveIntensity = 5 * (1 - t);
         });
       }
 

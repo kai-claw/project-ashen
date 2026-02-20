@@ -522,7 +522,7 @@ export class Boss {
   
   _setDormant() {
     this.eyes.forEach((eye) => {
-      eye.material.emissiveIntensity = 0.5;
+      if (eye.material.emissive) eye.material.emissiveIntensity = 0.5;
     });
     this.eyeLights.forEach((light) => {
       light.intensity = 0.1;
@@ -548,10 +548,10 @@ export class Boss {
     let delay = 0;
     this.eyes.forEach((eye, i) => {
       setTimeout(() => {
-        eye.material.emissiveIntensity = 7;
-        setTimeout(() => {
-          eye.material.emissiveIntensity = 4.5;
-        }, 200);
+        if (eye.material.emissive) {
+          eye.material.emissiveIntensity = 7;
+          setTimeout(() => { if (eye.material.emissive) eye.material.emissiveIntensity = 4.5; }, 200);
+        }
       }, delay);
       delay += 120;
     });
@@ -672,7 +672,7 @@ export class Boss {
     const pulseSpeed = 2 + (1 - healthRatio) * 5;
     const pulseIntensity = 3.5 + Math.sin(Date.now() * 0.001 * pulseSpeed) * (1.5 + (1 - healthRatio) * 2.5);
     this.eyes.forEach((eye) => {
-      eye.material.emissiveIntensity = pulseIntensity;
+      if (eye.material.emissive) eye.material.emissiveIntensity = pulseIntensity;
     });
     this.eyeLights.forEach((light) => {
       light.intensity = 0.3 + pulseIntensity * 0.1;
@@ -886,7 +886,7 @@ export class Boss {
       
       // Eyes intensify
       this.eyes.forEach((eye) => {
-        eye.material.emissiveIntensity = 4 + progress * 7;
+        if (eye.material.emissive) eye.material.emissiveIntensity = 4 + progress * 7;
       });
       
       // Rumble
@@ -957,7 +957,7 @@ export class Boss {
       
       // Eyes go crazy
       this.eyes.forEach((eye, i) => {
-        eye.material.emissiveIntensity = 6 + Math.sin(this.stateTimer * 18 + i) * 5;
+        if (eye.material.emissive) eye.material.emissiveIntensity = 6 + Math.sin(this.stateTimer * 18 + i) * 5;
       });
       
       // Color shift to Phase 2
@@ -983,7 +983,7 @@ export class Boss {
     
     this.eyes.forEach((eye) => {
       eye.material.color.setHex(0xff4400);
-      eye.material.emissive.setHex(0xff4400);
+      if (eye.material.emissive) eye.material.emissive.setHex(0xff4400);
     });
     
     this._changeState(STATES.IDLE);
@@ -1194,14 +1194,14 @@ export class Boss {
     // Big flash
     this._flashModel(1.0, 0xffcc00);
     this.eyes.forEach((eye) => {
-      eye.material.emissive.setHex(0xffcc00);
+      if (eye.material.emissive) eye.material.emissive.setHex(0xffcc00);
     });
     
     setTimeout(() => {
       if (this.state === STATES.STAGGERED) {
         this._flashModel(0, 0x000000);
         this.eyes.forEach((eye) => {
-          eye.material.emissive.setHex(this.phase === 2 ? 0xff4400 : 0xff2200);
+          if (eye.material.emissive) eye.material.emissive.setHex(this.phase === 2 ? 0xff4400 : 0xff2200);
         });
       }
     }, 300);
@@ -1245,7 +1245,7 @@ export class Boss {
       this.body.rotation.z = deathProgress * 0.3;
       
       this.eyes.forEach((eye) => {
-        eye.material.emissiveIntensity *= 0.94;
+        if (eye.material.emissive) eye.material.emissiveIntensity *= 0.94;
       });
       this.eyeLights.forEach((light) => {
         light.intensity *= 0.92;
@@ -1409,7 +1409,7 @@ export class Boss {
       eye.material.opacity = 1;
       eye.material.transparent = false;
       eye.material.color.setHex(0xff2200);
-      eye.material.emissive.setHex(0xff2200);
+      if (eye.material.emissive) eye.material.emissive.setHex(0xff2200);
     });
     
     this.eyeLights.forEach((light) => {

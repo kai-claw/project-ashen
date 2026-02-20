@@ -2712,7 +2712,7 @@ export class Enemy {
         targetModel.rotation.x = -progress * 0.35;  // Lean back
         targetModel.position.y = progress * 0.15;   // Rise slightly
         // Red glow intensifies
-        if (this.eye && progress > 0.3) {
+        if (this.eye && progress > 0.3 && this.eye.material.emissive) {
           this.eye.material.emissiveIntensity = 4 + progress * 4;
         }
         // Flash red at 50% and 80% progress (warning pulses)
@@ -2756,7 +2756,7 @@ export class Enemy {
     }
     
     // Reset eye intensity
-    if (this.eye) {
+    if (this.eye && this.eye.material.emissive) {
       this.eye.material.emissiveIntensity = 4;
     }
     
@@ -2882,13 +2882,13 @@ export class Enemy {
       
       // Eye glow intensifies
       if (this.eye) {
-        const intensity = 4 + progress * 6;
-        this.eye.material.emissiveIntensity = intensity;
-        // Shift to purple
         const r = THREE.MathUtils.lerp(1.0, 1.0, progress);
         const g = THREE.MathUtils.lerp(0.13, 0.0, progress);
         const b = THREE.MathUtils.lerp(0.13, 1.0, progress);
-        this.eye.material.emissive.setRGB(r, g, b);
+        if (this.eye.material.emissive) {
+          this.eye.material.emissiveIntensity = 4 + progress * 6;
+          this.eye.material.emissive.setRGB(r, g, b);
+        }
         this.eye.material.color.setRGB(r, g, b);
       }
       
@@ -2917,9 +2917,8 @@ export class Enemy {
     
     // Set eye to purple
     if (this.eye) {
-      this.eye.material.emissive.setHex(0xff00ff);
       this.eye.material.color.setHex(0xff00ff);
-      this.eye.material.emissiveIntensity = 5;
+      if (this.eye.material.emissive) { this.eye.material.emissive.setHex(0xff00ff); this.eye.material.emissiveIntensity = 5; }
     }
     
     // Apply purple tint to model
@@ -2971,10 +2970,10 @@ export class Enemy {
       }, duration);
     }
     
-    if (this.eye && this.eye.material) {
+    if (this.eye && this.eye.material && this.eye.material.emissive) {
       const origColor = this.eye.material.emissive.getHex();
       this.eye.material.emissive.setHex(color);
-      setTimeout(() => this.eye.material.emissive.setHex(origColor), duration);
+      setTimeout(() => { if (this.eye?.material?.emissive) this.eye.material.emissive.setHex(origColor); }, duration);
     }
   }
   
@@ -3190,7 +3189,7 @@ export class Enemy {
       
       // Fade eyes (corruption draining)
       if (this.eye) {
-        this.eye.material.emissiveIntensity = Math.max(0, 3 * (1 - progress * 1.5));
+        if (this.eye.material.emissive) this.eye.material.emissiveIntensity = Math.max(0, 3 * (1 - progress * 1.5));
         if (this.eye.material.opacity !== undefined) {
           this.eye.material.opacity = Math.max(0, 1 - progress);
         }
@@ -3259,7 +3258,7 @@ export class Enemy {
       
       // Eye fades
       if (this.eye) {
-        this.eye.material.emissiveIntensity = 5 * (1 - progress);
+        if (this.eye.material.emissive) this.eye.material.emissiveIntensity = 5 * (1 - progress);
         this.eye.material.opacity = 1 - progress;
       }
       
