@@ -209,35 +209,23 @@ export class VillageManager {
    */
   _createMaterials() {
     return {
-      hutWall: new THREE.MeshStandardMaterial({
-        color: 0x8B7355,
-        roughness: 0.9,
-        metalness: 0.0,
+      hutWall: new THREE.MeshBasicMaterial({
+        color: 0xAB9375,  // Warm tan-brown (brightened for visibility)
       }),
-      hutRoof: new THREE.MeshStandardMaterial({
-        color: 0xA0855C,
-        roughness: 1.0,
-        metalness: 0.0,
+      hutRoof: new THREE.MeshBasicMaterial({
+        color: 0xC0A57C,  // Light straw/thatch (brightened)
       }),
-      marketWood: new THREE.MeshStandardMaterial({
-        color: 0x6B5344,
-        roughness: 0.85,
-        metalness: 0.0,
+      marketWood: new THREE.MeshBasicMaterial({
+        color: 0x8B7364,  // Medium wood brown (brightened)
       }),
-      wellStone: new THREE.MeshStandardMaterial({
-        color: 0x707070,
-        roughness: 0.95,
-        metalness: 0.0,
+      wellStone: new THREE.MeshBasicMaterial({
+        color: 0x909090,  // Light gray stone (brightened)
       }),
-      wellWood: new THREE.MeshStandardMaterial({
-        color: 0x5C4033,
-        roughness: 0.9,
-        metalness: 0.0,
+      wellWood: new THREE.MeshBasicMaterial({
+        color: 0x7C6053,  // Dark wood (brightened)
       }),
-      fenceWood: new THREE.MeshStandardMaterial({
-        color: 0x7A6452,
-        roughness: 0.9,
-        metalness: 0.0,
+      fenceWood: new THREE.MeshBasicMaterial({
+        color: 0x9A8472,  // Fence brown (brightened)
       }),
     };
   }
@@ -250,8 +238,8 @@ export class VillageManager {
     group.position.set(village.x, 0, village.z);
     group.rotation.y = village.rotation;
     
-    // Central well
-    this._createWell(group, 0, 0);
+    // Central well (at village center terrain height)
+    this._createWell(group, 0, 0, village);
     
     // Huts in a circle
     const hutCount = village.size;
@@ -317,7 +305,7 @@ export class VillageManager {
     hut.add(roof);
     
     const doorGeom = new THREE.BoxGeometry(0.6, 1.5, 0.1);
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0x2a2015 });
+    const doorMat = new THREE.MeshBasicMaterial({ color: 0x4a4035 });
     const door = new THREE.Mesh(doorGeom, doorMat);
     door.position.set(0, 0.75, bodyRadius + 0.05);
     hut.add(door);
@@ -367,9 +355,8 @@ export class VillageManager {
     
     const canopyGeom = new THREE.PlaneGeometry(stallWidth * 1.2, stallDepth * 1.3);
     const canopyColors = [0xB85450, 0x5475B8, 0x6B9954, 0xC9A953];
-    const canopyMat = new THREE.MeshStandardMaterial({
+    const canopyMat = new THREE.MeshBasicMaterial({
       color: canopyColors[Math.floor(Math.random() * canopyColors.length)],
-      roughness: 0.8,
       side: THREE.DoubleSide,
     });
     const canopy = new THREE.Mesh(canopyGeom, canopyMat);
@@ -385,9 +372,16 @@ export class VillageManager {
   /**
    * Create a village well
    */
-  _createWell(group, localX, localZ) {
+  _createWell(group, localX, localZ, village) {
+    // Compute terrain height at well position
+    const cos = village ? Math.cos(village.rotation) : 1;
+    const sin = village ? Math.sin(village.rotation) : 0;
+    const worldX = (village ? village.x : 0) + localX * cos - localZ * sin;
+    const worldZ = (village ? village.z : 0) + localX * sin + localZ * cos;
+    const terrainY = this.terrain.getTerrainHeight(worldX, worldZ);
+    
     const well = new THREE.Group();
-    well.position.set(localX, 0, localZ);
+    well.position.set(localX, terrainY, localZ);
     
     const baseGeom = new THREE.TorusGeometry(1.0, 0.3, 8, 16);
     const base = new THREE.Mesh(baseGeom, this.materials.wellStone);
@@ -429,10 +423,8 @@ export class VillageManager {
     well.add(roof);
     
     const waterGeom = new THREE.CircleGeometry(0.85, 12);
-    const waterMat = new THREE.MeshStandardMaterial({
+    const waterMat = new THREE.MeshBasicMaterial({
       color: 0x1a3050,
-      roughness: 0.3,
-      metalness: 0.1,
     });
     const water = new THREE.Mesh(waterGeom, waterMat);
     water.rotation.x = -Math.PI / 2;
@@ -508,9 +500,8 @@ export class VillageManager {
     forge.position.set(localX, terrainY, localZ);
     
     // Furnace (brick structure)
-    const furnaceMat = new THREE.MeshStandardMaterial({
+    const furnaceMat = new THREE.MeshBasicMaterial({
       color: 0x8b4513,
-      roughness: 0.95,
     });
     const furnaceGeo = new THREE.BoxGeometry(1.2, 1.5, 1.0);
     const furnace = new THREE.Mesh(furnaceGeo, furnaceMat);
@@ -520,10 +511,8 @@ export class VillageManager {
     forge.add(furnace);
     
     // Furnace opening (glowing)
-    const openingMat = new THREE.MeshStandardMaterial({
+    const openingMat = new THREE.MeshBasicMaterial({
       color: 0xff4400,
-      emissive: 0xff2200,
-      emissiveIntensity: 2,
     });
     const openingGeo = new THREE.BoxGeometry(0.4, 0.5, 0.1);
     const opening = new THREE.Mesh(openingGeo, openingMat);
@@ -536,10 +525,8 @@ export class VillageManager {
     forge.add(fireLight);
     
     // Anvil next to furnace
-    const anvilMat = new THREE.MeshStandardMaterial({
+    const anvilMat = new THREE.MeshBasicMaterial({
       color: 0x444444,
-      roughness: 0.3,
-      metalness: 0.8,
     });
     // Anvil base
     const anvilBaseGeo = new THREE.BoxGeometry(0.6, 0.3, 0.4);
@@ -584,9 +571,8 @@ export class VillageManager {
     workbench.position.set(localX, terrainY, localZ);
     
     // Table surface
-    const tableMat = new THREE.MeshStandardMaterial({
+    const tableMat = new THREE.MeshBasicMaterial({
       color: 0x6b5344,
-      roughness: 0.9,
     });
     const tableGeo = new THREE.BoxGeometry(1.6, 0.1, 0.9);
     const table = new THREE.Mesh(tableGeo, tableMat);
@@ -596,9 +582,8 @@ export class VillageManager {
     workbench.add(table);
     
     // Table legs
-    const legMat = new THREE.MeshStandardMaterial({
+    const legMat = new THREE.MeshBasicMaterial({
       color: 0x5a4030,
-      roughness: 0.95,
     });
     const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.85, 6);
     const legPositions = [
@@ -615,10 +600,8 @@ export class VillageManager {
     });
     
     // Tools on table (vice, saw)
-    const viceMat = new THREE.MeshStandardMaterial({
+    const viceMat = new THREE.MeshBasicMaterial({
       color: 0x555555,
-      roughness: 0.4,
-      metalness: 0.7,
     });
     const viceGeo = new THREE.BoxGeometry(0.2, 0.15, 0.15);
     const vice = new THREE.Mesh(viceGeo, viceMat);
@@ -649,9 +632,8 @@ export class VillageManager {
     alchemyTable.position.set(localX, terrainY, localZ);
     
     // Table
-    const tableMat = new THREE.MeshStandardMaterial({
+    const tableMat = new THREE.MeshBasicMaterial({
       color: 0x3a3050,
-      roughness: 0.85,
     });
     const tableGeo = new THREE.CylinderGeometry(0.7, 0.6, 0.1, 8);
     const table = new THREE.Mesh(tableGeo, tableMat);
@@ -668,10 +650,8 @@ export class VillageManager {
     alchemyTable.add(pedestal);
     
     // Glowing potion bottles
-    const bottleMat = new THREE.MeshStandardMaterial({
+    const bottleMat = new THREE.MeshBasicMaterial({
       color: 0x44ff88,
-      emissive: 0x22aa44,
-      emissiveIntensity: 0.8,
       transparent: true,
       opacity: 0.85,
     });

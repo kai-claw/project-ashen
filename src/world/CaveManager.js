@@ -215,44 +215,28 @@ export class CaveManager {
   _createMaterials() {
     return {
       // Dark cave rock - interior
-      caveRock: new THREE.MeshStandardMaterial({
+      caveRock: new THREE.MeshBasicMaterial({
         color: 0x1a1a1a,
-        roughness: 1.0,
-        metalness: 0.0,
       }),
       // Exterior rocky frame
-      frameRock: new THREE.MeshStandardMaterial({
+      frameRock: new THREE.MeshBasicMaterial({
         color: 0x3a3530,
-        roughness: 0.95,
-        metalness: 0.0,
       }),
       // Mossy accent
-      moss: new THREE.MeshStandardMaterial({
+      moss: new THREE.MeshBasicMaterial({
         color: 0x2a4020,
-        roughness: 0.9,
-        metalness: 0.0,
       }),
       // Glowing crystal - cyan/blue
-      crystalCyan: new THREE.MeshStandardMaterial({
+      crystalCyan: new THREE.MeshBasicMaterial({
         color: 0x00ffff,
-        emissive: 0x00aaaa,
-        emissiveIntensity: 0.8,
-        roughness: 0.3,
-        metalness: 0.2,
       }),
       // Glowing crystal - purple
-      crystalPurple: new THREE.MeshStandardMaterial({
+      crystalPurple: new THREE.MeshBasicMaterial({
         color: 0xaa66ff,
-        emissive: 0x7744aa,
-        emissiveIntensity: 0.8,
-        roughness: 0.3,
-        metalness: 0.2,
       }),
       // Torch wood
-      torchWood: new THREE.MeshStandardMaterial({
+      torchWood: new THREE.MeshBasicMaterial({
         color: 0x4a3020,
-        roughness: 0.9,
-        metalness: 0.0,
       }),
     };
   }
@@ -450,9 +434,8 @@ export class CaveManager {
    * Create scattered bones near entrance (ominous decoration)
    */
   _createBoneScatter(group, scale) {
-    const boneMat = new THREE.MeshStandardMaterial({
+    const boneMat = new THREE.MeshBasicMaterial({
       color: 0xd0c8b8,
-      roughness: 0.9,
     });
     
     const boneCount = 3 + Math.floor(Math.random() * 4);
@@ -604,7 +587,7 @@ export class CaveManager {
     
     // Torch head (wrapped in cloth)
     const headGeo = new THREE.CylinderGeometry(0.08 * scale, 0.12 * scale, 0.25 * scale, 8);
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x332211 });
+    const headMat = new THREE.MeshBasicMaterial({ color: 0x332211 });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = poleHeight + 0.1 * scale;
     torch.add(head);

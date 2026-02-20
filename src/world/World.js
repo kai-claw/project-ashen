@@ -370,23 +370,18 @@ export class World {
     const GATE_WIDTH = 6;
     
     // Castle materials
-    const stoneMat = new THREE.MeshStandardMaterial({
+    const stoneMat = new THREE.MeshBasicMaterial({
       color: 0x555555,
-      roughness: 0.9,
-      metalness: 0.1,
     });
     
-    const darkStoneMat = new THREE.MeshStandardMaterial({
+    const darkStoneMat = new THREE.MeshBasicMaterial({
       color: 0x444444,
-      roughness: 0.95,
-      metalness: 0.05,
     });
     
     // Castle floor (flat stone courtyard)
     const floorGeo = new THREE.PlaneGeometry(CASTLE_WIDTH - 4, CASTLE_DEPTH - 4);
-    const floorMat = new THREE.MeshStandardMaterial({
+    const floorMat = new THREE.MeshBasicMaterial({
       color: 0x3a3a40,
-      roughness: 0.95,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -506,7 +501,7 @@ export class World {
     
     // Stone ring base
     const ringGeo = new THREE.TorusGeometry(0.8, 0.15, 8, 16);
-    const ringMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x333333, roughness: 0.9 });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.1;
@@ -514,7 +509,7 @@ export class World {
     group.add(ring);
     
     // Logs
-    const logMat = new THREE.MeshStandardMaterial({ color: 0x3a2010, roughness: 0.95 });
+    const logMat = new THREE.MeshBasicMaterial({ color: 0x3a2010, roughness: 0.95 });
     for (let i = 0; i < 6; i++) {
       const logGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.8, 6);
       const log = new THREE.Mesh(logGeo, logMat);
@@ -563,24 +558,22 @@ export class World {
     group.position.set(x, y, z);
     
     // Torch bracket (metal holder on wall)
-    const bracketMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8, metalness: 0.5 });
+    const bracketMat = new THREE.MeshBasicMaterial({ color: 0x2a2a2a, roughness: 0.8, metalness: 0.5 });
     const bracketGeo = new THREE.BoxGeometry(0.15, 0.4, 0.15);
     const bracket = new THREE.Mesh(bracketGeo, bracketMat);
     bracket.position.y = -0.1;
     group.add(bracket);
     
     // Torch handle (wooden)
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0x4a3020, roughness: 0.9 });
+    const handleMat = new THREE.MeshBasicMaterial({ color: 0x4a3020, roughness: 0.9 });
     const handleGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.6, 6);
     const handle = new THREE.Mesh(handleGeo, handleMat);
     handle.position.y = 0.2;
     group.add(handle);
     
     // Torch head (burning part)
-    const headMat = new THREE.MeshStandardMaterial({ 
+    const headMat = new THREE.MeshBasicMaterial({ 
       color: 0x331100, 
-      emissive: 0xff4400, 
-      emissiveIntensity: 0.5 
     });
     const headGeo = new THREE.SphereGeometry(0.12, 8, 8);
     const head = new THREE.Mesh(headGeo, headMat);

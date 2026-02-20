@@ -43,10 +43,9 @@ export class NPCManager {
   _getOrCreateMaterial(color, roughness = 0.8) {
     const key = `${color.toString(16)}_${roughness}`;
     if (!this.materials.has(key)) {
-      this.materials.set(key, new THREE.MeshStandardMaterial({
+      this.materials.set(key, new THREE.MeshBasicMaterial({
         color,
         roughness,
-        metalness: 0.1,
       }));
     }
     return this.materials.get(key);

@@ -185,32 +185,20 @@ export class RuinsManager {
   
   _createMaterials() {
     return {
-      ancientStone: new THREE.MeshStandardMaterial({
+      ancientStone: new THREE.MeshBasicMaterial({
         color: 0x5a5a5a,
-        roughness: 0.95,
-        metalness: 0.0,
       }),
-      mossyStone: new THREE.MeshStandardMaterial({
+      mossyStone: new THREE.MeshBasicMaterial({
         color: 0x4a5040,
-        roughness: 1.0,
-        metalness: 0.0,
       }),
-      crackedStone: new THREE.MeshStandardMaterial({
+      crackedStone: new THREE.MeshBasicMaterial({
         color: 0x6a6860,
-        roughness: 0.9,
-        metalness: 0.0,
       }),
-      altarStone: new THREE.MeshStandardMaterial({
+      altarStone: new THREE.MeshBasicMaterial({
         color: 0x3a3535,
-        roughness: 0.85,
-        metalness: 0.05,
       }),
-      runeGlow: new THREE.MeshStandardMaterial({
+      runeGlow: new THREE.MeshBasicMaterial({
         color: 0x4488aa,
-        emissive: 0x4488aa,
-        emissiveIntensity: 0.3,
-        roughness: 0.5,
-        metalness: 0.2,
       }),
     };
   }
