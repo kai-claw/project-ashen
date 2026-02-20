@@ -276,8 +276,14 @@ export class TerrainGenerator {
     
     this.scene.add(mesh);
     
+    // Add foliage (trees + rocks) to this chunk
+    const foliageGroup = this._addFoliage(chunkX, chunkZ);
+    if (foliageGroup) {
+      this.scene.add(foliageGroup);
+    }
+    
     // Store chunk data
-    this.chunks.set(key, { mesh, geometry });
+    this.chunks.set(key, { mesh, geometry, foliageGroup });
   }
   
   /**
@@ -290,7 +296,153 @@ export class TerrainGenerator {
     this.scene.remove(chunk.mesh);
     chunk.geometry.dispose();
     
+    // Remove foliage
+    if (chunk.foliageGroup) {
+      this.scene.remove(chunk.foliageGroup);
+      chunk.foliageGroup.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+      });
+    }
+    
     this.chunks.delete(key);
+  }
+  
+  // ========================================
+  // FOLIAGE (trees + rocks)
+  // ========================================
+  
+  /**
+   * Deterministic hash for foliage placement — consistent per chunk
+   */
+  _foliageHash(x, z, salt) {
+    let h = (x * 374761 + z * 668265 + (salt || 0) * 982451) | 0;
+    h = ((h >> 16) ^ h) * 0x45d9f3b | 0;
+    h = ((h >> 16) ^ h) * 0x45d9f3b | 0;
+    return ((h >> 16) ^ h) & 0x7fffffff;
+  }
+  
+  /**
+   * Add trees and rocks to a terrain chunk
+   */
+  _addFoliage(chunkX, chunkZ) {
+    const worldOffsetX = chunkX * this.chunkSize;
+    const worldOffsetZ = chunkZ * this.chunkSize;
+    const centerX = worldOffsetX + this.chunkSize / 2;
+    const centerZ = worldOffsetZ + this.chunkSize / 2;
+    
+    // Skip chunks far from player (LOD — only decorate within 2 chunk-distances)
+    const pChunkX = this.lastPlayerChunkX || 0;
+    const pChunkZ = this.lastPlayerChunkZ || 0;
+    if (Math.abs(chunkX - pChunkX) > 2 || Math.abs(chunkZ - pChunkZ) > 2) {
+      return null;
+    }
+    
+    const group = new THREE.Group();
+    
+    // Shared materials (reuse across all foliage)
+    if (!this._foliageMats) {
+      this._foliageMats = {
+        trunk:   new THREE.MeshBasicMaterial({ color: 0x553311 }),
+        canopy1: new THREE.MeshBasicMaterial({ color: 0x227722 }),
+        canopy2: new THREE.MeshBasicMaterial({ color: 0x2a8a2a }),
+        canopy3: new THREE.MeshBasicMaterial({ color: 0x1a6620 }),
+        rock1:   new THREE.MeshBasicMaterial({ color: 0x777777 }),
+        rock2:   new THREE.MeshBasicMaterial({ color: 0x666655 }),
+        rock3:   new THREE.MeshBasicMaterial({ color: 0x888880 }),
+      };
+      this._foliageGeo = {
+        trunk:   new THREE.CylinderGeometry(0.15, 0.25, 3, 5),
+        canopyA: new THREE.ConeGeometry(1.8, 3.5, 6),
+        canopyB: new THREE.SphereGeometry(1.6, 6, 5),
+        canopyC: new THREE.ConeGeometry(1.2, 4, 5),  // Tall pine
+        rockA:   new THREE.DodecahedronGeometry(1, 0),
+        rockB:   new THREE.DodecahedronGeometry(0.6, 1),
+      };
+    }
+    
+    const m = this._foliageMats;
+    const g = this._foliageGeo;
+    
+    // Determine tree/rock count from biome
+    const distFromOrigin = Math.sqrt(centerX * centerX + centerZ * centerZ);
+    if (distFromOrigin < this.castleRadius) return null; // No foliage in castle
+    
+    const biome = this.getBiome(centerX, centerZ);
+    let treeCount, rockCount;
+    switch (biome) {
+      case 'safe_meadow':  treeCount = 4;  rockCount = 2; break;
+      case 'grassland':    treeCount = 8;  rockCount = 4; break;
+      case 'dense_woods':  treeCount = 14; rockCount = 3; break;
+      case 'dark_frontier': treeCount = 10; rockCount = 6; break;
+      default:             treeCount = 0;  rockCount = 0;
+    }
+    
+    // Place trees
+    for (let i = 0; i < treeCount; i++) {
+      const hash = this._foliageHash(chunkX, chunkZ, i);
+      const lx = (hash % 1000) / 1000 * this.chunkSize;
+      const lz = ((hash >> 10) % 1000) / 1000 * this.chunkSize;
+      const wx = worldOffsetX + lx;
+      const wz = worldOffsetZ + lz;
+      
+      // Skip if inside castle blend zone
+      const d = Math.sqrt(wx * wx + wz * wz);
+      if (d < this.castleBlendRadius) continue;
+      
+      // Skip steep slopes
+      const slope = this.getTerrainSlope(wx, wz);
+      if (slope > 0.6) continue;
+      
+      const h = this.getTerrainHeight(wx, wz);
+      const treeType = hash % 3;
+      const scale = 0.7 + (hash % 100) / 100 * 0.6; // 0.7 - 1.3
+      
+      // Trunk
+      const trunk = new THREE.Mesh(g.trunk, m.trunk);
+      trunk.position.set(wx, h + 1.5 * scale, wz);
+      trunk.scale.set(scale, scale, scale);
+      group.add(trunk);
+      
+      // Canopy
+      let canopy;
+      if (treeType === 0) {
+        canopy = new THREE.Mesh(g.canopyA, m.canopy1);
+        canopy.position.set(wx, h + 3.8 * scale, wz);
+      } else if (treeType === 1) {
+        canopy = new THREE.Mesh(g.canopyB, m.canopy2);
+        canopy.position.set(wx, h + 3.5 * scale, wz);
+      } else {
+        canopy = new THREE.Mesh(g.canopyC, m.canopy3);
+        canopy.position.set(wx, h + 4.0 * scale, wz);
+      }
+      canopy.scale.set(scale, scale, scale);
+      group.add(canopy);
+    }
+    
+    // Place rocks
+    for (let i = 0; i < rockCount; i++) {
+      const hash = this._foliageHash(chunkX, chunkZ, 1000 + i);
+      const lx = (hash % 1000) / 1000 * this.chunkSize;
+      const lz = ((hash >> 10) % 1000) / 1000 * this.chunkSize;
+      const wx = worldOffsetX + lx;
+      const wz = worldOffsetZ + lz;
+      
+      const d = Math.sqrt(wx * wx + wz * wz);
+      if (d < this.castleBlendRadius) continue;
+      
+      const h = this.getTerrainHeight(wx, wz);
+      const rockType = hash % 2;
+      const scale = 0.5 + (hash % 100) / 100 * 1.5; // 0.5 - 2.0
+      const matChoice = [m.rock1, m.rock2, m.rock3][hash % 3];
+      
+      const rock = new THREE.Mesh(rockType === 0 ? g.rockA : g.rockB, matChoice);
+      rock.position.set(wx, h + 0.3 * scale, wz);
+      rock.scale.set(scale, scale * (0.5 + (hash % 50) / 100), scale); // Flatten some
+      rock.rotation.y = (hash % 628) / 100; // Random rotation
+      group.add(rock);
+    }
+    
+    return group.children.length > 0 ? group : null;
   }
   
   /**
