@@ -12,7 +12,7 @@ export class CameraController {
     this.height = 1;           // Was 2.5 — lookAt target is player.y + 1 (matches override)
     this.sensitivity = 0.002;
 
-    this.yaw = Math.PI;        // Face north (away from castle) to match player initial facing
+    this.yaw = 0;              // Face north (+Z, away from castle) to match player initial facing
     this.pitch = 0.53;         // Was 0.3 — atan(7/12)≈0.53 rad matches override's +8Y/+12Z
     this.minPitch = -0.3;
     this.maxPitch = 1.2;

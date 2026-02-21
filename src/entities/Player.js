@@ -112,7 +112,7 @@ export class Player {
     // Directions
     this.moveDir = new THREE.Vector3();
     this.dodgeDir = new THREE.Vector3();
-    this.facingAngle = Math.PI; // Face north (away from castle, into open world)
+    this.facingAngle = 0; // Face north (+Z, away from castle, into open world)
 
     // GLTF model state
     this.modelLoaded = false;
