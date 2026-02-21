@@ -328,14 +328,14 @@ export class HUD {
       pointer-events: none;
     `;
     
-    // Mana label
+    // Mana label — matches HP/Stamina/Posture bar style (Courier New monospace)
     const manaLabel = document.createElement('div');
     manaLabel.style.cssText = `
-      font-family: 'Cinzel', serif;
-      font-size: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 9px;
       color: #6699ff;
-      text-shadow: 0 0 4px rgba(0,0,0,0.8);
-      letter-spacing: 1px;
+      text-shadow: 1px 1px 2px #000;
+      line-height: 10px;
     `;
     manaLabel.textContent = 'MANA';
     this.manaContainer.appendChild(manaLabel);
@@ -365,13 +365,13 @@ export class HUD {
     this.manaBarBg.appendChild(this.manaBar);
     this.manaContainer.appendChild(this.manaBarBg);
     
-    // Mana text (current/max)
+    // Mana text (current/max) — matches HUD bar style
     this.manaText = document.createElement('div');
     this.manaText.style.cssText = `
-      font-family: 'Cinzel', serif;
+      font-family: 'Courier New', monospace;
       font-size: 9px;
       color: #88aaff;
-      text-shadow: 0 0 4px rgba(0,0,0,0.8);
+      text-shadow: 1px 1px 2px #000;
       text-align: right;
     `;
     this.manaText.textContent = '100 / 100';
