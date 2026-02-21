@@ -1142,17 +1142,16 @@ try {
   if (player.velocity) player.velocity.set(0, 0, 0);
   
   // Force camera to correct position behind/above player (prevents first-frame sky-only render)
-  // Must match CameraController params: distance=14, height=1, pitch=0.53
-  // Camera goes BEHIND the player based on their facing direction (yaw)
+  // CameraController uses: desiredPos = target + offset (where offset = sin/cos(yaw) * dist)
+  // So camera yaw=π puts camera south of player, looking north — BEHIND a north-facing player
   {
     const camTargetY = player.mesh.position.y + 1; // CameraController.height
     const camDist = 14;    // CameraController.distance
     const camPitch = 0.53; // CameraController.pitch
-    const yaw = player.facingAngle || 0; // Player's facing direction
-    // Place camera behind player: subtract facing direction offset
-    const camX = player.mesh.position.x - Math.sin(yaw) * camDist * Math.cos(camPitch);
+    const camYaw = Math.PI; // Match CameraController initial yaw
+    const camX = player.mesh.position.x + Math.sin(camYaw) * camDist * Math.cos(camPitch);
     const camY = camTargetY + camDist * Math.sin(camPitch);
-    const camZ = player.mesh.position.z - Math.cos(yaw) * camDist * Math.cos(camPitch);
+    const camZ = player.mesh.position.z + Math.cos(camYaw) * camDist * Math.cos(camPitch);
     cameraController.forcePosition(camX, camY, camZ);
     camera.lookAt(player.mesh.position.x, camTargetY, player.mesh.position.z);
   }
