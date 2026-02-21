@@ -9,6 +9,7 @@ import { Player } from './entities/Player.js';
 import { EnemyManager } from './entities/EnemyManager.js';
 import { World } from './world/World.js';
 import { CloudManager } from './world/CloudManager.js';
+import { LandmarkManager } from './world/LandmarkManager.js';
 import { InputManager } from './systems/InputManager.js';
 import { ItemManager } from './systems/ItemManager.js';
 import { LootManager } from './systems/LootManager.js';
@@ -222,6 +223,9 @@ const world = new World(scene);
 
 // --- Sky Clouds (Phase 31) ---
 const cloudManager = new CloudManager(scene);
+
+// --- Distant Landmarks (Phase 31) ---
+const landmarkManager = new LandmarkManager(scene, world.terrain);
 
 // --- Items ---
 const itemManager = new ItemManager(scene, gameManager);
