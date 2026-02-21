@@ -127,7 +127,7 @@ export class Player {
     this.mesh = new THREE.Group();
     // Spawn just outside castle gate (gate at Z=25, facing north into open world)
     // Y=50 is safe fallback — main.js safety loop corrects to actual terrain height
-    this.mesh.position.set(0, 50, 32);
+    this.mesh.position.set(0, 50, 80);
 
     // Create fallback primitive mesh (visible while GLTF loads)
     this._createFallbackMesh();
