@@ -55,9 +55,8 @@ class NPCQuestGiver {
     
     // Body
     const bodyGeom = new THREE.CapsuleGeometry(0.4, 1.0, 4, 8);
-    const bodyMat = new THREE.MeshStandardMaterial({ 
+    const bodyMat = new THREE.MeshBasicMaterial({ 
       color: this.getNPCColor(),
-      roughness: 0.7,
     });
     const body = new THREE.Mesh(bodyGeom, bodyMat);
     body.position.y = 0.9;

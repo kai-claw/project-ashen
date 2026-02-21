@@ -60,6 +60,7 @@ import { createDiscoveryManager, getDiscoveryManager } from './ui/DiscoveryManag
 import { EnemyHealthBarManager } from './ui/EnemyHealthBarManager.js';
 import { DamageNumberManager } from './ui/DamageNumberManager.js';
 import { HitEffectManager } from './effects/HitEffectManager.js';
+import { NPCMarkerManager } from './ui/NPCMarkerManager.js';
 import { GameTester } from './systems/GameTester.js';
 
 // Color grading + vignette shader for cinematic feel
@@ -489,6 +490,10 @@ questUI.init(questManager);
 const npcQuestGivers = createNPCQuestGivers(scene);
 npcQuestGivers.init(questManager);
 gameManager.npcQuestGivers = npcQuestGivers;
+
+// Phase 33: Screen-space NPC quest markers
+const npcMarkerManager = new NPCMarkerManager(camera);
+npcMarkerManager.setNPCQuestGivers(npcQuestGivers);
 
 // Initialize Quest Rewards & Reputation (Phase 25 - Worker 2)
 questRewards.init(questManager, scene);
@@ -967,6 +972,9 @@ function animate() {
   enemyHealthBars.update(delta, player.mesh.position);
   damageNumbers.update(delta);
   hitEffects.update(delta);
+  
+  // Phase 33: NPC quest markers
+  npcMarkerManager.update(delta, player.mesh.position);
   
   // Phase 27: Minimap update
   if (minimapManager) {
