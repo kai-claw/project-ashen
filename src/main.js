@@ -678,6 +678,41 @@ window.addEventListener('resize', () => {
   bloomPass.resolution.set(window.innerWidth, window.innerHeight);
 });
 
+// --- Phase 33: Welcome controls tooltip (once per session) ---
+if (!sessionStorage.getItem('ashen_controls_shown')) {
+  sessionStorage.setItem('ashen_controls_shown', '1');
+  setTimeout(() => {
+    const tip = document.createElement('div');
+    tip.style.cssText = `
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Cinzel', serif;
+      font-size: 14px;
+      color: #e0d0b0;
+      text-shadow: 0 0 6px rgba(0,0,0,0.9);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 24px;
+      border: 1px solid rgba(200, 180, 140, 0.3);
+      border-radius: 6px;
+      z-index: 600;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      text-align: center;
+      letter-spacing: 1px;
+    `;
+    tip.textContent = 'WASD to move  ·  Click to attack  ·  Tab for map  ·  E to interact';
+    document.body.appendChild(tip);
+    requestAnimationFrame(() => { tip.style.opacity = '1'; });
+    setTimeout(() => {
+      tip.style.opacity = '0';
+      setTimeout(() => tip.remove(), 600);
+    }, 8000);
+  }, 2000); // Show 2s after load to let terrain settle
+}
+
 // --- Game Loop ---
 let spawnSafetyFrames = 60; // Brief safety window for terrain to load
 
