@@ -48,8 +48,20 @@ export class TerrainGenerator {
     this.lastPlayerChunkX = null;
     this.lastPlayerChunkZ = null;
     
+    // Water level — terrain below this Y shows water
+    this.waterLevel = -2;
+    
     // Shared material for all chunks
     this.terrainMaterial = this._createTerrainMaterial();
+    
+    // Shared water material (semi-transparent blue)
+    this.waterMaterial = new THREE.MeshBasicMaterial({
+      color: 0x2266aa,
+      transparent: true,
+      opacity: 0.55,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
     
     // Generate initial chunks around origin
     this._updateChunks(0, 0);
@@ -339,6 +351,25 @@ export class TerrainGenerator {
     
     this.scene.add(mesh);
     
+    // Add water plane if any part of chunk is below water level
+    let waterMesh = null;
+    let hasWater = false;
+    for (let i = 0; i < positions.length; i += 3) {
+      if (positions[i + 1] < this.waterLevel) { hasWater = true; break; }
+    }
+    if (hasWater) {
+      const waterGeo = new THREE.PlaneGeometry(this.chunkSize, this.chunkSize);
+      waterGeo.rotateX(-Math.PI / 2);
+      waterMesh = new THREE.Mesh(waterGeo, this.waterMaterial);
+      waterMesh.position.set(
+        worldOffsetX + this.chunkSize / 2,
+        this.waterLevel,
+        worldOffsetZ + this.chunkSize / 2
+      );
+      waterMesh.renderOrder = 1; // Render after terrain
+      this.scene.add(waterMesh);
+    }
+    
     // Add foliage (trees + rocks) to this chunk
     const foliageGroup = this._addFoliage(chunkX, chunkZ);
     if (foliageGroup) {
@@ -346,7 +377,7 @@ export class TerrainGenerator {
     }
     
     // Store chunk data
-    this.chunks.set(key, { mesh, geometry, foliageGroup });
+    this.chunks.set(key, { mesh, geometry, foliageGroup, waterMesh });
   }
   
   /**
@@ -365,6 +396,12 @@ export class TerrainGenerator {
       chunk.foliageGroup.traverse((child) => {
         if (child.geometry) child.geometry.dispose();
       });
+    }
+    
+    // Remove water
+    if (chunk.waterMesh) {
+      this.scene.remove(chunk.waterMesh);
+      chunk.waterMesh.geometry.dispose();
     }
     
     this.chunks.delete(key);
@@ -708,8 +745,13 @@ export class TerrainGenerator {
     for (const [key, chunk] of this.chunks) {
       this.scene.remove(chunk.mesh);
       chunk.geometry.dispose();
+      if (chunk.waterMesh) {
+        this.scene.remove(chunk.waterMesh);
+        chunk.waterMesh.geometry.dispose();
+      }
     }
     this.chunks.clear();
     this.terrainMaterial.dispose();
+    this.waterMaterial.dispose();
   }
 }
