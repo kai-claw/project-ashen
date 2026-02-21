@@ -310,8 +310,56 @@ export class VillageManager {
     door.position.set(0, 0.75, bodyRadius + 0.05);
     hut.add(door);
     
+    // Interior furniture
+    this._addHutFurniture(hut, bodyRadius);
+    
     hut.rotation.y = Math.random() * Math.PI * 2;
     group.add(hut);
+  }
+  
+  /**
+   * Add simple furniture inside a hut
+   */
+  _addHutFurniture(hut, radius) {
+    const woodMat = new THREE.MeshBasicMaterial({ color: 0x6b4226 });
+    const darkWoodMat = new THREE.MeshBasicMaterial({ color: 0x4a2f1a });
+    const barrelMat = new THREE.MeshBasicMaterial({ color: 0x5c3a1e });
+    
+    const innerR = radius * 0.6; // Keep furniture inside the walls
+    
+    // Table (center)
+    const tableGeo = new THREE.BoxGeometry(0.9, 0.05, 0.6);
+    const table = new THREE.Mesh(tableGeo, woodMat);
+    table.position.set(0, 0.7, 0);
+    hut.add(table);
+    // Table legs
+    const legGeo = new THREE.BoxGeometry(0.06, 0.65, 0.06);
+    for (const [lx, lz] of [[-0.38, -0.24], [0.38, -0.24], [-0.38, 0.24], [0.38, 0.24]]) {
+      const leg = new THREE.Mesh(legGeo, darkWoodMat);
+      leg.position.set(lx, 0.325, lz);
+      hut.add(leg);
+    }
+    
+    // Two chairs (small boxes)
+    const chairGeo = new THREE.BoxGeometry(0.3, 0.4, 0.3);
+    const chair1 = new THREE.Mesh(chairGeo, darkWoodMat);
+    chair1.position.set(-0.6, 0.2, 0);
+    hut.add(chair1);
+    const chair2 = new THREE.Mesh(chairGeo, darkWoodMat);
+    chair2.position.set(0.6, 0.2, 0);
+    hut.add(chair2);
+    
+    // Barrel (against wall)
+    const barrelGeo = new THREE.CylinderGeometry(0.25, 0.28, 0.6, 8);
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(innerR * 0.5, 0.3, -innerR * 0.7);
+    hut.add(barrel);
+    
+    // Shelf (tall thin box against wall)
+    const shelfGeo = new THREE.BoxGeometry(0.6, 1.2, 0.15);
+    const shelf = new THREE.Mesh(shelfGeo, woodMat);
+    shelf.position.set(-innerR * 0.6, 0.65, -innerR * 0.6);
+    hut.add(shelf);
   }
   
   /**
