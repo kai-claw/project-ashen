@@ -8,6 +8,7 @@ import { GameManager } from './systems/GameManager.js';
 import { Player } from './entities/Player.js';
 import { EnemyManager } from './entities/EnemyManager.js';
 import { World } from './world/World.js';
+import { CloudManager } from './world/CloudManager.js';
 import { InputManager } from './systems/InputManager.js';
 import { ItemManager } from './systems/ItemManager.js';
 import { LootManager } from './systems/LootManager.js';
@@ -218,6 +219,9 @@ document.addEventListener('keydown', initAudio);
 
 // --- World ---
 const world = new World(scene);
+
+// --- Sky Clouds (Phase 31) ---
+const cloudManager = new CloudManager(scene);
 
 // --- Items ---
 const itemManager = new ItemManager(scene, gameManager);
@@ -716,6 +720,11 @@ function animate() {
     // Update villages for infinite world
     if (world.villages && world.villages.update) {
       world.villages.update(player.mesh.position.x, player.mesh.position.z);
+    }
+    
+    // Update sky clouds (drift + wrap around player)
+    if (cloudManager) {
+      cloudManager.update(delta, player.mesh.position.x, player.mesh.position.z);
     }
     
     // Update ruins for infinite world
