@@ -51,6 +51,27 @@ export class TerrainGenerator {
     // Water level — terrain below this Y shows water
     this.waterLevel = -2;
     
+    // Ground paths — brown dirt strips connecting origin to landmarks
+    // Each path is an array of [x1,z1, x2,z2] line segments
+    this.pathSegments = [
+      // Origin (castle gate at ~0,30) → Ashen Spire (280, 320)
+      [0, 30,  60, 80],
+      [60, 80,  140, 160],
+      [140, 160,  220, 260],
+      [220, 260,  280, 320],
+      // Origin → Frosthollow Peak (-250, -380)
+      [0, -30,  -50, -80],
+      [-50, -80,  -120, -180],
+      [-120, -180,  -190, -290],
+      [-190, -290,  -250, -380],
+      // Origin → Shattered Gate (-320, 200)
+      [-20, 25,  -70, 60],
+      [-70, 60,  -150, 110],
+      [-150, 110,  -240, 160],
+      [-240, 160,  -320, 200],
+    ];
+    this.pathWidth = 3.0; // Half-width of path blend zone
+    
     // Shared material for all chunks
     this.terrainMaterial = this._createTerrainMaterial();
     
@@ -84,6 +105,26 @@ export class TerrainGenerator {
     
     // Scale to actual height
     return height * this.heightScale + this.baseHeight;
+  }
+  
+  /**
+   * Distance from point (px,pz) to nearest path segment. Returns 0..Infinity.
+   */
+  _distToPath(px, pz) {
+    let minDist = Infinity;
+    for (let i = 0; i < this.pathSegments.length; i++) {
+      const seg = this.pathSegments[i];
+      const ax = seg[0], az = seg[1], bx = seg[2], bz = seg[3];
+      // Project point onto segment, clamp t to [0,1]
+      const dx = bx - ax, dz = bz - az;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq === 0) continue;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / lenSq));
+      const cx = ax + t * dx, cz = az + t * dz;
+      const d = Math.sqrt((px - cx) * (px - cx) + (pz - cz) * (pz - cz));
+      if (d < minDist) minDist = d;
+    }
+    return minDist;
   }
   
   /**
@@ -318,6 +359,19 @@ export class TerrainGenerator {
         r = r + (0.35 - r) * meadow * 0.4;
         g = g + (0.55 - g) * meadow * 0.4;
         b = b + (0.20 - b) * meadow * 0.4;
+      }
+      
+      // Dirt path blending — brown strip near path lines
+      if (dist > this.castleRadius) {
+        const pathDist = this._distToPath(wx, wz);
+        if (pathDist < this.pathWidth * 2) {
+          // Smooth blend: fully brown at center, fading at edges
+          const pathBlend = 1 - Math.min(1, pathDist / (this.pathWidth * 2));
+          const pathR = 0.45, pathG = 0.35, pathB = 0.20;
+          r = r + (pathR - r) * pathBlend * 0.85;
+          g = g + (pathG - g) * pathBlend * 0.85;
+          b = b + (pathB - b) * pathBlend * 0.85;
+        }
       }
       
       // Micro-variation: subtle per-vertex noise to break uniformity
