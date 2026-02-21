@@ -10,6 +10,7 @@ import { EnemyManager } from './entities/EnemyManager.js';
 import { World } from './world/World.js';
 import { CloudManager } from './world/CloudManager.js';
 import { LandmarkManager } from './world/LandmarkManager.js';
+import { GrassManager } from './world/GrassManager.js';
 import { InputManager } from './systems/InputManager.js';
 import { ItemManager } from './systems/ItemManager.js';
 import { LootManager } from './systems/LootManager.js';
@@ -226,6 +227,9 @@ const cloudManager = new CloudManager(scene);
 
 // --- Distant Landmarks (Phase 31) ---
 const landmarkManager = new LandmarkManager(scene, world.terrain);
+
+// --- Grass Ground Detail (Phase 31) ---
+const grassManager = new GrassManager(scene, world.terrain);
 
 // --- Items ---
 const itemManager = new ItemManager(scene, gameManager);
@@ -729,6 +733,11 @@ function animate() {
     // Update sky clouds (drift + wrap around player)
     if (cloudManager) {
       cloudManager.update(delta, player.mesh.position.x, player.mesh.position.z);
+    }
+    
+    // Update near-player grass tufts
+    if (grassManager) {
+      grassManager.update(player.mesh.position.x, player.mesh.position.z);
     }
     
     // Update ruins for infinite world
