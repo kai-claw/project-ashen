@@ -112,7 +112,7 @@ export class Player {
     // Directions
     this.moveDir = new THREE.Vector3();
     this.dodgeDir = new THREE.Vector3();
-    this.facingAngle = 0;
+    this.facingAngle = Math.PI; // Face north (away from castle, into open world)
 
     // GLTF model state
     this.modelLoaded = false;
@@ -125,8 +125,9 @@ export class Player {
     // Position will be corrected by main.js IIFE using actual terrain height + 5
     // Per task spec: Use terrain height + 5 for safe spawn, or fallback y=50 if terrain not ready
     this.mesh = new THREE.Group();
-    // Initial Y=50 is safe fallback - IIFE will correct to terrain + 5 after terrain generates
-    this.mesh.position.set(0, 50, 5);
+    // Spawn just outside castle gate (gate at Z=25, facing north into open world)
+    // Y=50 is safe fallback — main.js safety loop corrects to actual terrain height
+    this.mesh.position.set(0, 50, 32);
 
     // Create fallback primitive mesh (visible while GLTF loads)
     this._createFallbackMesh();
