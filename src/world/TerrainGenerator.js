@@ -30,6 +30,9 @@ export class TerrainGenerator {
     this.seed = 12345;
     this.noise2D = createNoise2D(() => this.seed / 10000);
     
+    // Separate noise for biome moisture (different seed so it's independent of height)
+    this.moistureNoise = createNoise2D(() => (this.seed + 7777) / 10000);
+    
     // Noise octaves for natural terrain
     this.octaves = [
       { frequency: 0.003, amplitude: 1.0 },    // Large hills
@@ -244,16 +247,76 @@ export class TerrainGenerator {
     // Mark position buffer as needing GPU re-upload after height modification
     geometry.attributes.position.needsUpdate = true;
     
-    // Add vertex colors based on height for visual depth (MeshBasicMaterial has no shading)
+    // Biome-aware vertex colors (MeshBasicMaterial — lighting-independent)
+    // Uses height + moisture noise to blend between biome palettes
     const vertCount = positions.length / 3;
     const colors = new Float32Array(vertCount * 3);
     for (let i = 0; i < vertCount; i++) {
-      const h = positions[i * 3 + 1];  // Y = height
-      const t = Math.max(0, Math.min(1, (h + 5) / 30));  // Normalize height range
-      // Low = dark green (0.15, 0.35, 0.1), High = light green-brown (0.55, 0.65, 0.25)
-      colors[i * 3]     = 0.15 + t * 0.40;  // R
-      colors[i * 3 + 1] = 0.35 + t * 0.30;  // G
-      colors[i * 3 + 2] = 0.10 + t * 0.15;  // B
+      const wx = positions[i * 3] + worldOffsetX + this.chunkSize / 2;
+      const wz = positions[i * 3 + 2] + worldOffsetZ + this.chunkSize / 2;
+      const h = positions[i * 3 + 1]; // Y = height
+      
+      // Moisture: low-frequency noise → 0..1 (dry plains vs lush forest)
+      const moisture = (this.moistureNoise(wx * 0.005, wz * 0.005) + 1) * 0.5;
+      // Height normalized: -5..25 → 0..1
+      const ht = Math.max(0, Math.min(1, (h + 5) / 30));
+      // Distance from castle (for safe-meadow brightening)
+      const dist = Math.sqrt(wx * wx + wz * wz);
+      
+      let r, g, b;
+      
+      if (dist < this.castleRadius) {
+        // Castle courtyard — gray stone
+        r = 0.35; g = 0.33; b = 0.30;
+      } else if (ht > 0.75) {
+        // Rocky highlands — gray-brown, less vegetation
+        const rock = (ht - 0.75) / 0.25; // 0..1 within highland range
+        r = 0.40 + rock * 0.15;
+        g = 0.38 + rock * 0.08;
+        b = 0.30 + rock * 0.10;
+      } else if (moisture < 0.35) {
+        // Dry plains — yellow-brown grass
+        r = 0.50 + ht * 0.15;
+        g = 0.45 + ht * 0.10;
+        b = 0.20 + ht * 0.05;
+      } else if (moisture > 0.65) {
+        // Dense forest — dark rich green
+        r = 0.10 + ht * 0.12;
+        g = 0.28 + ht * 0.15;
+        b = 0.08 + ht * 0.06;
+      } else {
+        // Grassland — medium green (default, blends between biomes)
+        const blend = (moisture - 0.35) / 0.30; // 0..1 within grassland range
+        // Dry side
+        const dr = 0.45 + ht * 0.15;
+        const dg = 0.45 + ht * 0.10;
+        const db = 0.20 + ht * 0.05;
+        // Lush side
+        const lr = 0.12 + ht * 0.15;
+        const lg = 0.32 + ht * 0.18;
+        const lb = 0.10 + ht * 0.06;
+        r = dr + (lr - dr) * blend;
+        g = dg + (lg - dg) * blend;
+        b = db + (lb - db) * blend;
+      }
+      
+      // Near-castle meadow brightening (warm gentle green)
+      if (dist > this.castleRadius && dist < 80) {
+        const meadow = 1 - (dist - this.castleRadius) / (80 - this.castleRadius);
+        r = r + (0.35 - r) * meadow * 0.4;
+        g = g + (0.55 - g) * meadow * 0.4;
+        b = b + (0.20 - b) * meadow * 0.4;
+      }
+      
+      // Micro-variation: subtle per-vertex noise to break uniformity
+      const micro = this.noise2D(wx * 0.15, wz * 0.15) * 0.04;
+      r = Math.max(0, Math.min(1, r + micro));
+      g = Math.max(0, Math.min(1, g + micro * 0.7));
+      b = Math.max(0, Math.min(1, b + micro * 0.5));
+      
+      colors[i * 3]     = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     
