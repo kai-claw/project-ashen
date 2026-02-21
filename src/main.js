@@ -57,6 +57,9 @@ import { createMinimapManager, getMinimapManager } from './ui/MinimapManager.js'
 import { createFastTravelManager, getFastTravelManager } from './systems/FastTravelManager.js';
 import { createWorldMapUI, getWorldMapUI } from './ui/WorldMapUI.js';
 import { createDiscoveryManager, getDiscoveryManager } from './ui/DiscoveryManager.js';
+import { EnemyHealthBarManager } from './ui/EnemyHealthBarManager.js';
+import { DamageNumberManager } from './ui/DamageNumberManager.js';
+import { HitEffectManager } from './effects/HitEffectManager.js';
 import { GameTester } from './systems/GameTester.js';
 
 // Color grading + vignette shader for cinematic feel
@@ -321,6 +324,15 @@ spellCaster.setPlayer(player);
 spellCaster.setEnemyManager(enemyManager);
 spellCaster.particleManager = particleManager;
 spellCaster.audioManager = audioManager;
+
+// --- Phase 32: Combat Feedback Managers ---
+const enemyHealthBars = new EnemyHealthBarManager(camera);
+enemyHealthBars.setEnemyManager(enemyManager);
+
+const damageNumbers = new DamageNumberManager(camera);
+const hitEffects = new HitEffectManager(scene, camera);
+gameManager.damageNumbers = damageNumbers;
+gameManager.hitEffects = hitEffects;
 
 // --- Spell Visual Effects Manager ---
 const spellEffects = new SpellEffects(scene, particleManager);
@@ -950,6 +962,11 @@ function animate() {
   
   audioManager.updateListener();
   floatingText.update(delta);
+  
+  // Phase 32: Combat feedback
+  enemyHealthBars.update(delta, player.mesh.position);
+  damageNumbers.update(delta);
+  hitEffects.update(delta);
   
   // Phase 27: Minimap update
   if (minimapManager) {

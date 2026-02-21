@@ -536,12 +536,24 @@ export class EnemyManager {
         const dist = Math.sqrt(dx * dx + dz * dz);
         if (dist < player.activeAttack.range && enemy.health > 0) {
           // Pass player position for recoil direction
+          const attackDamage = player.activeAttack.damage;
           const result = enemy.takeDamage(
-            player.activeAttack.damage,
+            attackDamage,
             player.activeAttack.postureDmg,
             player.mesh.position // attackerPos for recoil
           );
           player.hitThisSwing = true;
+          
+          // Phase 32: Damage numbers
+          if (this.gm.damageNumbers) {
+            const isCrit = player.activeAttack.isHeavy;
+            this.gm.damageNumbers.spawn(attackDamage, enemy.mesh.position, isCrit ? 'critical' : 'normal');
+          }
+          
+          // Phase 32: Hit effects
+          if (this.gm.hitEffects) {
+            this.gm.hitEffects.spawnBurst(enemy.mesh.position);
+          }
           
           // HITSTOP - brief freeze on impact
           if (player.activeAttack.isHeavy) {
@@ -616,8 +628,9 @@ export class EnemyManager {
             continue; // Skip damage, attack parried
           }
           
+          const enemyDmg = enemy.activeAttack.damage;
           const result = this.gm.takeDamage(
-            enemy.activeAttack.damage,
+            enemyDmg,
             'physical',
             enemy.activeAttack.postureDmg,
             player.isBlocking
@@ -625,9 +638,20 @@ export class EnemyManager {
           enemy.hitThisSwing = true;
           player.flashDamage();
           
+          // Phase 32: Damage numbers on player
+          if (this.gm.damageNumbers) {
+            this.gm.damageNumbers.spawn(enemyDmg, player.mesh.position, 'player-hit');
+          }
+          
+          // Phase 32: Hit effects on player + screen shake
+          if (this.gm.hitEffects) {
+            this.gm.hitEffects.spawnBurst(player.mesh.position);
+            this.gm.hitEffects.screenShake();
+          }
+          
           // HUD DAMAGE VIGNETTE - screen flash feedback
           if (this.gm.hud) {
-            const intensity = enemy.activeAttack.damage / 30; // Scale with damage
+            const intensity = enemyDmg / 30; // Scale with damage
             this.gm.hud.flashDamage(Math.min(1.0, intensity));
           }
           
@@ -672,12 +696,21 @@ export class EnemyManager {
         const dist = Math.sqrt(dx * dx + dz * dz);
         // Boss has larger hitbox
         if (dist < player.activeAttack.range + 1.0 && this.boss.health > 0) {
+          const bossDmg = player.activeAttack.damage;
           const result = this.boss.takeDamage(
-            player.activeAttack.damage,
+            bossDmg,
             player.activeAttack.postureDmg,
             player.mesh.position // attackerPos for recoil
           );
           player.hitThisSwing = true;
+          
+          // Phase 32: Damage numbers + hit effects on boss
+          if (this.gm.damageNumbers) {
+            this.gm.damageNumbers.spawn(bossDmg, this.boss.mesh.position, player.activeAttack.isHeavy ? 'critical' : 'normal');
+          }
+          if (this.gm.hitEffects) {
+            this.gm.hitEffects.spawnBurst(this.boss.mesh.position);
+          }
           
           // HITSTOP - boss hits feel extra impactful
           this.gm.hitstopHeavy();
@@ -739,8 +772,9 @@ export class EnemyManager {
             
             // Continue instead of taking damage
           } else {
+            const bossHitDmg = this.boss.activeAttack.damage;
             const result = this.gm.takeDamage(
-              this.boss.activeAttack.damage,
+              bossHitDmg,
               'physical',
               this.boss.activeAttack.postureDmg,
               player.isBlocking
@@ -748,9 +782,18 @@ export class EnemyManager {
             this.boss.hitThisSwing = true;
             player.flashDamage();
           
+            // Phase 32: Damage numbers + hit effects for boss hits
+            if (this.gm.damageNumbers) {
+              this.gm.damageNumbers.spawn(bossHitDmg, player.mesh.position, 'player-hit');
+            }
+            if (this.gm.hitEffects) {
+              this.gm.hitEffects.spawnBurst(player.mesh.position);
+              this.gm.hitEffects.screenShake();
+            }
+          
             // HUD DAMAGE VIGNETTE - boss hits feel brutal
             if (this.gm.hud) {
-              const intensity = this.boss.activeAttack.damage / 25; // Boss hits are more intense
+              const intensity = bossHitDmg / 25; // Boss hits are more intense
               this.gm.hud.flashDamage(Math.min(1.0, intensity));
             }
             
