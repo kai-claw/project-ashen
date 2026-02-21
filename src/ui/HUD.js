@@ -4,8 +4,6 @@ export class HUD {
     this.healthBar = document.getElementById('health-bar');
     this.staminaBar = document.getElementById('stamina-bar');
     this.postureBar = document.getElementById('posture-bar');
-    this.remnantLabel = document.getElementById('remnant');
-    this.lostRemnantLabel = document.getElementById('lost-remnant');
     
     // Boss UI elements
     this.bossContainer = document.getElementById('boss-container');
@@ -39,8 +37,11 @@ export class HUD {
     // Create ability bar UI
     this._createAbilityBar();
     
-    // Create mana bar UI
+    // Create mana bar UI (positioned below HUD bars)
     this._createManaBar();
+    
+    // Create remnant labels below mana bar
+    this._createRemnantLabels();
     
     // Create spell hotbar UI
     this._createSpellHotbar();
@@ -311,12 +312,13 @@ export class HUD {
   }
   
   _createManaBar() {
-    // Mana bar container - positioned below health/stamina bars
+    // Mana bar container - positioned below health/stamina/posture bars
+    // HUD top=20, HP=24, Stamina=20, Posture=16 → bars end at ~80px, add 4px gap
     this.manaContainer = document.createElement('div');
     this.manaContainer.id = 'mana-container';
     this.manaContainer.style.cssText = `
       position: fixed;
-      top: 95px;
+      top: 84px;
       left: 20px;
       width: 200px;
       display: flex;
@@ -376,6 +378,42 @@ export class HUD {
     this.manaContainer.appendChild(this.manaText);
     
     document.body.appendChild(this.manaContainer);
+  }
+  
+  _createRemnantLabels() {
+    // Remnant label - positioned below mana bar (mana top=84, label~12+bar~12+text~12 = ~36px → ~120px)
+    this.remnantContainer = document.createElement('div');
+    this.remnantContainer.style.cssText = `
+      position: fixed;
+      top: 122px;
+      left: 20px;
+      z-index: 100;
+      pointer-events: none;
+    `;
+    
+    this.remnantLabel = document.createElement('div');
+    this.remnantLabel.id = 'remnant';
+    this.remnantLabel.style.cssText = `
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: #d4af37;
+      text-shadow: 0 0 8px rgba(212,175,55,0.4);
+    `;
+    this.remnantLabel.textContent = 'Remnant: 0';
+    this.remnantContainer.appendChild(this.remnantLabel);
+    
+    this.lostRemnantLabel = document.createElement('div');
+    this.lostRemnantLabel.id = 'lost-remnant';
+    this.lostRemnantLabel.style.cssText = `
+      display: none;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #aa3333;
+      margin-top: 4px;
+    `;
+    this.remnantContainer.appendChild(this.lostRemnantLabel);
+    
+    document.body.appendChild(this.remnantContainer);
   }
   
   _createSpellHotbar() {

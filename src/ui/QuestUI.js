@@ -533,7 +533,7 @@ class QuestUI {
       /* ===== HUD TRACKER ===== */
       #quest-hud-tracker {
         position: fixed;
-        top: 100px;
+        top: 178px;
         right: 10px;
         width: 260px;
         background: rgba(0,0,0,0.7);

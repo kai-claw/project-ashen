@@ -88,7 +88,7 @@
       font-size: 11px; text-shadow: 1px 1px 2px #000;
     }
     #remnant {
-      margin-top: 8px; font-size: 14px;
+      font-size: 14px;
       color: #d4af37; text-shadow: 0 0 8px rgba(212,175,55,0.4);
     }
     #death-screen {
@@ -434,12 +434,8 @@
       <div class="bar-fill posture-fill" id="posture-bar" style="width: 0%"></div>
       <div class="bar-label" style="line-height:12px; font-size:9px">POSTURE</div>
     </div>
-    <div class="bar-container" style="width: 220px; height: 14px; margin-top: 8px;">
-      <div class="bar-fill mana-fill" id="mana-bar" style="width: 100%"></div>
-      <div class="bar-label" style="line-height:14px; font-size:10px">MANA</div>
-    </div>
-    <div id="remnant">Remnant: 0</div>
-    <div id="lost-remnant" style="display:none; font-size:12px; color:#aa3333; margin-top:4px;">Lost: 0</div>
+    <!-- Mana bar is created dynamically by HUD.js _createManaBar() -->
+    <!-- Remnant labels positioned by HUD.js _createRemnantLabels() -->
   </div>
   <div id="crosshair"></div>
   <div id="lock-on-indicator"></div>
