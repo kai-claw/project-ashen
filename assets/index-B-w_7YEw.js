@@ -7718,7 +7718,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Kc(t.i
         border: 2px solid #4a4a6a;
         border-radius: 12px;
         box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 60px rgba(100,100,150,0.1);
-        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-family: 'Cinzel', serif;
         color: #e0e0e0;
         z-index: 2000;
         display: none;
@@ -8163,7 +8163,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Kc(t.i
         background: rgba(0,0,0,0.7);
         border: 1px solid #444;
         border-radius: 8px;
-        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-family: 'Cinzel', serif;
         color: #e0e0e0;
         font-size: 12px;
         z-index: 500;
@@ -8265,7 +8265,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Kc(t.i
         box-shadow: 0 0 60px rgba(68,255,68,0.4);
         padding: 30px;
         text-align: center;
-        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-family: 'Cinzel', serif;
         z-index: 3000;
         opacity: 0;
         pointer-events: none;
@@ -8353,7 +8353,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Kc(t.i
         border-radius: 8px;
         border-left: 4px solid #ffd700;
         box-shadow: 0 5px 20px rgba(0,0,0,0.5);
-        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-family: 'Cinzel', serif;
         animation: notifSlideIn 0.3s ease-out;
         pointer-events: auto;
       }
