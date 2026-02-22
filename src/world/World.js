@@ -507,6 +507,31 @@ export class World {
     gateArch.castShadow = true;
     this.scene.add(gateArch);
     
+    // Banners on walls — alternate colors for visual interest
+    const bannerColors = [0x8B0000, 0xDAA520, 0x1B3D6E, 0x8B0000, 0xDAA520, 0x1B3D6E];
+    const bannerGeo = new THREE.PlaneGeometry(1, 3);
+    const bannerPositions = [
+      // West wall (inside face)
+      { x: -halfW + WALL_THICKNESS + 0.1, y: WALL_HEIGHT * 0.6, z: -8, ry: Math.PI / 2 },
+      { x: -halfW + WALL_THICKNESS + 0.1, y: WALL_HEIGHT * 0.6, z: 8, ry: Math.PI / 2 },
+      // East wall (inside face)
+      { x: halfW - WALL_THICKNESS - 0.1, y: WALL_HEIGHT * 0.6, z: -8, ry: -Math.PI / 2 },
+      { x: halfW - WALL_THICKNESS - 0.1, y: WALL_HEIGHT * 0.6, z: 8, ry: -Math.PI / 2 },
+      // South wall (inside face)
+      { x: -8, y: WALL_HEIGHT * 0.6, z: -halfD + WALL_THICKNESS + 0.1, ry: 0 },
+      { x: 8, y: WALL_HEIGHT * 0.6, z: -halfD + WALL_THICKNESS + 0.1, ry: 0 },
+    ];
+    for (let i = 0; i < bannerPositions.length; i++) {
+      const bp = bannerPositions[i];
+      const bannerMat = new THREE.MeshBasicMaterial({ color: bannerColors[i], side: THREE.DoubleSide });
+      const banner = new THREE.Mesh(bannerGeo, bannerMat);
+      banner.position.set(bp.x, bp.y, bp.z);
+      banner.rotation.y = bp.ry;
+      // Slight tilt for wind effect
+      banner.rotation.z = (Math.random() - 0.5) * 0.1;
+      this.scene.add(banner);
+    }
+    
     console.log('[World] Starting castle created');
   }
   
