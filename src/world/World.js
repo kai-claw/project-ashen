@@ -45,6 +45,7 @@ export class World {
     this.terrain = new TerrainGenerator(scene);
     this._createStartingCastle();
     this._createGateRoadAndExterior();
+    this._createHorizonMountains();
     this.foliage = new FoliageManager(scene, this.terrain);
     this.villages = new VillageManager(scene, this.terrain);
     this.npcManager = new NPCManager(scene, this.terrain, this.villages);
@@ -814,6 +815,48 @@ export class World {
     this.scene.add(board2);
     
     console.log('[World] Gate road, lamp posts, and exterior decorations created (Phase 38)');
+  }
+  
+  // ========================================
+  // HORIZON MOUNTAINS (Phase 39)
+  // ========================================
+  
+  _createHorizonMountains() {
+    const mountainMat = new THREE.MeshBasicMaterial({
+      color: 0x2a2a44,
+      side: THREE.DoubleSide,
+    });
+    const mountainCount = 10;
+    const radius = 380;
+    
+    for (let i = 0; i < mountainCount; i++) {
+      const angle = (i / mountainCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+      const cx = Math.cos(angle) * radius;
+      const cz = Math.sin(angle) * radius;
+      const baseY = this.terrain.getTerrainHeight(cx, cz);
+      
+      const peakHeight = 40 + Math.random() * 40; // 40-80
+      const baseWidth = 60 + Math.random() * 50;  // 60-110
+      
+      // Triangular BufferGeometry — 3 vertices: base-left, peak, base-right
+      const geo = new THREE.BufferGeometry();
+      // Perpendicular to radius for base spread
+      const perpX = -Math.sin(angle);
+      const perpZ = Math.cos(angle);
+      
+      const vertices = new Float32Array([
+        cx + perpX * baseWidth / 2, baseY, cz + perpZ * baseWidth / 2,   // base-left
+        cx, baseY + peakHeight, cz,                                        // peak
+        cx - perpX * baseWidth / 2, baseY, cz - perpZ * baseWidth / 2,   // base-right
+      ]);
+      geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      geo.computeVertexNormals();
+      
+      const mountain = new THREE.Mesh(geo, mountainMat);
+      this.scene.add(mountain);
+    }
+    
+    console.log(`[World] ${mountainCount} horizon mountain silhouettes created (Phase 39)`);
   }
   
   _createBonfire(x, y, z) {

@@ -29,7 +29,7 @@ const PHASE_COLORS = {
     moon: new THREE.Color(0x2244aa),            // Fading moon
     sky: new THREE.Color(0xff9966),             // Orange-pink sky
     fog: new THREE.Color(0xaa6644),             // Warm fog
-    fogDensity: 0.015,
+    fogDensity: 0.004,                          // Reduced from 0.015 (Phase 39: deeper view)
     ambientIntensity: 0.4,
     sunIntensity: 0.6,
     moonIntensity: 0.1
@@ -40,7 +40,7 @@ const PHASE_COLORS = {
     moon: new THREE.Color(0x000000),            // No moon
     sky: new THREE.Color(0x87ceeb),             // Sky blue
     fog: new THREE.Color(0x99bb88),             // Warm green-gray fog (was 0xaabbcc blue → teal bleed)
-    fogDensity: 0.002,                          // Very gentle — distance haze only
+    fogDensity: 0.0012,                         // Reduced from 0.002 (Phase 39: deeper view)
     ambientIntensity: 0.6,
     sunIntensity: 1.2,
     moonIntensity: 0
@@ -172,24 +172,25 @@ export class DayNightLighting {
    * Create sun and moon visual meshes
    */
   createCelestialBodies() {
-    // Sun mesh - glowing sphere
-    const sunGeom = new THREE.SphereGeometry(4, 16, 16);
+    // Sun mesh - larger glowing sphere (Phase 39: enlarged for visibility)
+    const sunGeom = new THREE.SphereGeometry(8, 16, 16);
     const sunMat = new THREE.MeshBasicMaterial({
-      color: 0xffdd88,
+      color: 0xFFDD88,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.95
     });
     this.sunMesh = new THREE.Mesh(sunGeom, sunMat);
     this.sunMesh.position.set(50, 80, 30);
     this.scene.add(this.sunMesh);
     
-    // Sun glow (larger, more transparent)
-    const sunGlowGeom = new THREE.SphereGeometry(8, 16, 16);
+    // Sun glow halo (Phase 39: larger, warm golden)
+    const sunGlowGeom = new THREE.SphereGeometry(20, 16, 16);
     const sunGlowMat = new THREE.MeshBasicMaterial({
-      color: 0xffaa44,
+      color: 0xFFEECC,
       transparent: true,
       opacity: 0.3,
-      side: THREE.BackSide
+      side: THREE.BackSide,
+      depthWrite: false,
     });
     this.sunGlow = new THREE.Mesh(sunGlowGeom, sunGlowMat);
     this.sunMesh.add(this.sunGlow);

@@ -10,26 +10,26 @@ export class CloudManager {
     this.scene = scene;
     this.clouds = [];
     
-    // Cloud field parameters
-    this.cloudCount = 18;
-    this.minY = 180;
-    this.maxY = 280;
+    // Cloud field parameters (Phase 39: lower altitude, more count, higher opacity)
+    this.cloudCount = 25;
+    this.minY = 60;
+    this.maxY = 120;
     this.fieldRadius = 400;   // Clouds spread around player
     this.driftSpeed = 0.3;    // Base drift speed (units/sec)
     
-    // Shared materials (a few opacity variants for depth)
+    // Shared materials — warm dawn tint (Phase 39), higher opacity
     this.materials = [
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
-      new THREE.MeshBasicMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
-      new THREE.MeshBasicMaterial({ color: 0xf8f8ff, transparent: true, opacity: 0.65, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xFFDDCC, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xFFEEDD, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xFFE8D8, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }),
     ];
     
-    // Shared geometries (a few sizes)
+    // Shared geometries — slightly larger (Phase 39)
     this.geometries = [
-      new THREE.PlaneGeometry(40, 18),
-      new THREE.PlaneGeometry(55, 22),
-      new THREE.PlaneGeometry(30, 14),
+      new THREE.PlaneGeometry(50, 22),
       new THREE.PlaneGeometry(65, 28),
+      new THREE.PlaneGeometry(38, 16),
+      new THREE.PlaneGeometry(75, 32),
     ];
     
     this._createClouds();
