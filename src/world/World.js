@@ -369,25 +369,40 @@ export class World {
     const TOWER_HEIGHT = 5; // Reduced from 12 to match lower walls
     const GATE_WIDTH = 6;
     
-    // Castle materials
+    // Castle materials — warm sandstone tones
     const stoneMat = new THREE.MeshBasicMaterial({
-      color: 0x555555,
+      color: 0x8B7355,
     });
     
     const darkStoneMat = new THREE.MeshBasicMaterial({
-      color: 0x444444,
+      color: 0x6B5B45,
     });
     
-    // Castle floor (flat stone courtyard)
+    // Castle floor (warm stone courtyard)
     const floorGeo = new THREE.PlaneGeometry(CASTLE_WIDTH - 4, CASTLE_DEPTH - 4);
     const floorMat = new THREE.MeshBasicMaterial({
-      color: 0x3a3a40,
+      color: 0x9B8B6E,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0.05;
     floor.receiveShadow = true;
     this.scene.add(floor);
+    
+    // Red carpets near bonfire
+    const carpetMat1 = new THREE.MeshBasicMaterial({ color: 0x8B0000, side: THREE.DoubleSide });
+    const carpetMat2 = new THREE.MeshBasicMaterial({ color: 0x1B1B6E, side: THREE.DoubleSide });
+    const carpetGeo1 = new THREE.PlaneGeometry(3, 6);
+    const carpet1 = new THREE.Mesh(carpetGeo1, carpetMat1);
+    carpet1.rotation.x = -Math.PI / 2;
+    carpet1.position.set(-4, 0.06, -5);
+    this.scene.add(carpet1);
+    const carpetGeo2 = new THREE.PlaneGeometry(2.5, 4);
+    const carpet2 = new THREE.Mesh(carpetGeo2, carpetMat2);
+    carpet2.rotation.x = -Math.PI / 2;
+    carpet2.position.set(5, 0.06, -3);
+    carpet2.rotation.z = 0.3;
+    this.scene.add(carpet2);
     
     // Helper to create walls
     const createWall = (x, y, z, width, height, depth) => {
