@@ -61,6 +61,8 @@ import { EnemyHealthBarManager } from './ui/EnemyHealthBarManager.js';
 import { DamageNumberManager } from './ui/DamageNumberManager.js';
 import { HitEffectManager } from './effects/HitEffectManager.js';
 import { NPCMarkerManager } from './ui/NPCMarkerManager.js';
+import { FireParticleManager } from './effects/FireParticleManager.js';
+import { AmbientParticleManager } from './effects/AmbientParticleManager.js';
 import { GameTester } from './systems/GameTester.js';
 
 // Color grading + vignette shader for cinematic feel
@@ -234,6 +236,11 @@ const landmarkManager = new LandmarkManager(scene, world.terrain);
 
 // --- Grass Ground Detail (Phase 31) ---
 const grassManager = new GrassManager(scene, world.terrain);
+
+// --- Phase 35: Fire Particles & Ambient Effects ---
+const fireParticleManager = new FireParticleManager(scene);
+fireParticleManager.init(world.bonfirePosition, world._torchPositions || []);
+const ambientParticleManager = new AmbientParticleManager(scene, world.terrain);
 
 // --- Items ---
 const itemManager = new ItemManager(scene, gameManager);
@@ -790,6 +797,16 @@ function animate() {
     // Update near-player grass tufts
     if (grassManager) {
       grassManager.update(player.mesh.position.x, player.mesh.position.z);
+    }
+    
+    // Phase 35: Fire particles + ambient effects + water animation + wind sway
+    if (fireParticleManager) fireParticleManager.update(delta);
+    if (ambientParticleManager) ambientParticleManager.update(delta, player.mesh.position.x, player.mesh.position.z);
+    {
+      const elapsed = clock.elapsedTime;
+      if (world.terrain && world.terrain.updateWater) world.terrain.updateWater(elapsed);
+      if (world.foliage && world.foliage.updateWind) world.foliage.updateWind(elapsed);
+      if (grassManager && grassManager.updateWind) grassManager.updateWind(elapsed);
     }
     
     // Update ruins for infinite world

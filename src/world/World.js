@@ -28,6 +28,9 @@ export class World {
     // Player spawn/checkpoint
     this.bonfirePosition = new THREE.Vector3(0, 0, 0);
     
+    // Track torch positions for fire particle effects
+    this._torchPositions = [];
+    
     // Boss arena state (placeholder for future bosses)
     this.bossArena = {
       active: false,
@@ -646,6 +649,10 @@ export class World {
     }
     
     this.scene.add(group);
+    
+    // Track torch position for fire particle effects
+    this._torchPositions.push(new THREE.Vector3(x, y, z));
+    
     return group;
   }
   

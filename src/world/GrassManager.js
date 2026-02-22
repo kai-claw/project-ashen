@@ -117,6 +117,24 @@ export class GrassManager {
   }
   
   /**
+   * Wind sway for grass tufts (Phase 35).
+   * Faster oscillation than trees, with position-based phase offset.
+   * Call every frame from game loop.
+   * @param {number} time - elapsed time in seconds
+   */
+  updateWind(time) {
+    for (let i = 0; i < this.pool.length; i++) {
+      const mesh = this.pool[i];
+      if (!mesh.visible) continue;
+      // Phase offset based on position for organic feel
+      const phase = mesh.position.x * 1.1 + mesh.position.z * 0.7;
+      // Amplitude 0.05-0.08 range, faster than trees
+      mesh.rotation.z = Math.sin(time * 2.5 + phase) * 0.06
+                       + Math.sin(time * 3.8 + phase * 0.5) * 0.02;
+    }
+  }
+  
+  /**
    * Simple deterministic integer hash from grid coords
    */
   _hash(x, z) {

@@ -809,6 +809,23 @@ export class TerrainGenerator {
   }
   
   /**
+   * Animate water color (call from game loop with elapsed time).
+   * Cycles between blue shades using sin(time) for a gentle shimmer.
+   * @param {number} time - elapsed time in seconds
+   */
+  updateWater(time) {
+    // Gentle color oscillation between deeper and lighter blue
+    const t = Math.sin(time * 0.8) * 0.5 + 0.5;   // 0..1
+    const t2 = Math.sin(time * 1.3 + 1.0) * 0.5 + 0.5;
+    const r = 0.10 + t * 0.08;       // 0.10 - 0.18
+    const g = 0.35 + t2 * 0.12;      // 0.35 - 0.47
+    const b = 0.60 + t * 0.10;       // 0.60 - 0.70
+    this.waterMaterial.color.setRGB(r, g, b);
+    // Subtle opacity pulse
+    this.waterMaterial.opacity = 0.50 + Math.sin(time * 0.5) * 0.08;
+  }
+  
+  /**
    * Cleanup
    */
   dispose() {

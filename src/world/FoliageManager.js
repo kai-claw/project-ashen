@@ -41,6 +41,9 @@ export class FoliageManager {
     this.lastPlayerChunkX = null;
     this.lastPlayerChunkZ = null;
     
+    // Track foliage InstancedMesh refs for wind sway animation (Phase 35)
+    this._foliageMeshes = []; // { mesh, chunkKey, phaseOffset }
+    
     // Initial generation around origin
     this.update(0, 0);
     
@@ -314,6 +317,10 @@ export class FoliageManager {
       this.scene.add(oakFoliage);
       
       chunkData.meshes.push(oakTrunks, oakFoliage);
+      
+      // Track foliage mesh for wind sway (Phase 35)
+      const oakPhase = oakTrees[0] ? (oakTrees[0].x * 0.7 + oakTrees[0].z * 1.3) : 0;
+      this._foliageMeshes.push({ mesh: oakFoliage, chunkKey: null, phaseOffset: oakPhase });
     }
     
     // Pine trees
@@ -350,6 +357,10 @@ export class FoliageManager {
       this.scene.add(pineFoliage);
       
       chunkData.meshes.push(pineTrunks, pineFoliage);
+      
+      // Track foliage mesh for wind sway (Phase 35)
+      const pinePhase = pineTrees[0] ? (pineTrees[0].x * 0.9 + pineTrees[0].z * 0.6) : 0;
+      this._foliageMeshes.push({ mesh: pineFoliage, chunkKey: null, phaseOffset: pinePhase });
     }
     
     chunkData.trees = positions;
@@ -475,6 +486,9 @@ export class FoliageManager {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
       // Don't dispose shared materials
+      
+      // Remove from wind-sway tracking (Phase 35)
+      this._foliageMeshes = this._foliageMeshes.filter(f => f.mesh !== mesh);
     }
     
     // Remove colliders from global list
@@ -487,6 +501,20 @@ export class FoliageManager {
     });
     
     this.chunks.delete(key);
+  }
+  
+  /**
+   * Wind sway animation for tree canopies (Phase 35).
+   * Apply a gentle rotation.z oscillation to foliage InstancedMesh groups.
+   * Call every frame from game loop.
+   * @param {number} time - elapsed time in seconds
+   */
+  updateWind(time) {
+    for (let i = 0; i < this._foliageMeshes.length; i++) {
+      const entry = this._foliageMeshes[i];
+      // Gentle sway: sin wave with per-chunk phase offset, amplitude 0.03
+      entry.mesh.rotation.z = Math.sin(time * 1.2 + entry.phaseOffset) * 0.03;
+    }
   }
   
   // ========================================
