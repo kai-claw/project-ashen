@@ -319,35 +319,51 @@ export class TerrainGenerator {
       let r, g, b;
       
       if (dist < this.castleRadius) {
-        // Castle courtyard — gray stone
-        r = 0.35; g = 0.33; b = 0.30;
-      } else if (ht > 0.75) {
-        // Rocky highlands — gray-brown, less vegetation
-        const rock = (ht - 0.75) / 0.25; // 0..1 within highland range
-        r = 0.40 + rock * 0.15;
-        g = 0.38 + rock * 0.08;
-        b = 0.30 + rock * 0.10;
+        // Castle courtyard — warm stone
+        r = 0.42; g = 0.38; b = 0.30;
+      } else if (ht > 0.8) {
+        // Mountain peaks — golden-amber highlights (fantasy feel)
+        const peak = (ht - 0.8) / 0.2;
+        r = 0.55 + peak * 0.20;
+        g = 0.45 + peak * 0.12;
+        b = 0.25 + peak * 0.05;
+      } else if (ht > 0.65) {
+        // Highland transition — golden-brown with sparse vegetation
+        const highland = (ht - 0.65) / 0.15;
+        r = 0.38 + highland * 0.17;
+        g = 0.40 + highland * 0.05;
+        b = 0.22 + highland * 0.03;
+      } else if (ht < 0.12) {
+        // Low valleys near water — sandy tan blending into green
+        const shore = ht / 0.12;
+        // Sandy near water level
+        const sr = 0.60, sg = 0.52, sb = 0.35;
+        // Transition to green
+        const vr = 0.18, vg = 0.35, vb = 0.12;
+        r = sr + (vr - sr) * shore;
+        g = sg + (vg - sg) * shore;
+        b = sb + (vb - sb) * shore;
       } else if (moisture < 0.35) {
-        // Dry plains — yellow-brown grass
-        r = 0.50 + ht * 0.15;
-        g = 0.45 + ht * 0.10;
-        b = 0.20 + ht * 0.05;
+        // Dry plains — warm amber-gold grass
+        r = 0.55 + ht * 0.12;
+        g = 0.48 + ht * 0.08;
+        b = 0.22 + ht * 0.04;
       } else if (moisture > 0.65) {
-        // Dense forest — dark rich green
-        r = 0.10 + ht * 0.12;
-        g = 0.28 + ht * 0.15;
-        b = 0.08 + ht * 0.06;
+        // Dense forest — darker richer green
+        r = 0.08 + ht * 0.10;
+        g = 0.25 + ht * 0.18;
+        b = 0.06 + ht * 0.05;
       } else {
-        // Grassland — medium green (default, blends between biomes)
-        const blend = (moisture - 0.35) / 0.30; // 0..1 within grassland range
-        // Dry side
-        const dr = 0.45 + ht * 0.15;
-        const dg = 0.45 + ht * 0.10;
-        const db = 0.20 + ht * 0.05;
-        // Lush side
-        const lr = 0.12 + ht * 0.15;
-        const lg = 0.32 + ht * 0.18;
-        const lb = 0.10 + ht * 0.06;
+        // Grassland — medium green with warmth
+        const blend = (moisture - 0.35) / 0.30;
+        // Dry side (warmer, golden-green)
+        const dr = 0.48 + ht * 0.12;
+        const dg = 0.48 + ht * 0.08;
+        const db = 0.22 + ht * 0.04;
+        // Lush side (richer green)
+        const lr = 0.10 + ht * 0.12;
+        const lg = 0.30 + ht * 0.20;
+        const lb = 0.08 + ht * 0.05;
         r = dr + (lr - dr) * blend;
         g = dg + (lg - dg) * blend;
         b = db + (lb - db) * blend;
