@@ -30,7 +30,7 @@ export class TimeManager {
     this.scene = scene;
     
     // Time state
-    this.currentHour = 10;        // Start at 10 AM (nice daytime start)
+    this.currentHour = 6;         // Start at 6 AM (dawn/golden hour for warm sky)
     this.currentMinute = 0;       // Game minutes (0-59)
     this.currentDay = 1;          // Day counter
     this.dayPhase = DAY_PHASES.DAY;

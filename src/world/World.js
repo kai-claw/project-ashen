@@ -44,6 +44,7 @@ export class World {
     // scene.background (managed by DayNightLighting) already provides sky color.
     this.terrain = new TerrainGenerator(scene);
     this._createStartingCastle();
+    this._createGateRoadAndExterior();
     this.foliage = new FoliageManager(scene, this.terrain);
     this.villages = new VillageManager(scene, this.terrain);
     this.npcManager = new NPCManager(scene, this.terrain, this.villages);
@@ -696,6 +697,123 @@ export class World {
     });
     
     console.log('[World] Starting castle created (Phase 37: merlons, gate pillars, props, shields)');
+  }
+  
+  // ========================================
+  // GATE ROAD & EXTERIOR (Phase 38)
+  // ========================================
+  
+  _createGateRoadAndExterior() {
+    const halfD = 25; // CASTLE_DEPTH / 2
+    const roadStartZ = halfD + 2;
+    
+    // === STONE ROAD FROM GATE (8 segments) ===
+    const roadTex = TextureFactory.createCobblestoneTexture(256, 256);
+    const roadMat = new THREE.MeshBasicMaterial({ color: 0x8A7A65, map: roadTex });
+    const borderMat = new THREE.MeshBasicMaterial({ color: 0x4A3A2A });
+    const segLen = 10;
+    
+    for (let i = 0; i < 8; i++) {
+      const z = roadStartZ + i * segLen + segLen / 2;
+      const y = this.terrain.getTerrainHeight(0, z) + 0.05;
+      
+      // Main road surface
+      const roadGeo = new THREE.PlaneGeometry(6, segLen);
+      const road = new THREE.Mesh(roadGeo, roadMat);
+      road.rotation.x = -Math.PI / 2;
+      road.position.set(0, y, z);
+      this.scene.add(road);
+      
+      // Dark border strips
+      const borderGeo = new THREE.PlaneGeometry(0.3, segLen);
+      const borderL = new THREE.Mesh(borderGeo, borderMat);
+      borderL.rotation.x = -Math.PI / 2;
+      borderL.position.set(-3.15, y + 0.01, z);
+      this.scene.add(borderL);
+      const borderR = new THREE.Mesh(borderGeo, borderMat);
+      borderR.rotation.x = -Math.PI / 2;
+      borderR.position.set(3.15, y + 0.01, z);
+      this.scene.add(borderR);
+    }
+    
+    // === ROADSIDE LAMP POSTS (6 posts, alternating sides) ===
+    const poleMat = new THREE.MeshBasicMaterial({ color: 0x444444 });
+    const lanternMat = new THREE.MeshBasicMaterial({ color: 0xDDAA33 });
+    const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 3, 6);
+    const lanternGeo = new THREE.BoxGeometry(0.4, 0.3, 0.4);
+    
+    for (let li = 0; li < 6; li++) {
+      const lz = roadStartZ + 5 + li * 15;
+      const lx = (li % 2 === 0) ? 4 : -4;
+      const ly = this.terrain.getTerrainHeight(lx, lz);
+      
+      // Pole
+      const pole = new THREE.Mesh(poleGeo, poleMat);
+      pole.position.set(lx, ly + 1.5, lz);
+      this.scene.add(pole);
+      
+      // Lantern
+      const lantern = new THREE.Mesh(lanternGeo, lanternMat);
+      lantern.position.set(lx, ly + 3.15, lz);
+      this.scene.add(lantern);
+      
+      // Warm glow
+      const lampLight = new THREE.PointLight(0xff9944, 1.5, 12);
+      lampLight.position.set(lx, ly + 3.2, lz);
+      this.scene.add(lampLight);
+    }
+    
+    // === GATE AREA DECORATION ===
+    const stoneMat = new THREE.MeshBasicMaterial({ color: 0x8B7355 });
+    const woodMat = new THREE.MeshBasicMaterial({ color: 0x6B4423 });
+    
+    // Stone benches flanking the road
+    const benchGeo = new THREE.BoxGeometry(2, 0.5, 0.8);
+    const benchY = this.terrain.getTerrainHeight(5, halfD + 4);
+    const benchL = new THREE.Mesh(benchGeo, stoneMat);
+    benchL.position.set(-5, benchY + 0.25, halfD + 4);
+    this.scene.add(benchL);
+    const benchR = new THREE.Mesh(benchGeo, stoneMat);
+    benchR.position.set(5, benchY + 0.25, halfD + 4);
+    this.scene.add(benchR);
+    
+    // Flower bushes (4 colored spheres)
+    const flowerColors = [0x448833, 0xDD6699, 0xDDCC44, 0x55AA44];
+    const flowerPositions = [
+      { x: -7, z: halfD + 3 },
+      { x: -6.5, z: halfD + 5 },
+      { x: 7, z: halfD + 3 },
+      { x: 6.5, z: halfD + 5 },
+    ];
+    const bushGeo = new THREE.SphereGeometry(0.6, 6, 4);
+    for (let fi = 0; fi < flowerPositions.length; fi++) {
+      const fp = flowerPositions[fi];
+      const fy = this.terrain.getTerrainHeight(fp.x, fp.z);
+      const fMat = new THREE.MeshBasicMaterial({ color: flowerColors[fi] });
+      const bush = new THREE.Mesh(bushGeo, fMat);
+      bush.position.set(fp.x, fy + 0.5, fp.z);
+      this.scene.add(bush);
+    }
+    
+    // Wooden signpost at (3, halfD+3)
+    const signPostGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.5, 6);
+    const spY = this.terrain.getTerrainHeight(3, halfD + 3);
+    const signPost = new THREE.Mesh(signPostGeo, woodMat);
+    signPost.position.set(3, spY + 1.25, halfD + 3);
+    this.scene.add(signPost);
+    // Sign boards pointing in different directions
+    const boardGeo = new THREE.PlaneGeometry(1.2, 0.4);
+    const boardMat = new THREE.MeshBasicMaterial({ color: 0x7B6B4A, side: THREE.DoubleSide });
+    const board1 = new THREE.Mesh(boardGeo, boardMat);
+    board1.position.set(3, spY + 2.1, halfD + 3);
+    board1.rotation.y = 0.4;
+    this.scene.add(board1);
+    const board2 = new THREE.Mesh(boardGeo, boardMat);
+    board2.position.set(3, spY + 1.7, halfD + 3);
+    board2.rotation.y = -0.6;
+    this.scene.add(board2);
+    
+    console.log('[World] Gate road, lamp posts, and exterior decorations created (Phase 38)');
   }
   
   _createBonfire(x, y, z) {
