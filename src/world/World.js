@@ -5,6 +5,7 @@ import { VillageManager } from './VillageManager.js';
 import { RuinsManager } from './RuinsManager.js';
 import { CaveManager } from './CaveManager.js';
 import { NPCManager } from './NPCManager.js';
+import { TextureFactory } from '../utils/TextureFactory.js';
 
 /**
  * World - Open World Environment
@@ -372,19 +373,24 @@ export class World {
     const TOWER_HEIGHT = 5; // Reduced from 12 to match lower walls
     const GATE_WIDTH = 6;
     
-    // Castle materials — warm sandstone tones
+    // Castle materials — warm sandstone tones with canvas textures (Phase 36)
+    const brickTex = TextureFactory.createStoneBrickTexture(256, 256);
     const stoneMat = new THREE.MeshBasicMaterial({
       color: 0x8B7355,
+      map: brickTex,
     });
     
     const darkStoneMat = new THREE.MeshBasicMaterial({
       color: 0x6B5B45,
+      map: brickTex,
     });
     
-    // Castle floor (warm stone courtyard)
+    // Castle floor (warm stone courtyard with cobblestone texture)
+    const cobbleTex = TextureFactory.createCobblestoneTexture(256, 256);
     const floorGeo = new THREE.PlaneGeometry(CASTLE_WIDTH - 4, CASTLE_DEPTH - 4);
     const floorMat = new THREE.MeshBasicMaterial({
       color: 0x9B8B6E,
+      map: cobbleTex,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;

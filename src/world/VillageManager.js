@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TextureFactory } from '../utils/TextureFactory.js';
 
 /**
  * VillageManager - Creates villages with dynamic chunk loading
@@ -208,9 +209,11 @@ export class VillageManager {
    * Create shared materials for all village buildings
    */
   _createMaterials() {
+    const woodTex = TextureFactory.createWoodPlankTexture(256, 256);
     return {
       hutWall: new THREE.MeshBasicMaterial({
         color: 0xAB9375,  // Warm tan-brown (brightened for visibility)
+        map: woodTex,
       }),
       hutRoof: new THREE.MeshBasicMaterial({
         color: 0xC0A57C,  // Light straw/thatch (brightened)

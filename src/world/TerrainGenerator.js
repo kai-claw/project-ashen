@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
+import { TextureFactory } from '../utils/TextureFactory.js';
 
 /**
  * TerrainGenerator - Infinite Procedural Terrain with Chunking
@@ -660,8 +661,11 @@ export class TerrainGenerator {
     // Terrain material — MeshBasicMaterial with vertex colors for height-based shading
     // Lighting-independent: vertex colors provide depth cues without lighting dependency
     // (MeshStandardMaterial/LambertMaterial were washed gray-teal by light color interactions)
+    // Phase 36: Ground noise texture multiplies with vertex colors for micro-detail
+    const groundNoiseTex = TextureFactory.createGroundNoiseTexture(256, 256);
     return new THREE.MeshBasicMaterial({
       vertexColors: true,
+      map: groundNoiseTex,
       side: THREE.DoubleSide,
     });
   }
