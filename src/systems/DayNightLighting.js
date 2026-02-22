@@ -110,6 +110,13 @@ export class DayNightLighting {
     // Torch references for night-time enhancement
     this.torches = [];
     
+    // Sky gradient canvas (updated each phase)
+    this._skyCanvas = document.createElement('canvas');
+    this._skyCanvas.width = 1;
+    this._skyCanvas.height = 256;
+    this._skyCtx = this._skyCanvas.getContext('2d');
+    this._skyTexture = null;
+    
     // Initialize
     this.createLights();
     this.createCelestialBodies();
@@ -363,12 +370,8 @@ export class DayNightLighting {
       this.moonLight.intensity = moonIntensity;
     }
     
-    // Sky background
-    if (this.scene.background && this.scene.background.isColor) {
-      this.scene.background.copy(this.currentSkyColor);
-    } else {
-      this.scene.background = this.currentSkyColor.clone();
-    }
+    // Sky gradient background — zenith→horizon gradient
+    this._updateSkyGradient();
     
     // Fog — re-enabled with green-tinted color (density 0.002 is very gentle)
     if (!this.scene.fog) {
@@ -623,6 +626,44 @@ export class DayNightLighting {
       isIndoors: this.isIndoors,
       transitionProgress: this.transitionProgress.toFixed(2)
     };
+  }
+  /**
+   * Generate sky gradient texture from current sky color.
+   * Zenith uses the sky color, horizon blends to a warm/bright tone.
+   */
+  _updateSkyGradient() {
+    const ctx = this._skyCtx;
+    const canvas = this._skyCanvas;
+    
+    // Zenith color = currentSkyColor
+    const zr = Math.round(this.currentSkyColor.r * 255);
+    const zg = Math.round(this.currentSkyColor.g * 255);
+    const zb = Math.round(this.currentSkyColor.b * 255);
+    
+    // Horizon: blend sky color toward warm light
+    // Warm shift for daytime, maintain hue at night
+    const brightness = (this.currentSkyColor.r + this.currentSkyColor.g + this.currentSkyColor.b) / 3;
+    const warmth = Math.max(0, brightness - 0.1); // More warmth in bright phases
+    const hr = Math.min(255, Math.round(zr + warmth * 180));
+    const hg = Math.min(255, Math.round(zg + warmth * 120));
+    const hb = Math.min(255, Math.round(zb + warmth * 40));
+    
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0.0, `rgb(${zr},${zg},${zb})`);    // Zenith (top)
+    gradient.addColorStop(0.6, `rgb(${zr},${zg},${zb})`);    // Hold zenith
+    gradient.addColorStop(1.0, `rgb(${hr},${hg},${hb})`);    // Warm horizon
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    if (!this._skyTexture) {
+      this._skyTexture = new THREE.CanvasTexture(canvas);
+      this._skyTexture.mapping = THREE.EquirectangularReflectionMapping;
+    } else {
+      this._skyTexture.needsUpdate = true;
+    }
+    
+    this.scene.background = this._skyTexture;
   }
 }
 
