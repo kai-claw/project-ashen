@@ -509,12 +509,63 @@ export class World {
     
     console.log('[World] Castle torches added for starting area visibility');
     
-    // Gate visual (open archway)
-    const gateArchGeo = new THREE.BoxGeometry(GATE_WIDTH + 1, 1.5, WALL_THICKNESS + 0.5);
-    const gateArch = new THREE.Mesh(gateArchGeo, darkStoneMat);
-    gateArch.position.set(0, WALL_HEIGHT - 0.25, halfD);
-    gateArch.castShadow = true;
-    this.scene.add(gateArch);
+    // === GATE PILLARS (Phase 37) — imposing stone entrance ===
+    // Left pillar
+    const pillarGeo = new THREE.BoxGeometry(1.5, WALL_HEIGHT + 1, 1.5);
+    const leftPillar = new THREE.Mesh(pillarGeo, darkStoneMat);
+    leftPillar.position.set(-GATE_WIDTH / 2 - 0.75, (WALL_HEIGHT + 1) / 2, halfD);
+    leftPillar.castShadow = true;
+    this.scene.add(leftPillar);
+    // Right pillar
+    const rightPillar = new THREE.Mesh(pillarGeo, darkStoneMat);
+    rightPillar.position.set(GATE_WIDTH / 2 + 0.75, (WALL_HEIGHT + 1) / 2, halfD);
+    rightPillar.castShadow = true;
+    this.scene.add(rightPillar);
+    // Arch beam connecting pillars
+    const archBeamGeo = new THREE.BoxGeometry(GATE_WIDTH + 3, 1.2, WALL_THICKNESS + 0.5);
+    const archBeam = new THREE.Mesh(archBeamGeo, darkStoneMat);
+    archBeam.position.set(0, WALL_HEIGHT + 0.1, halfD);
+    archBeam.castShadow = true;
+    this.scene.add(archBeam);
+    // Decorative pillar caps
+    const capGeo = new THREE.BoxGeometry(2, 0.5, 2);
+    const leftCap = new THREE.Mesh(capGeo, stoneMat);
+    leftCap.position.set(-GATE_WIDTH / 2 - 0.75, WALL_HEIGHT + 1.25, halfD);
+    this.scene.add(leftCap);
+    const rightCap = new THREE.Mesh(capGeo, stoneMat);
+    rightCap.position.set(GATE_WIDTH / 2 + 0.75, WALL_HEIGHT + 1.25, halfD);
+    this.scene.add(rightCap);
+    
+    // === WALL-TOP MERLONS (Phase 37) — battlement silhouette ===
+    const merlonGeo = new THREE.BoxGeometry(1.2, 1.0, WALL_THICKNESS + 0.1);
+    // South wall merlons
+    for (let mx = -halfW + 2; mx <= halfW - 2; mx += 2.4) {
+      if (Math.round(mx / 2.4) % 2 !== 0) continue; // skip alternating for gaps
+      const m = new THREE.Mesh(merlonGeo, stoneMat);
+      m.position.set(mx, WALL_HEIGHT + 0.5, -halfD);
+      this.scene.add(m);
+    }
+    // North wall merlons (skip gate gap)
+    for (let mx = -halfW + 2; mx <= halfW - 2; mx += 2.4) {
+      if (Math.round(mx / 2.4) % 2 !== 0) continue;
+      if (mx > -GATE_WIDTH / 2 - 1.5 && mx < GATE_WIDTH / 2 + 1.5) continue; // gate gap
+      const m = new THREE.Mesh(merlonGeo, stoneMat);
+      m.position.set(mx, WALL_HEIGHT + 0.5, halfD);
+      this.scene.add(m);
+    }
+    // West/East wall merlons (rotated for depth along Z)
+    const merlonGeoSide = new THREE.BoxGeometry(WALL_THICKNESS + 0.1, 1.0, 1.2);
+    for (let mz = -halfD + 2; mz <= halfD - 2; mz += 2.4) {
+      if (Math.round(mz / 2.4) % 2 !== 0) continue;
+      // West
+      const mw = new THREE.Mesh(merlonGeoSide, stoneMat);
+      mw.position.set(-halfW, WALL_HEIGHT + 0.5, mz);
+      this.scene.add(mw);
+      // East
+      const me = new THREE.Mesh(merlonGeoSide, stoneMat);
+      me.position.set(halfW, WALL_HEIGHT + 0.5, mz);
+      this.scene.add(me);
+    }
     
     // Banners on walls — alternate colors for visual interest
     const bannerColors = [0x8B0000, 0xDAA520, 0x1B3D6E, 0x8B0000, 0xDAA520, 0x1B3D6E];
@@ -541,7 +592,110 @@ export class World {
       this.scene.add(banner);
     }
     
-    console.log('[World] Starting castle created');
+    // === WALL SHIELDS (Phase 37) — decorative hex shields on inner walls ===
+    const shieldGeo = new THREE.CircleGeometry(0.6, 6);
+    const shieldDefs = [
+      // South wall (inside) — 2 shields
+      { x: -5, y: WALL_HEIGHT * 0.7, z: -halfD + WALL_THICKNESS + 0.15, ry: 0, color: 0xAA2222 },
+      { x: 5, y: WALL_HEIGHT * 0.7, z: -halfD + WALL_THICKNESS + 0.15, ry: 0, color: 0xD4AF37 },
+      // West wall (inside) — 1 shield
+      { x: -halfW + WALL_THICKNESS + 0.15, y: WALL_HEIGHT * 0.7, z: 0, ry: Math.PI / 2, color: 0x224488 },
+      // East wall (inside) — 1 shield
+      { x: halfW - WALL_THICKNESS - 0.15, y: WALL_HEIGHT * 0.7, z: 0, ry: -Math.PI / 2, color: 0xAA2222 },
+      // South wall extra
+      { x: 0, y: WALL_HEIGHT * 0.7, z: -halfD + WALL_THICKNESS + 0.15, ry: 0, color: 0x224488 },
+    ];
+    const swordGeo = new THREE.BoxGeometry(0.08, 1.3, 0.02);
+    const metalMat = new THREE.MeshBasicMaterial({ color: 0x888899 });
+    for (const sd of shieldDefs) {
+      const sMat = new THREE.MeshBasicMaterial({ color: sd.color, side: THREE.DoubleSide });
+      const shield = new THREE.Mesh(shieldGeo, sMat);
+      shield.position.set(sd.x, sd.y, sd.z);
+      shield.rotation.y = sd.ry;
+      this.scene.add(shield);
+      // Crossed sword behind shield
+      const sword = new THREE.Mesh(swordGeo, metalMat);
+      sword.position.set(sd.x, sd.y, sd.z);
+      sword.rotation.y = sd.ry;
+      sword.rotation.z = 0.5;
+      this.scene.add(sword);
+    }
+    
+    // === COURTYARD PROPS (Phase 37) ===
+    const woodMat = new THREE.MeshBasicMaterial({ color: 0x6B4423 });
+    
+    // Training dummy at (-8, 0, -2)
+    const dummyPostGeo = new THREE.CylinderGeometry(0.15, 0.15, 3, 6);
+    const dummyPost = new THREE.Mesh(dummyPostGeo, woodMat);
+    dummyPost.position.set(-8, 1.5, -2);
+    this.scene.add(dummyPost);
+    const dummyBarGeo = new THREE.BoxGeometry(1.5, 0.15, 0.15);
+    const dummyBar = new THREE.Mesh(dummyBarGeo, woodMat);
+    dummyBar.position.set(-8, 2, -2);
+    this.scene.add(dummyBar);
+    const dummyHeadGeo = new THREE.SphereGeometry(0.3, 8, 8);
+    const dummyHead = new THREE.Mesh(dummyHeadGeo, new THREE.MeshBasicMaterial({ color: 0xC4A882 }));
+    dummyHead.position.set(-8, 2.7, -2);
+    this.scene.add(dummyHead);
+    this.colliders.push({
+      type: 'cylinder',
+      position: new THREE.Vector3(-8, 0, -2),
+      radius: 0.5,
+      height: 3,
+    });
+    
+    // Barrel cluster at (8, 0, -8)
+    const barrelGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+    const barrelMat = new THREE.MeshBasicMaterial({ color: 0x7B5B3A });
+    const barrel1 = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel1.position.set(8, 0.5, -8);
+    this.scene.add(barrel1);
+    const barrel2 = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel2.position.set(8.9, 0.5, -7.5);
+    this.scene.add(barrel2);
+    const barrel3 = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel3.position.set(8.5, 0.5, -9);
+    barrel3.rotation.x = 0.4;
+    this.scene.add(barrel3);
+    this.colliders.push({
+      type: 'box',
+      bounds: new THREE.Box3(
+        new THREE.Vector3(7.3, 0, -9.5),
+        new THREE.Vector3(9.6, 1.2, -7)
+      ),
+    });
+    
+    // Weapon rack at (-8, 0, -12)
+    const rackPostGeo = new THREE.BoxGeometry(0.15, 2.0, 0.15);
+    const rackL = new THREE.Mesh(rackPostGeo, woodMat);
+    rackL.position.set(-8.6, 1, -12);
+    rackL.rotation.z = 0.15;
+    this.scene.add(rackL);
+    const rackR = new THREE.Mesh(rackPostGeo, woodMat);
+    rackR.position.set(-7.4, 1, -12);
+    rackR.rotation.z = -0.15;
+    this.scene.add(rackR);
+    const rackBarGeo = new THREE.BoxGeometry(1.4, 0.1, 0.1);
+    const rackBar = new THREE.Mesh(rackBarGeo, woodMat);
+    rackBar.position.set(-8, 1.6, -12);
+    this.scene.add(rackBar);
+    // Swords on rack
+    const swordBladeGeo = new THREE.BoxGeometry(0.1, 1.5, 0.03);
+    for (let si = 0; si < 3; si++) {
+      const sw = new THREE.Mesh(swordBladeGeo, metalMat);
+      sw.position.set(-8.4 + si * 0.4, 1.1, -12);
+      sw.rotation.z = 0.15 - si * 0.08;
+      this.scene.add(sw);
+    }
+    this.colliders.push({
+      type: 'box',
+      bounds: new THREE.Box3(
+        new THREE.Vector3(-9, 0, -12.5),
+        new THREE.Vector3(-7, 2.2, -11.5)
+      ),
+    });
+    
+    console.log('[World] Starting castle created (Phase 37: merlons, gate pillars, props, shields)');
   }
   
   _createBonfire(x, y, z) {
