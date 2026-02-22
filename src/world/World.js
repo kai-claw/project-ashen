@@ -363,10 +363,10 @@ export class World {
     // Castle dimensions (per design doc)
     const CASTLE_WIDTH = 40;   // X dimension
     const CASTLE_DEPTH = 50;   // Z dimension
-    const WALL_HEIGHT = 8;
+    const WALL_HEIGHT = 3; // Reduced from 8 — low walls show terrain/sky over them
     const WALL_THICKNESS = 2;
     const TOWER_SIZE = 8;
-    const TOWER_HEIGHT = 12;
+    const TOWER_HEIGHT = 5; // Reduced from 12 to match lower walls
     const GATE_WIDTH = 6;
     
     // Castle materials
