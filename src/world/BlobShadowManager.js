@@ -7,10 +7,11 @@ import * as THREE from 'three';
  * Phase 43 — Entity Blob Shadows & Improved Ground Textures
  */
 
+// Phase 44: boosted opacity from 0.3 → 0.4
 const SHADOW_MAT = new THREE.MeshBasicMaterial({
   color: 0x000000,
   transparent: true,
-  opacity: 0.3,
+  opacity: 0.4,
   depthWrite: false,
   side: THREE.DoubleSide,
 });
@@ -38,6 +39,7 @@ export class BlobShadowManager {
     this._enemyPool = [];
     this._enemyPoolIdx = 0;
     this._maxPool = 80;
+    this._elapsed = 0; // Phase 44: for shadow breathing
 
     // Pre-fill enemy pool
     for (let i = 0; i < this._maxPool; i++) {
@@ -82,13 +84,18 @@ export class BlobShadowManager {
 
   /**
    * Call every frame from game loop.
-   * @param {number} _delta
+   * @param {number} delta
    * @param {Array} enemies  — enemyManager.enemies
    */
-  update(_delta, enemies) {
+  update(delta, enemies) {
+    this._elapsed += delta;
+    // Phase 44: subtle shadow breathing
+    const breathe = 1.0 + Math.sin(this._elapsed * 2) * 0.05;
+
     // Player
     if (this._playerShadow && this._playerMesh) {
       this._place(this._playerShadow, this._playerMesh.position);
+      this._playerShadow.scale.set(1.3 * breathe, 1, 1.3 * breathe);
     }
 
     // NPCs

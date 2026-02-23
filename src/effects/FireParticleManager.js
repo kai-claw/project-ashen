@@ -11,8 +11,8 @@ export class FireParticleManager {
     this.sources = [];       // { position, isBonfire }
     this.particles = [];     // active particle objects
     
-    // Shared geometry (small quad)
-    this.geo = new THREE.PlaneGeometry(0.15, 0.15);
+    // Shared geometry — Phase 44: larger quads for torch visibility
+    this.geo = new THREE.PlaneGeometry(0.25, 0.25);
     
     // Pre-create a few fire color materials
     this.materials = [
@@ -50,9 +50,9 @@ export class FireParticleManager {
       this.sources.push({ position: tp.clone(), isBonfire: false });
     }
     
-    // Pre-spawn particles for each source
+    // Pre-spawn particles for each source (Phase 44: boosted torch count)
     for (const src of this.sources) {
-      const count = src.isBonfire ? 28 : 14;
+      const count = src.isBonfire ? 28 : 18;
       for (let i = 0; i < count; i++) {
         this._spawnParticle(src, true);
       }
@@ -66,8 +66,8 @@ export class FireParticleManager {
     const mesh = new THREE.Mesh(this.geo, mat);
     
     const isBig = source.isBonfire;
-    const spread = isBig ? 0.6 : 0.25;
-    const baseScale = isBig ? (0.3 + Math.random() * 0.5) : (0.1 + Math.random() * 0.3);
+    const spread = isBig ? 0.6 : 0.3;
+    const baseScale = isBig ? (0.3 + Math.random() * 0.5) : (0.2 + Math.random() * 0.35);
     const lifetime = 0.5 + Math.random() * 1.0;
     
     const p = {
@@ -134,11 +134,11 @@ export class FireParticleManager {
   
   _resetParticle(p) {
     const src = p.source;
-    const spread = src.isBonfire ? 0.6 : 0.25;
+    const spread = src.isBonfire ? 0.6 : 0.3;
     
     p.age = 0;
     p.lifetime = 0.5 + Math.random() * 1.0;
-    p.baseScale = src.isBonfire ? (0.3 + Math.random() * 0.5) : (0.1 + Math.random() * 0.3);
+    p.baseScale = src.isBonfire ? (0.3 + Math.random() * 0.5) : (0.2 + Math.random() * 0.35);
     p.vx = (Math.random() - 0.5) * 0.4;
     p.vy = 1.0 + Math.random() * 2.0;
     p.vz = (Math.random() - 0.5) * 0.4;

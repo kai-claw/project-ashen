@@ -1282,6 +1282,15 @@ function animate() {
   composer.render();
 }
 
+// ========== LOADING SCREEN FADE (Phase 44) ==========
+{
+  const loadingEl = document.getElementById('loading-screen');
+  if (loadingEl) {
+    loadingEl.style.opacity = '0';
+    setTimeout(() => loadingEl.remove(), 600);
+  }
+}
+
 // ========== SPAWN INITIALIZATION ==========
 // Place player on terrain at origin, let CameraController handle camera
 try {

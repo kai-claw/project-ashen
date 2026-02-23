@@ -489,9 +489,9 @@ export class World {
     createTower(-halfW + TOWER_SIZE / 2, halfD - TOWER_SIZE / 2);   // NW
     createTower(halfW - TOWER_SIZE / 2, halfD - TOWER_SIZE / 2);    // NE
 
-    // Phase 43: Fake ambient occlusion — dark planes along wall bases
+    // Phase 43/44: Fake ambient occlusion — dark planes along wall bases (opacity boosted P44)
     const aoMat = new THREE.MeshBasicMaterial({
-      color: 0x000000, transparent: true, opacity: 0.15, depthWrite: false,
+      color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false,
     });
     const addWallAO = (x, z, w, d) => {
       const aoGeo = new THREE.PlaneGeometry(w, d);
@@ -501,35 +501,36 @@ export class World {
       ao.renderOrder = -1;
       this.scene.add(ao);
     };
-    // South wall base (inside)
-    addWallAO(0, -halfD + WALL_THICKNESS / 2 + 0.3, CASTLE_WIDTH, 0.8);
+    // South wall base (inside) — Phase 44: wider AO strips
+    addWallAO(0, -halfD + WALL_THICKNESS / 2 + 0.4, CASTLE_WIDTH, 1.2);
     // West wall base (inside)
-    addWallAO(-halfW + WALL_THICKNESS / 2 + 0.3, 0, 0.8, CASTLE_DEPTH);
+    addWallAO(-halfW + WALL_THICKNESS / 2 + 0.4, 0, 1.2, CASTLE_DEPTH);
     // East wall base (inside)
-    addWallAO(halfW - WALL_THICKNESS / 2 - 0.3, 0, 0.8, CASTLE_DEPTH);
+    addWallAO(halfW - WALL_THICKNESS / 2 - 0.4, 0, 1.2, CASTLE_DEPTH);
     // North wall base (inside, split around gate)
-    addWallAO(-halfW + northWallHalf / 2 + WALL_THICKNESS / 2, halfD - WALL_THICKNESS / 2 - 0.3, northWallHalf, 0.8);
-    addWallAO(halfW - northWallHalf / 2 - WALL_THICKNESS / 2, halfD - WALL_THICKNESS / 2 - 0.3, northWallHalf, 0.8);
+    addWallAO(-halfW + northWallHalf / 2 + WALL_THICKNESS / 2, halfD - WALL_THICKNESS / 2 - 0.4, northWallHalf, 1.2);
+    addWallAO(halfW - northWallHalf / 2 - WALL_THICKNESS / 2, halfD - WALL_THICKNESS / 2 - 0.4, northWallHalf, 1.2);
 
     // BONFIRE in center of courtyard
     this._createBonfire(0, 0, -5);
     
-    // Wall torches for better courtyard lighting
+    // Wall torches for better courtyard lighting (Phase 44: fixed Y to match WALL_HEIGHT)
+    const torchY = WALL_HEIGHT - 0.5; // Slightly below wall top
     // South wall torches (back wall)
-    this._createTorch(-12, 5, -halfD + WALL_THICKNESS + 0.5);
-    this._createTorch(12, 5, -halfD + WALL_THICKNESS + 0.5);
+    this._createTorch(-12, torchY, -halfD + WALL_THICKNESS + 0.5);
+    this._createTorch(12, torchY, -halfD + WALL_THICKNESS + 0.5);
     
     // West wall torches
-    this._createTorch(-halfW + WALL_THICKNESS + 0.5, 5, -10);
-    this._createTorch(-halfW + WALL_THICKNESS + 0.5, 5, 10);
+    this._createTorch(-halfW + WALL_THICKNESS + 0.5, torchY, -10);
+    this._createTorch(-halfW + WALL_THICKNESS + 0.5, torchY, 10);
     
     // East wall torches
-    this._createTorch(halfW - WALL_THICKNESS - 0.5, 5, -10);
-    this._createTorch(halfW - WALL_THICKNESS - 0.5, 5, 10);
+    this._createTorch(halfW - WALL_THICKNESS - 0.5, torchY, -10);
+    this._createTorch(halfW - WALL_THICKNESS - 0.5, torchY, 10);
     
     // Near gate torches (flanking the entrance)
-    this._createTorch(-GATE_WIDTH/2 - 1, 5, halfD - WALL_THICKNESS - 0.5);
-    this._createTorch(GATE_WIDTH/2 + 1, 5, halfD - WALL_THICKNESS - 0.5);
+    this._createTorch(-GATE_WIDTH/2 - 1, torchY, halfD - WALL_THICKNESS - 0.5);
+    this._createTorch(GATE_WIDTH/2 + 1, torchY, halfD - WALL_THICKNESS - 0.5);
     
     console.log('[World] Castle torches added for starting area visibility');
     
@@ -560,6 +561,49 @@ export class World {
     rightCap.position.set(GATE_WIDTH / 2 + 0.75, WALL_HEIGHT + 1.25, halfD);
     this.scene.add(rightCap);
     
+    // === COURTYARD DEPTH PROPS (Phase 44) ===
+    // Stone column near courtyard edge (foreground depth cue)
+    const colGeo = new THREE.CylinderGeometry(0.3, 0.35, 2.2, 8);
+    const colMat = new THREE.MeshBasicMaterial({ color: 0x7B6B55 });
+    const col1 = new THREE.Mesh(colGeo, colMat);
+    col1.position.set(-8, 1.1, 8);
+    this.scene.add(col1);
+    // Column base
+    const colBaseGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 8);
+    const colBase1 = new THREE.Mesh(colBaseGeo, colMat);
+    colBase1.position.set(-8, 0.15, 8);
+    this.scene.add(colBase1);
+
+    // Decorative urn/pot (opposite side)
+    const urnGeo = new THREE.SphereGeometry(0.4, 8, 8);
+    const urnMat = new THREE.MeshBasicMaterial({ color: 0x8B6B45 });
+    const urn = new THREE.Mesh(urnGeo, urnMat);
+    urn.scale.set(1, 0.8, 1); // Squish slightly
+    urn.position.set(9, 0.35, -8);
+    this.scene.add(urn);
+    // Urn rim
+    const rimGeo = new THREE.TorusGeometry(0.35, 0.06, 8, 12);
+    const rim = new THREE.Mesh(rimGeo, urnMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(9, 0.6, -8);
+    this.scene.add(rim);
+
+    // Second smaller column near gate (peripheral depth)
+    const col2 = new THREE.Mesh(colGeo, colMat);
+    col2.scale.set(0.8, 0.7, 0.8);
+    col2.position.set(7, 0.77, 12);
+    this.scene.add(col2);
+
+    // Atmospheric haze plane at gate opening
+    const hazeGeo = new THREE.PlaneGeometry(GATE_WIDTH + 2, WALL_HEIGHT + 2);
+    const hazeMat = new THREE.MeshBasicMaterial({
+      color: 0xCCCCCC, transparent: true, opacity: 0.04,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const haze = new THREE.Mesh(hazeGeo, hazeMat);
+    haze.position.set(0, (WALL_HEIGHT + 2) / 2, halfD + 0.5);
+    this.scene.add(haze);
+
     // === WALL-TOP MERLONS (Phase 37) — battlement silhouette ===
     const merlonGeo = new THREE.BoxGeometry(1.2, 1.0, WALL_THICKNESS + 0.1);
     // South wall merlons
