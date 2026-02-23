@@ -488,7 +488,29 @@ export class World {
     createTower(halfW - TOWER_SIZE / 2, -halfD + TOWER_SIZE / 2);   // SE
     createTower(-halfW + TOWER_SIZE / 2, halfD - TOWER_SIZE / 2);   // NW
     createTower(halfW - TOWER_SIZE / 2, halfD - TOWER_SIZE / 2);    // NE
-    
+
+    // Phase 43: Fake ambient occlusion — dark planes along wall bases
+    const aoMat = new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.15, depthWrite: false,
+    });
+    const addWallAO = (x, z, w, d) => {
+      const aoGeo = new THREE.PlaneGeometry(w, d);
+      const ao = new THREE.Mesh(aoGeo, aoMat);
+      ao.rotation.x = -Math.PI / 2;
+      ao.position.set(x, 0.03, z);
+      ao.renderOrder = -1;
+      this.scene.add(ao);
+    };
+    // South wall base (inside)
+    addWallAO(0, -halfD + WALL_THICKNESS / 2 + 0.3, CASTLE_WIDTH, 0.8);
+    // West wall base (inside)
+    addWallAO(-halfW + WALL_THICKNESS / 2 + 0.3, 0, 0.8, CASTLE_DEPTH);
+    // East wall base (inside)
+    addWallAO(halfW - WALL_THICKNESS / 2 - 0.3, 0, 0.8, CASTLE_DEPTH);
+    // North wall base (inside, split around gate)
+    addWallAO(-halfW + northWallHalf / 2 + WALL_THICKNESS / 2, halfD - WALL_THICKNESS / 2 - 0.3, northWallHalf, 0.8);
+    addWallAO(halfW - northWallHalf / 2 - WALL_THICKNESS / 2, halfD - WALL_THICKNESS / 2 - 0.3, northWallHalf, 0.8);
+
     // BONFIRE in center of courtyard
     this._createBonfire(0, 0, -5);
     

@@ -58,53 +58,75 @@ export class TextureFactory {
   }
   
   /**
-   * Cobblestone texture for castle courtyard floor.
-   * Irregular rounded rectangles packed on stone base.
+   * Cobblestone texture for castle courtyard floor and roads.
+   * Irregular polygonal stones with mortar lines on a grid with offset rows.
+   * Phase 43: Rewritten — previous version drew ellipses (looked like polka dots).
    */
   static createCobblestoneTexture(width = 256, height = 256) {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-    
-    // Gap color
-    ctx.fillStyle = '#6B5B4E';
+
+    // Dark mortar base (visible between stones)
+    ctx.fillStyle = '#3B2F20';
     ctx.fillRect(0, 0, width, height);
-    
-    const baseR = 0x9B, baseG = 0x8B, baseB = 0x6E;
-    const cobbleCount = 70;
-    
-    // Pack cobbles in a jittered grid
-    const cols = 8, rows = 9;
+
+    const cols = 8, rows = 10;
     const cellW = width / cols, cellH = height / rows;
-    
+    const inset = 2; // mortar gap
+
     for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const cx = c * cellW + cellW * 0.5 + (Math.random() - 0.5) * cellW * 0.3;
-        const cy = r * cellH + cellH * 0.5 + (Math.random() - 0.5) * cellH * 0.3;
-        const cw = cellW * (0.6 + Math.random() * 0.3);
-        const ch = cellH * (0.6 + Math.random() * 0.3);
-        
-        // Per-cobble color variation ±20
-        const vr = baseR + Math.floor((Math.random() - 0.5) * 40);
-        const vg = baseG + Math.floor((Math.random() - 0.5) * 40);
-        const vb = baseB + Math.floor((Math.random() - 0.5) * 40);
-        
-        ctx.fillStyle = `rgb(${vr},${vg},${vb})`;
+      const rowOffset = (r % 2 === 1) ? cellW * 0.45 : 0;
+      for (let c = -1; c <= cols; c++) {
+        const cx = c * cellW + rowOffset + cellW * 0.5;
+        const cy = r * cellH + cellH * 0.5;
+
+        // 5-7 sided irregular polygon
+        const sides = 5 + Math.floor(Math.random() * 3);
+        const pts = [];
+        for (let s = 0; s < sides; s++) {
+          const angle = (s / sides) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+          const rx = (cellW * 0.5 - inset) * (0.7 + Math.random() * 0.3);
+          const ry = (cellH * 0.5 - inset) * (0.7 + Math.random() * 0.3);
+          pts.push({ x: cx + Math.cos(angle) * rx, y: cy + Math.sin(angle) * ry });
+        }
+
+        // Stone fill — color variation between #7B6545 and #A89272
+        const baseR = 0x8B + Math.floor((Math.random() - 0.5) * 40);
+        const baseG = 0x73 + Math.floor((Math.random() - 0.5) * 36);
+        const baseB = 0x55 + Math.floor((Math.random() - 0.5) * 30);
+        ctx.fillStyle = `rgb(${baseR},${baseG},${baseB})`;
         ctx.beginPath();
-        // Rounded rect approximation via ellipse
-        ctx.ellipse(cx, cy, cw / 2, ch / 2, Math.random() * 0.3, 0, Math.PI * 2);
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let p = 1; p < pts.length; p++) ctx.lineTo(pts[p].x, pts[p].y);
+        ctx.closePath();
         ctx.fill();
-        
-        // Highlight edge (top-left lighter)
-        ctx.strokeStyle = `rgba(255,255,255,0.08)`;
+
+        // Mortar outline
+        ctx.strokeStyle = '#3B2F20';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Subtle surface grain: random dark/light speckles inside stone
+        for (let d = 0; d < 8; d++) {
+          const sx = cx + (Math.random() - 0.5) * cellW * 0.6;
+          const sy = cy + (Math.random() - 0.5) * cellH * 0.6;
+          const nv = Math.floor(Math.random() * 24) - 12;
+          ctx.fillStyle = `rgb(${baseR + nv},${baseG + nv},${baseB + nv})`;
+          ctx.fillRect(sx, sy, 1 + Math.random() * 2, 1 + Math.random() * 2);
+        }
+
+        // Top-left highlight for slight 3D look
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.ellipse(cx - 1, cy - 1, cw / 2 - 1, ch / 2 - 1, Math.random() * 0.3, -0.5, 1.0);
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pts[1].x, pts[1].y);
         ctx.stroke();
       }
     }
-    
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;

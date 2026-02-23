@@ -293,8 +293,10 @@ export class TerrainGenerator {
       const worldX = localX + worldOffsetX + this.chunkSize / 2;
       const worldZ = localZ + worldOffsetZ + this.chunkSize / 2;
       
-      // Get height at world position
-      const height = this.getTerrainHeight(worldX, worldZ);
+      // Get height at world position + Phase 43 micro-detail noise
+      let height = this.getTerrainHeight(worldX, worldZ);
+      // Small-scale bumps (high freq, low amplitude) to break smooth hills
+      height += this.noise2D(worldX * 4, worldZ * 4) * 0.15;
       positions[i + 1] = height;
     }
     
@@ -396,6 +398,11 @@ export class TerrainGenerator {
       r = Math.max(0, Math.min(1, r + micro));
       g = Math.max(0, Math.min(1, g + micro * 0.7));
       b = Math.max(0, Math.min(1, b + micro * 0.5));
+
+      // Phase 43: Per-channel random noise (±0.04) to break flat color bands
+      r = Math.max(0, Math.min(1, r + (Math.random() - 0.5) * 0.08));
+      g = Math.max(0, Math.min(1, g + (Math.random() - 0.5) * 0.08));
+      b = Math.max(0, Math.min(1, b + (Math.random() - 0.5) * 0.06));
       
       colors[i * 3]     = r;
       colors[i * 3 + 1] = g;

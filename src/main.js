@@ -66,6 +66,7 @@ import { AmbientParticleManager } from './effects/AmbientParticleManager.js';
 import { QuestArrow } from './ui/QuestArrow.js';
 import { GameTester } from './systems/GameTester.js';
 import { SettingsUI } from './ui/SettingsUI.js';
+import { BlobShadowManager } from './world/BlobShadowManager.js';
 
 // Phase 41: Procedural Audio (Web Audio API — no audio files)
 import audioEngine from './audio/AudioEngine.js';
@@ -740,6 +741,14 @@ const gameTester = new GameTester({
 });
 gameManager.gameTester = gameTester;
 
+// ========== BLOB SHADOWS (Phase 43) ==========
+const blobShadows = new BlobShadowManager(scene, world.terrain);
+blobShadows.initPlayer(player.mesh);
+// Init NPC shadows after npcManager is ready
+if (world.npcManager && world.npcManager.npcs) {
+  blobShadows.initNPCs(world.npcManager.npcs);
+}
+
 // ========== SETTINGS MENU (Phase 42) ==========
 const settingsUI = new SettingsUI();
 gameManager.settingsUI = settingsUI;
@@ -1125,6 +1134,9 @@ function animate() {
   damageNumbers.update(delta);
   hitEffects.update(delta);
   
+  // Phase 43: Blob shadows under entities
+  blobShadows.update(delta, enemyManager.enemies);
+
   // Phase 33: NPC quest markers
   npcMarkerManager.update(delta, player.mesh.position);
   
