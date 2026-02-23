@@ -8,11 +8,17 @@ export class TouchControls {
     this.inputManager = inputManager;
     this.isMobile = this._detectMobile();
     
+    // Camera controller reference (set via setCameraController)
+    this.cameraController = null;
+    
     // Joystick state
     this.joystick = { active: false, startX: 0, startY: 0, deltaX: 0, deltaY: 0, touchId: null };
     
     // Camera state  
     this.camera = { active: false, startX: 0, startY: 0, deltaX: 0, deltaY: 0, touchId: null };
+    
+    // Pinch-to-zoom state
+    this.pinch = { active: false, startDist: 0 };
     
     // Button states
     this.buttons = { attack: false, dodge: false, block: false, interact: false };
@@ -25,7 +31,12 @@ export class TouchControls {
     if (this.isMobile) {
       this._createUI();
       this._bindTouchEvents();
+      this._bindPinchZoom();
     }
+  }
+  
+  setCameraController(cameraController) {
+    this.cameraController = cameraController;
   }
   
   _detectMobile() {
@@ -319,6 +330,7 @@ export class TouchControls {
           this.inputManager._bufferAction('Space');
         } else if (action === 'block') {
           this.inputManager.keys['ShiftLeft'] = true;
+          this.inputManager.keys['ShiftRight'] = true;
         } else if (action === 'interact') {
           this.inputManager._bufferAction('KeyE');
         }
@@ -333,6 +345,7 @@ export class TouchControls {
         
         if (action === 'block') {
           this.inputManager.keys['ShiftLeft'] = false;
+          this.inputManager.keys['ShiftRight'] = false;
         }
       }, { passive: false });
       
@@ -343,6 +356,7 @@ export class TouchControls {
         
         if (action === 'block') {
           this.inputManager.keys['ShiftLeft'] = false;
+          this.inputManager.keys['ShiftRight'] = false;
         }
       }, { passive: false });
     });
@@ -473,6 +487,55 @@ export class TouchControls {
         break;
       }
     }
+  }
+  
+  // --- Pinch-to-Zoom ---
+  
+  _bindPinchZoom() {
+    // Listen on the whole document for pinch gestures
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        this.pinch.startDist = Math.sqrt(dx * dx + dy * dy);
+        this.pinch.active = true;
+      }
+    }, { passive: false });
+    
+    document.addEventListener('touchmove', (e) => {
+      if (this.pinch.active && e.touches.length === 2 && this.cameraController) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const currentDist = Math.sqrt(dx * dx + dy * dy);
+        
+        const scale = this.pinch.startDist / currentDist;
+        const zoomSpeed = 0.15;
+        
+        if (scale > 1.02) {
+          // Pinch in — zoom out (increase distance)
+          this.cameraController.distance = Math.min(
+            this.cameraController.maxDistance,
+            this.cameraController.distance + zoomSpeed
+          );
+          this.pinch.startDist = currentDist;
+        } else if (scale < 0.98) {
+          // Pinch out — zoom in (decrease distance)
+          this.cameraController.distance = Math.max(
+            this.cameraController.minDistance,
+            this.cameraController.distance - zoomSpeed
+          );
+          this.pinch.startDist = currentDist;
+        }
+      }
+    }, { passive: false });
+    
+    document.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) {
+        this.pinch.active = false;
+      }
+    }, { passive: false });
   }
   
   // --- Analog movement vector (smoother than key thresholds) ---

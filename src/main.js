@@ -332,6 +332,7 @@ player.setWorld(world); // Enable collision detection
 const cameraController = new CameraController(camera, player.mesh, inputManager);
 cameraController.setTerrain(world.terrain); // Enable terrain height clamping (fixes autostart spawn bug)
 player.setCameraController(cameraController);
+touchControls.setCameraController(cameraController); // Enable pinch-to-zoom on mobile
 
 // Initialize attack animator now that all dependencies exist
 attackAnimator = new AttackAnimator(equipmentManager, weaponManager, particleManager, cameraController);

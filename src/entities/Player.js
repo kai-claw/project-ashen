@@ -1027,10 +1027,17 @@ export class Player {
       });
     }
     
-    const camYaw = this._getCameraYaw();
-    this.facingAngle = camYaw;
-    // Add Math.PI offset to match GLTF model's default orientation
-    this.mesh.rotation.y = camYaw + Math.PI;
+    // Attack in the direction the character is facing (set by movement)
+    // Only snap to camera direction if player is idle (no recent movement)
+    const move = this.input.getMovementVector();
+    const isMoving = move.x !== 0 || move.z !== 0;
+    if (!isMoving) {
+      // Standing still: attack toward camera forward direction
+      const camYaw = this._getCameraYaw();
+      this.facingAngle = camYaw;
+    }
+    // Otherwise keep current facingAngle from movement
+    this.mesh.rotation.y = this.facingAngle + Math.PI;
     
     // Visual anticipation - flash weapon glow based on attack type
     if (isHeavy) {
@@ -1043,7 +1050,7 @@ export class Player {
     
     // Spawn attack arc trail
     if (this.gm.particleManager) {
-      const attackDir = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+      const attackDir = new THREE.Vector3(-Math.sin(this.facingAngle), 0, -Math.cos(this.facingAngle));
       this.gm.particleManager.spawnAttackArc(
         this.mesh.position.clone(),
         attackDir,
