@@ -147,18 +147,14 @@ export class Player {
 
   _createFallbackMesh() {
     // Complete humanoid placeholder while model loads
-    // Using brighter colors so character is visible on mobile/low-brightness screens
+    // Bright materials with emissive so character is always visible
     const armorMat = new THREE.MeshBasicMaterial({
-      color: 0x8a8a9a,
-      roughness: 0.35,
-      metalness: 0.85,
+      color: 0xaaaabc,
     });
     
     // Slightly darker material for joints/extremities (feet, etc.)
     const jointMat = new THREE.MeshBasicMaterial({
-      color: 0x6a6a78,
-      roughness: 0.4,
-      metalness: 0.8,
+      color: 0x8888a0,
     });
     
     // Brighter gauntlet material for hands - visible in dark areas
@@ -343,21 +339,18 @@ export class Player {
       this.gltfModel.position.y = 0;
       this.gltfModel.rotation.y = Math.PI; // Face forward
 
-      // Set up materials for damage flash and tone down brightness
+      // Set up materials for damage flash
+      const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       this.gltfModel.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
-          // Adjust materials for daytime scene
           if (child.material) {
-            // Slight color adjustment for balance
-            if (child.material.color) {
-              child.material.color.multiplyScalar(0.85);  // Slight darkening only
-            }
-            // Remove emissive since scene is bright
+            // Keep original colors visible — don't darken
+            // Add subtle emissive so character is always visible regardless of lighting
             if (child.material.emissive) {
-              child.material.emissive.setHex(0x000000);
-              child.material.emissiveIntensity = 0;
+              child.material.emissive.setHex(0x222222);
+              child.material.emissiveIntensity = isMobile ? 0.5 : 0.3;
             }
           }
           // Store original material for flash effects

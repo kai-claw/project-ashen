@@ -6,11 +6,13 @@ export class CameraController {
     this.target = target;
     this.input = inputManager;
 
-    this.distance = 14;        // Was 6 — matches working camera override (sqrt(8²+12²)≈14)
-    this.minDistance = 6;
-    this.maxDistance = 20;
+    // Closer camera on mobile so character is visible on small screens
+    const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    this.distance = isMobile ? 9 : 14;
+    this.minDistance = isMobile ? 4 : 6;
+    this.maxDistance = isMobile ? 14 : 20;
     this.height = 1;           // Was 2.5 — lookAt target is player.y + 1 (matches override)
-    this.sensitivity = 0.002;
+    this.sensitivity = isMobile ? 0.003 : 0.002;  // Slightly higher for touch
 
     this.yaw = Math.PI;        // Camera BEHIND north-facing player (offset formula: target+offset, so yaw=π puts cam at -Z = south of player, looking north)
     this.pitch = 0.53;         // Was 0.3 — atan(7/12)≈0.53 rad matches override's +8Y/+12Z
