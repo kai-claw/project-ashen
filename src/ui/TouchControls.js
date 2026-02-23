@@ -125,8 +125,10 @@ export class TouchControls {
     // Scale down HUD bars for mobile
     const hud = document.getElementById('hud');
     if (hud) {
-      hud.style.transform = 'scale(0.8)';
+      hud.style.transform = 'scale(0.75)';
       hud.style.transformOrigin = 'top left';
+      hud.style.top = '10px';
+      hud.style.left = '10px';
     }
     
     // Hide keyboard controls hint
@@ -137,11 +139,152 @@ export class TouchControls {
     const crosshair = document.getElementById('crosshair');
     if (crosshair) crosshair.style.display = 'none';
     
+    // Hide lock-on indicator (not usable on mobile)
+    const lockOn = document.getElementById('lock-on-indicator');
+    if (lockOn) lockOn.style.display = 'none';
+    
     // Prevent default touch behaviors on canvas
     const canvas = document.querySelector('canvas');
     if (canvas) {
       canvas.style.touchAction = 'none';
     }
+    
+    // Inject mobile-specific CSS to hide desktop-only UI elements
+    const mobileCSS = document.createElement('style');
+    mobileCSS.id = 'mobile-ui-overrides';
+    mobileCSS.textContent = `
+      /* Hide desktop hotbars — not usable on touch */
+      #combat-hotbar { display: none !important; }
+      #spell-hotbar { display: none !important; }
+      #ability-container { display: none !important; }
+      
+      /* Hide keyboard prompts — replaced by touch buttons */
+      #door-prompt { display: none !important; }
+      #ladder-prompt { display: none !important; }
+      #shortcut-prompt { display: none !important; }
+      
+      /* Reposition minimap to avoid overlap with HUD bars */
+      .minimap-container, #minimap-container {
+        top: 8px !important;
+        right: 8px !important;
+        transform: scale(0.75) !important;
+        transform-origin: top right !important;
+      }
+      
+      /* Scale quest tracker smaller and reposition */
+      #quest-hud-tracker {
+        top: auto !important;
+        bottom: 280px !important;
+        right: 8px !important;
+        transform: scale(0.75) !important;
+        transform-origin: bottom right !important;
+        max-width: 160px !important;
+        font-size: 10px !important;
+      }
+      
+      /* Move item notification higher so it doesn't overlap touch controls */
+      #item-notification {
+        top: 35% !important;
+      }
+      
+      /* Scale discovery manager popups */
+      #discovery-notifications {
+        top: 60px !important;
+        transform: translateX(-50%) scale(0.85) !important;
+      }
+      
+      /* Compact XP bar for mobile */
+      #xp-bar-container, .xp-bar-container {
+        bottom: 2px !important;
+        height: 4px !important;
+      }
+      
+      /* Scale boss health bar */
+      #boss-container {
+        width: 80vw !important;
+        max-width: 400px !important;
+        bottom: 280px !important;
+      }
+      
+      /* NPC interaction prompt — mobile friendly, above touch controls */
+      #npc-interact-prompt {
+        bottom: 55% !important;
+        font-size: 13px !important;
+        padding: 8px 16px !important;
+      }
+      #npc-interaction-prompt {
+        bottom: 55% !important;
+      }
+      #npc-interaction-prompt .npc-prompt-key {
+        display: none !important;
+      }
+      
+      /* Chest interaction prompt */
+      #chest-interact-prompt {
+        bottom: 55% !important;
+        font-size: 13px !important;
+      }
+      
+      /* Scale crucible menu for mobile */
+      #crucible-menu {
+        min-width: 280px !important;
+        width: 85vw !important;
+        max-width: 400px !important;
+        padding: 16px !important;
+      }
+      .crucible-title { font-size: 18px !important; }
+      .track-name { font-size: 13px !important; }
+      
+      /* Death screen readable on mobile */
+      #death-screen {
+        font-size: 36px !important;
+      }
+      #death-screen .sub {
+        font-size: 13px !important;
+      }
+      
+      /* Illusory wall notification compact */
+      #illusory-notification {
+        font-size: 16px !important;
+        padding: 10px 20px !important;
+        top: 120px !important;
+      }
+      
+      /* NPC marker labels smaller on mobile */
+      .npc-marker-label {
+        font-size: 10px !important;
+      }
+    `;
+    document.head.appendChild(mobileCSS);
+    
+    // Watch for dynamically created elements and hide them
+    this._observeNewElements();
+  }
+  
+  _observeNewElements() {
+    // MutationObserver to catch dynamically-created desktop UI elements
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          
+          // Hide combat hotbar when InventoryUI creates it
+          if (node.id === 'combat-hotbar') {
+            node.style.display = 'none';
+          }
+          // Hide spell hotbar
+          if (node.id === 'spell-hotbar') {
+            node.style.display = 'none';
+          }
+          // Hide ability container
+          if (node.id === 'ability-container') {
+            node.style.display = 'none';
+          }
+        }
+      }
+    });
+    
+    observer.observe(document.body, { childList: true, subtree: true });
   }
   
   _bindTouchEvents() {

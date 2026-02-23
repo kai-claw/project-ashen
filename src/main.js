@@ -242,8 +242,9 @@ document.addEventListener('keydown', initAudio);
 const combatSounds = new CombatSounds();
 const ambientSounds = new AmbientSounds();
 const uiSounds = new UISounds();
-// Ensure AudioEngine resumes on first click (browser autoplay policy)
+// Ensure AudioEngine resumes on first user gesture (browser autoplay policy)
 document.addEventListener('click', () => audioEngine.resume(), { once: true });
+document.addEventListener('touchstart', () => audioEngine.resume(), { once: true });
 
 // --- World ---
 const world = new World(scene);
@@ -819,7 +820,9 @@ if (!sessionStorage.getItem('ashen_controls_shown')) {
       text-align: center;
       letter-spacing: 1px;
     `;
-    tip.textContent = 'WASD to move  ·  Click to attack  ·  Tab for map  ·  E to interact';
+    tip.textContent = isMobileDevice 
+      ? 'Joystick to move  ·  Swipe to look  ·  ⚔️ to attack  ·  E to interact'
+      : 'WASD to move  ·  Click to attack  ·  Tab for map  ·  E to interact';
     document.body.appendChild(tip);
     requestAnimationFrame(() => { tip.style.opacity = '1'; });
     setTimeout(() => {

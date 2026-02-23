@@ -147,15 +147,16 @@ export class Player {
 
   _createFallbackMesh() {
     // Complete humanoid placeholder while model loads
+    // Using brighter colors so character is visible on mobile/low-brightness screens
     const armorMat = new THREE.MeshBasicMaterial({
-      color: 0x5a5a68,
+      color: 0x8a8a9a,
       roughness: 0.35,
       metalness: 0.85,
     });
     
-    // Darker material for joints/extremities (feet, etc.)
+    // Slightly darker material for joints/extremities (feet, etc.)
     const jointMat = new THREE.MeshBasicMaterial({
-      color: 0x3a3a45,
+      color: 0x6a6a78,
       roughness: 0.4,
       metalness: 0.8,
     });
