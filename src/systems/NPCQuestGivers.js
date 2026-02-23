@@ -1070,10 +1070,62 @@ class NPCQuestGiversManager {
     });
   }
 
-  update(delta) {
+  update(delta, playerPosition) {
     this.npcs.forEach(npc => {
       npc.update(delta);
     });
+    
+    // Phase 40: Show 'Press E to talk' prompt when near NPC
+    if (playerPosition) {
+      const nearest = this.getNearestNPC(playerPosition);
+      if (nearest) {
+        this._showInteractionPrompt(nearest.config.name);
+      } else {
+        this._hideInteractionPrompt();
+      }
+    }
+  }
+  
+  // Phase 40: Reusable DOM prompt for NPC interaction
+  _getInteractionPromptEl() {
+    if (!this._interactionPrompt) {
+      const el = document.createElement('div');
+      el.id = 'npc-interact-prompt';
+      el.style.cssText = `
+        position: fixed;
+        bottom: 30%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 24px;
+        background: rgba(0, 0, 0, 0.75);
+        border: 1px solid rgba(200, 180, 140, 0.4);
+        border-radius: 6px;
+        font-family: 'Cinzel', serif;
+        font-size: 15px;
+        color: #e0d0b0;
+        text-shadow: 0 0 6px rgba(0,0,0,0.8);
+        z-index: 800;
+        pointer-events: none;
+        display: none;
+        letter-spacing: 1px;
+        text-align: center;
+      `;
+      document.body.appendChild(el);
+      this._interactionPrompt = el;
+    }
+    return this._interactionPrompt;
+  }
+  
+  _showInteractionPrompt(name) {
+    const el = this._getInteractionPromptEl();
+    el.textContent = `Press E to talk to ${name}`;
+    el.style.display = 'block';
+  }
+  
+  _hideInteractionPrompt() {
+    if (this._interactionPrompt) {
+      this._interactionPrompt.style.display = 'none';
+    }
   }
 
   // ========== UTILITY ==========

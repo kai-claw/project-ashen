@@ -63,6 +63,7 @@ import { HitEffectManager } from './effects/HitEffectManager.js';
 import { NPCMarkerManager } from './ui/NPCMarkerManager.js';
 import { FireParticleManager } from './effects/FireParticleManager.js';
 import { AmbientParticleManager } from './effects/AmbientParticleManager.js';
+import { QuestArrow } from './ui/QuestArrow.js';
 import { GameTester } from './systems/GameTester.js';
 
 // Color grading + vignette shader for cinematic feel
@@ -504,6 +505,10 @@ npcMarkerManager.setNPCQuestGivers(npcQuestGivers);
 
 // Initialize Quest Rewards & Reputation (Phase 25 - Worker 2)
 questRewards.init(questManager, scene);
+
+// Phase 40: Quest objective arrow
+const questArrow = new QuestArrow();
+questArrow.init({ camera });
 
 // ========== SAVE SYSTEM INITIALIZATION (Phase 26) ==========
 const saveManager = getSaveManager();
@@ -1009,7 +1014,7 @@ function animate() {
   
   // Phase 25 (Worker 2): NPC quest giver markers and animations
   if (npcQuestGivers) {
-    npcQuestGivers.update(delta);
+    npcQuestGivers.update(delta, player.mesh.position);
   }
   
   // Update quest UI player position for distance sorting
@@ -1027,6 +1032,28 @@ function animate() {
   
   // Phase 33: NPC quest markers
   npcMarkerManager.update(delta, player.mesh.position);
+  
+  // Phase 40: Quest objective arrow — point toward relevant target
+  if (questArrow) {
+    let arrowTarget = null;
+    // If quest is active with kill objectives → nearest enemy
+    if (questManager && questManager.activeQuests.size > 0) {
+      // Find nearest alive enemy as target
+      if (enemyManager && enemyManager.enemies.length > 0) {
+        let minDist = Infinity;
+        for (const e of enemyManager.enemies) {
+          if (e.isDead) continue;
+          const d = e.mesh.position.distanceTo(player.mesh.position);
+          if (d < minDist) { minDist = d; arrowTarget = e.mesh.position; }
+        }
+      }
+    } else if (npcQuestGivers) {
+      // No active quest → point toward Elder Marcus to get one
+      const marcus = npcQuestGivers.getNPCById('elder_marcus');
+      if (marcus) arrowTarget = marcus.getPosition();
+    }
+    questArrow.update(arrowTarget);
+  }
   
   // Phase 27: Minimap update
   if (minimapManager) {

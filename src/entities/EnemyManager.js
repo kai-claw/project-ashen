@@ -99,6 +99,9 @@ export class EnemyManager {
     // Spawn enemies using terrain-based system
     this._spawnEnemies();
     
+    // Phase 40: Guaranteed starter enemies along the road
+    this._spawnStarterEnemies();
+    
     // Skip old boss spawning - use terrain-based encounters instead
     // this._spawnBoss();
     
@@ -310,6 +313,41 @@ export class EnemyManager {
   }
   
   /**
+   * Phase 40: Spawn guaranteed starter enemies along the road outside castle gate.
+   * These ensure new players always have something to fight immediately.
+   */
+  _spawnStarterEnemies() {
+    const terrain = this.world?.terrain;
+    const starterPositions = [
+      { x: 2, z: 60 },
+      { x: -3, z: 75 },
+      { x: 5, z: 90 },
+    ];
+    
+    const baseConfig = ENEMY_TYPES.HOLLOW_SOLDIER;
+    
+    for (const sp of starterPositions) {
+      const y = terrain ? terrain.getTerrainHeight(sp.x, sp.z) + 0.3 : 0.3;
+      const position = new THREE.Vector3(sp.x, y, sp.z);
+      
+      const enemy = new Enemy(this.scene, position, {
+        type: 'HOLLOW_SOLDIER',
+        ...baseConfig,
+        health: 40,          // Slightly easier for starters
+        damage: 10,
+        level: 1,
+        name: 'Road Hollow',
+      }, this.gm);
+      
+      enemy.world = this.world;
+      enemy.isStarterEnemy = true; // Prevent despawn
+      this.enemies.push(enemy);
+    }
+    
+    console.log(`[EnemyManager] 3 starter enemies spawned along road`);
+  }
+  
+  /**
    * Phase 24: Try to spawn night-specific enemies (wraiths, shadows, etc.)
    */
   _trySpawnNightEnemies(playerPos) {
@@ -423,7 +461,7 @@ export class EnemyManager {
       const enemy = this.enemies[i];
       const dist = enemy.mesh.position.distanceTo(playerPos);
       
-      if (dist > this.despawnRadius && !enemy.bossActive) {
+      if (dist > this.despawnRadius && !enemy.bossActive && !enemy.isStarterEnemy) {
         // Track the region this enemy was in for potential respawn
         if (enemy.spawnPos) {
           const regionX = Math.floor(enemy.spawnPos.x / 40) * 40;

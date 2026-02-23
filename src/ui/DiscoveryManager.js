@@ -296,18 +296,19 @@ export class DiscoveryManager {
     // Play discovery sound if available
     this._playDiscoverySound(type);
     
-    // Auto-dismiss after 3 seconds, then show next
+    // Auto-dismiss after 2 seconds (Phase 40: faster) with fade-out
     setTimeout(() => {
       notification.style.opacity = '0';
       notification.style.transform = 'translateY(-20px) scale(0.9)';
+      notification.style.transition = 'all 0.5s ease';
       setTimeout(() => {
         if (notification.parentNode) {
           notification.parentNode.removeChild(notification);
         }
         // Show next queued notification
         this._showNextNotification();
-      }, 400);
-    }, 3000);
+      }, 500);
+    }, 2000);
   }
   
   /**
