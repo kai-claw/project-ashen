@@ -8640,7 +8640,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Jc(t.i
         border: 2px solid #4a4a6a;
         border-radius: 12px;
         padding: 0;
-        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-family: 'Cinzel', serif;
         color: #e0e0e0;
         z-index: 2000;
         display: none;
@@ -8861,7 +8861,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Jc(t.i
         border: 3px solid #8b4513;
         border-radius: 8px;
         box-shadow: 0 0 40px rgba(0,0,0,0.8);
-        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-family: 'Cinzel', serif;
         z-index: 2000;
         display: none;
       }
