@@ -1079,7 +1079,7 @@ class NPCQuestGiversManager {
     if (playerPosition) {
       const nearest = this.getNearestNPC(playerPosition);
       if (nearest) {
-        this._showInteractionPrompt(nearest.config.name);
+        this._showInteractionPrompt(nearest.npcData.name);
       } else {
         this._hideInteractionPrompt();
       }

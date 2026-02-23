@@ -44,7 +44,7 @@ export class NPCMarkerManager {
       .npc-qm-icon {
         font-size: 24px;
         font-weight: bold;
-        font-family: 'Georgia', serif;
+        font-family: 'Cinzel', serif;
         line-height: 1;
         animation: npcQmBob 2s ease-in-out infinite;
         text-shadow: 0 0 8px currentColor, 0 2px 4px rgba(0,0,0,0.8);
