@@ -66,6 +66,12 @@ import { AmbientParticleManager } from './effects/AmbientParticleManager.js';
 import { QuestArrow } from './ui/QuestArrow.js';
 import { GameTester } from './systems/GameTester.js';
 
+// Phase 41: Procedural Audio (Web Audio API — no audio files)
+import audioEngine from './audio/AudioEngine.js';
+import { CombatSounds } from './audio/CombatSounds.js';
+import { AmbientSounds } from './audio/AmbientSounds.js';
+import { UISounds } from './audio/UISounds.js';
+
 // Color grading + vignette shader for cinematic feel
 const ColorGradingShader = {
   uniforms: {
@@ -226,6 +232,13 @@ const initAudio = async () => {
 document.addEventListener('click', initAudio);
 document.addEventListener('keydown', initAudio);
 
+// Phase 41: Procedural Audio modules (singleton engine auto-resumes on click)
+const combatSounds = new CombatSounds();
+const ambientSounds = new AmbientSounds();
+const uiSounds = new UISounds();
+// Ensure AudioEngine resumes on first click (browser autoplay policy)
+document.addEventListener('click', () => audioEngine.resume(), { once: true });
+
 // --- World ---
 const world = new World(scene);
 
@@ -237,6 +250,9 @@ const landmarkManager = new LandmarkManager(scene, world.terrain);
 
 // --- Grass Ground Detail (Phase 31) ---
 const grassManager = new GrassManager(scene, world.terrain);
+
+// Phase 41: Init ambient sounds with bonfire position
+ambientSounds.init({ bonfirePosition: world.bonfirePosition });
 
 // --- Phase 35: Fire Particles & Ambient Effects ---
 const fireParticleManager = new FireParticleManager(scene);
@@ -317,6 +333,8 @@ attackAnimator = new AttackAnimator(equipmentManager, weaponManager, particleMan
 weaponManager.onAttackStart = (data) => {
   const speedMult = gameManager.getAttackSpeedMultiplier ? gameManager.getAttackSpeedMultiplier() : 1.0;
   attackAnimator.startAttack(data.attackType, speedMult);
+  // Phase 41: sword swing sound
+  combatSounds.playSwordSwing();
 };
 weaponManager.onAttackEnd = () => {
   // Animation handles its own completion
@@ -412,6 +430,38 @@ gameManager.equipmentManager = equipmentManager; // For equipment stats
 gameManager.weaponManager = weaponManager; // For weapon stats/attacks
 gameManager.attackAnimator = attackAnimator; // Will be set after creation
 
+// Phase 41: Hook combat sounds into GameManager
+gameManager.combatSounds = combatSounds;
+gameManager.uiSounds = uiSounds;
+// Hook level-up for procedural fanfare
+{
+  const _origLevelUp = gameManager._levelUp.bind(gameManager);
+  gameManager._levelUp = function () {
+    _origLevelUp();
+    uiSounds.playLevelUp();
+  };
+}
+{
+  const _origTakeDamage = gameManager.takeDamage.bind(gameManager);
+  gameManager.takeDamage = function (...args) {
+    const result = _origTakeDamage(...args);
+    // Player got hit → play hurt sound
+    combatSounds.playPlayerHurt();
+    return result;
+  };
+  // Hook hit-impact sound into hitstop calls (called on every successful hit)
+  const _origHitstopLight = gameManager.hitstopLight.bind(gameManager);
+  const _origHitstopHeavy = gameManager.hitstopHeavy.bind(gameManager);
+  gameManager.hitstopLight = function () {
+    combatSounds.playHitImpact(false);
+    return _origHitstopLight();
+  };
+  gameManager.hitstopHeavy = function () {
+    combatSounds.playHitImpact(true);
+    return _origHitstopHeavy();
+  };
+}
+
 // --- Wire HUD to EnemyManager for boss bar ---
 hud.setEnemyManager(enemyManager);
 
@@ -494,6 +544,10 @@ questWorldHooks.init({
 // Initialize Quest UI (Phase 25 - Worker 2)
 questUI.init(questManager);
 
+// Phase 41: UI sounds hooked into quest events
+questManager.on('onQuestAccepted', () => uiSounds.playQuestAccept());
+questManager.on('onQuestComplete', () => uiSounds.playQuestComplete());
+
 // Initialize NPC Quest Givers (Phase 25 - Worker 2)
 const npcQuestGivers = createNPCQuestGivers(scene);
 npcQuestGivers.init(questManager);
@@ -563,9 +617,10 @@ saveIntegration.init(saveManager, {
 gameManager.saveManager = saveManager;
 gameManager.saveIntegration = saveIntegration;
 
-// Wire enemy death events to quest system
+// Wire enemy death events to quest system + Phase 41 death sound
 enemyManager.onEnemyDeath = (enemyType, enemyData, position) => {
   questWorldHooks.onEnemyKilled(enemyType, enemyData);
+  combatSounds.playEnemyDeath();
 };
 
 // Wire boss defeat events to quest system
@@ -575,9 +630,10 @@ bossSpawner.onBossDefeated = (bossData, arena) => {
   if (originalBossDefeated) originalBossDefeated(bossData, arena);
 };
 
-// Wire item pickup events to quest system
+// Wire item pickup events to quest system + Phase 41 pickup sound
 lootManager.onItemPickup = (itemId, amount) => {
   questWorldHooks.onItemPickup(itemId, amount);
+  uiSounds.playItemPickup();
 };
 
 // Wire NPC interaction to quest system
@@ -640,6 +696,8 @@ discoveryManager.init({
   dungeonManager: dungeonManager,
 });
 gameManager.discoveryManager = discoveryManager;
+// Phase 41: Discovery chime
+discoveryManager.onDiscovery = () => uiSounds.playDiscoveryChime();
 
 // ========== WORLD MAP UI (Phase 27) ==========
 const worldMapUI = createWorldMapUI();
@@ -1023,6 +1081,10 @@ function animate() {
   }
   
   audioManager.updateListener();
+
+  // Phase 41: Ambient sound update (wind, birds, bonfire crackle, footsteps)
+  ambientSounds.update(delta, player.mesh);
+
   floatingText.update(delta);
   
   // Phase 32: Combat feedback
@@ -1245,6 +1307,10 @@ window.saveIntegration = saveIntegration;
 window.saveUI = saveUI;
 window.minimapManager = minimapManager;
 window.fastTravelManager = fastTravelManager;
+window.audioEngine = audioEngine;
+window.combatSounds = combatSounds;
+window.ambientSounds = ambientSounds;
+window.uiSounds = uiSounds;
 
 // Initialize equipment visuals after player is created
 gameManager.playerMesh = player.mesh;
