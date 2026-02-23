@@ -65,6 +65,7 @@ import { FireParticleManager } from './effects/FireParticleManager.js';
 import { AmbientParticleManager } from './effects/AmbientParticleManager.js';
 import { QuestArrow } from './ui/QuestArrow.js';
 import { GameTester } from './systems/GameTester.js';
+import { SettingsUI } from './ui/SettingsUI.js';
 
 // Phase 41: Procedural Audio (Web Audio API — no audio files)
 import audioEngine from './audio/AudioEngine.js';
@@ -739,6 +740,38 @@ const gameTester = new GameTester({
 });
 gameManager.gameTester = gameTester;
 
+// ========== SETTINGS MENU (Phase 42) ==========
+const settingsUI = new SettingsUI();
+gameManager.settingsUI = settingsUI;
+
+// Esc key → toggle settings (only if no other overlay is open)
+// M key → quick mute toggle
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    // If settings is open, close it
+    if (settingsUI.isOpen) {
+      settingsUI.close();
+      e.preventDefault();
+      return;
+    }
+    // Don't open settings if another menu is open
+    if (shopManager.isShopOpen() || inventoryUI.isOpen || dialogueManager.isDialogueActive()
+        || crucibleUI.isOpen || statsUI.isOpen || craftingUI.isOpen) {
+      return;
+    }
+    settingsUI.open();
+    e.preventDefault();
+  }
+  if (e.key === 'm' || e.key === 'M') {
+    // Don't trigger if typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    // Don't trigger if any text-entry overlay is active
+    if (dialogueManager.isDialogueActive()) return;
+    const muted = audioEngine.toggleMute();
+    settingsUI.showMuteToast(muted);
+  }
+});
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -831,7 +864,7 @@ function animate() {
   if (!inHitstop) {
     // Normal game update when not in hitstop
     // Don't update player movement when any UI is open
-    if (!shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive()) {
+    if (!shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive() && !settingsUI.isOpen) {
       player.update(delta);
     }
     enemyManager.update(delta, player);
@@ -951,7 +984,7 @@ function animate() {
   equipmentManager.updateWeaponGlow(delta, elapsedTime);
   
   // Weapon switching hotkeys (when not in UI) - 1-4 keys or Q to cycle
-  if (!gameManager.isDead && !shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive()) {
+  if (!gameManager.isDead && !shopManager.isShopOpen() && !inventoryUI.isOpen && !dialogueManager.isDialogueActive() && !settingsUI.isOpen) {
     if (inputManager.cycleWeapon) {
       weaponManager.cycleWeapon();
       if (audioManager) audioManager.play('itemPickup', { volume: 0.4 });
@@ -1001,12 +1034,12 @@ function animate() {
   
   // NPC interaction system (prompts, facing, labels)
   // Don't show interaction prompts if any UI is open
-  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !craftingUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !craftingUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive() && !settingsUI.isOpen) {
     interactionManager.update(player.mesh.position, delta);
   }
   
   // Gathering system (Phase 23) - update nodes and interaction
-  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !craftingUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive()) {
+  if (!gameManager.isDead && !crucibleUI.isOpen && !statsUI.isOpen && !inventoryUI.isOpen && !craftingUI.isOpen && !shopManager.isShopOpen() && !dialogueManager.isDialogueActive() && !settingsUI.isOpen) {
     gatheringManager.update(player.mesh.position.x, player.mesh.position.z, delta);
   }
   
@@ -1050,7 +1083,7 @@ function animate() {
   
   // Phase 24: Day/Night & Weather System updates
   // Pause time during menus/dialogue
-  const timeIsPaused = shopManager.isShopOpen() || inventoryUI.isOpen || dialogueManager.isDialogueActive() || crucibleUI.isOpen || statsUI.isOpen || craftingUI.isOpen;
+  const timeIsPaused = shopManager.isShopOpen() || inventoryUI.isOpen || dialogueManager.isDialogueActive() || crucibleUI.isOpen || statsUI.isOpen || craftingUI.isOpen || settingsUI.isOpen;
   if (timeIsPaused) {
     timeManager.pause();
   } else {
@@ -1143,7 +1176,7 @@ function animate() {
   const doorPrompt = document.getElementById('door-prompt');
   const doorNameEl = document.getElementById('door-name');
   
-  if (nearDoor && !crucibleUI.isOpen) {
+  if (nearDoor && !crucibleUI.isOpen && !settingsUI.isOpen) {
     doorPrompt.style.display = 'block';
     doorNameEl.textContent = nearDoor.name;
     
@@ -1167,7 +1200,7 @@ function animate() {
   const ladderPrompt = document.getElementById('ladder-prompt');
   const ladderNameEl = document.getElementById('ladder-name');
   
-  if (nearLadder && !crucibleUI.isOpen) {
+  if (nearLadder && !crucibleUI.isOpen && !settingsUI.isOpen) {
     ladderPrompt.style.display = 'block';
     ladderNameEl.textContent = nearLadder.id === 'shortcut-ladder' ? 'to Cathedral' : 'Ladder';
     
@@ -1191,7 +1224,7 @@ function animate() {
   const shortcutActionEl = document.getElementById('shortcut-action');
   const shortcutNameEl = document.getElementById('shortcut-name');
   
-  if (nearShortcut && !crucibleUI.isOpen) {
+  if (nearShortcut && !crucibleUI.isOpen && !settingsUI.isOpen) {
     shortcutPrompt.style.display = 'block';
     shortcutActionEl.textContent = 'remove bar from';
     shortcutNameEl.textContent = 'Shortcut Door';
@@ -1307,6 +1340,7 @@ window.saveIntegration = saveIntegration;
 window.saveUI = saveUI;
 window.minimapManager = minimapManager;
 window.fastTravelManager = fastTravelManager;
+window.settingsUI = settingsUI;
 window.audioEngine = audioEngine;
 window.combatSounds = combatSounds;
 window.ambientSounds = ambientSounds;
