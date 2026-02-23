@@ -67,6 +67,7 @@ import { QuestArrow } from './ui/QuestArrow.js';
 import { GameTester } from './systems/GameTester.js';
 import { SettingsUI } from './ui/SettingsUI.js';
 import { BlobShadowManager } from './world/BlobShadowManager.js';
+import { TouchControls } from './ui/TouchControls.js';
 
 // Phase 41: Procedural Audio (Web Audio API — no audio files)
 import audioEngine from './audio/AudioEngine.js';
@@ -135,7 +136,9 @@ const renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Cap pixel ratio: 1.5 on mobile for performance, 2 on desktop
+const isMobileDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobileDevice ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.LinearToneMapping;  // Was ACES (shifted terrain green→cyan)
@@ -162,11 +165,11 @@ const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-// Bloom pass - very subtle, only for true emissives
+// Bloom pass - very subtle, only for true emissives (reduced on mobile for perf)
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.15,  // strength - minimal bloom
-  0.2,   // radius - tight glow
+  isMobileDevice ? 0.08 : 0.15,  // strength - lower on mobile
+  isMobileDevice ? 0.1 : 0.2,    // radius
   0.95   // threshold - only very bright things bloom
 );
 composer.addPass(bloomPass);
@@ -190,6 +193,7 @@ gameManager.spellManager = spellManager; // Cross-reference for spell casting
 const spellCaster = new SpellCaster(gameManager, spellManager, null, null); // particleManager and audioManager set later
 gameManager.spellCaster = spellCaster; // Cross-reference for spell casting
 const inputManager = new InputManager(renderer.domElement);
+const touchControls = new TouchControls(inputManager);
 const audioManager = new AudioManager(camera);
 const particleManager = new ParticleManager(scene);
 const hud = new HUD(gameManager);

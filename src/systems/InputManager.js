@@ -4,6 +4,11 @@ export class InputManager {
     this.mouseButtons = {};
     this.mouseDelta = { x: 0, y: 0 };
     this.isLocked = false;
+    
+    // Mobile detection
+    this.isMobile = ('ontouchstart' in window) || 
+                    (navigator.maxTouchPoints > 0) ||
+                    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     // Input buffer for responsive combat
     this.buffer = {};
@@ -59,15 +64,23 @@ export class InputManager {
       }
     });
 
-    // Pointer lock
-    domElement.addEventListener('click', () => {
-      if (!this.isLocked) {
-        domElement.requestPointerLock();
-      }
-    });
+    // Pointer lock — skip on mobile (touch camera handles it)
+    if (!this.isMobile) {
+      domElement.addEventListener('click', () => {
+        if (!this.isLocked) {
+          domElement.requestPointerLock();
+        }
+      });
+    } else {
+      // On mobile, treat as always "locked" so camera controller processes mouse deltas
+      // (touch controls feed into mouseDelta directly)
+      this.isLocked = true;
+    }
 
     document.addEventListener('pointerlockchange', () => {
-      this.isLocked = document.pointerLockElement === domElement;
+      if (!this.isMobile) {
+        this.isLocked = document.pointerLockElement === domElement;
+      }
     });
 
     // Prevent context menu
