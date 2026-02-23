@@ -638,11 +638,29 @@ export class Enemy {
       this._applyModelTint(0x2a1a3a);
 
       // Set up shadows and store original materials
+      const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       this.gltfModel.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
-          child.userData.originalMaterial = child.material.clone();
+          // On mobile: convert to MeshBasicMaterial for guaranteed visibility
+          if (isMobile && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            const converted = mats.map(mat => {
+              const origColor = mat.color ? mat.color.clone() : new THREE.Color(0xaaaaaa);
+              origColor.multiplyScalar(1.2);
+              return new THREE.MeshBasicMaterial({
+                color: origColor,
+                map: mat.map || null,
+                transparent: mat.transparent || false,
+                opacity: mat.opacity !== undefined ? mat.opacity : 1,
+              });
+            });
+            child.material = converted.length === 1 ? converted[0] : converted;
+          }
+          child.userData.originalMaterial = Array.isArray(child.material) 
+            ? child.material.map(m => m.clone()) 
+            : child.material.clone();
         }
       });
 

@@ -158,6 +158,9 @@ export class TouchControls {
       #spell-hotbar { display: none !important; }
       #ability-container { display: none !important; }
       
+      /* Quest tracker: hide "Press J" text, compact on mobile */
+      #quest-hud-tracker .hud-tracker-empty { display: none !important; }
+      
       /* Hide keyboard prompts — replaced by touch buttons */
       #door-prompt { display: none !important; }
       #ladder-prompt { display: none !important; }

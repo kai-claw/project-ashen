@@ -346,11 +346,24 @@ export class Player {
           child.castShadow = true;
           child.receiveShadow = true;
           if (child.material) {
-            // Keep original colors visible — don't darken
-            // Add subtle emissive so character is always visible regardless of lighting
-            if (child.material.emissive) {
-              child.material.emissive.setHex(0x222222);
-              child.material.emissiveIntensity = isMobile ? 0.5 : 0.3;
+            if (isMobile) {
+              // On mobile: convert to MeshBasicMaterial so character is ALWAYS visible
+              // MeshStandardMaterial depends on lighting which can fail/be too dark on mobile
+              const origColor = child.material.color ? child.material.color.clone() : new THREE.Color(0xaaaaaa);
+              // Brighten slightly for mobile visibility
+              origColor.multiplyScalar(1.2);
+              child.material = new THREE.MeshBasicMaterial({
+                color: origColor,
+                map: child.material.map || null,
+                transparent: child.material.transparent || false,
+                opacity: child.material.opacity !== undefined ? child.material.opacity : 1,
+              });
+            } else {
+              // Desktop: keep original materials, add subtle emissive for visibility
+              if (child.material.emissive) {
+                child.material.emissive.setHex(0x222222);
+                child.material.emissiveIntensity = 0.3;
+              }
             }
           }
           // Store original material for flash effects
