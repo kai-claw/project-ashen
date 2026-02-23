@@ -9025,7 +9025,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Jc(t.i
             <span>⭐ ${s.rewards.xp} XP</span>
           </div>
         </div>
-      `).join(""),t.querySelectorAll(".notice-quest").forEach(s=>{s.onclick=()=>{const n=s.dataset.quest;this.questManager?.acceptQuest(n)?.success&&(e.classList.remove("show"),this.updateAllMarkers())}})),e.classList.add("show")}updateAllMarkers(){this.npcs.forEach(e=>{e.updateMarker(this.questManager)})}update(e,t){if(this.npcs.forEach(i=>{i.update(e)}),t){const i=this.getNearestNPC(t);i?this._showInteractionPrompt(i.config.name):this._hideInteractionPrompt()}}_getInteractionPromptEl(){if(!this._interactionPrompt){const e=document.createElement("div");e.id="npc-interact-prompt",e.style.cssText=`
+      `).join(""),t.querySelectorAll(".notice-quest").forEach(s=>{s.onclick=()=>{const n=s.dataset.quest;this.questManager?.acceptQuest(n)?.success&&(e.classList.remove("show"),this.updateAllMarkers())}})),e.classList.add("show")}updateAllMarkers(){this.npcs.forEach(e=>{e.updateMarker(this.questManager)})}update(e,t){if(this.npcs.forEach(i=>{i.update(e)}),t){const i=this.getNearestNPC(t);i?this._showInteractionPrompt(i.npcData.name):this._hideInteractionPrompt()}}_getInteractionPromptEl(){if(!this._interactionPrompt){const e=document.createElement("div");e.id="npc-interact-prompt",e.style.cssText=`
         position: fixed;
         bottom: 30%;
         left: 50%;
@@ -10879,7 +10879,7 @@ Beware: ${t.boss.name} lurks within`})}_populateCombatRoom(e,t,i){const s=Jc(t.i
       .npc-qm-icon {
         font-size: 24px;
         font-weight: bold;
-        font-family: 'Georgia', serif;
+        font-family: 'Cinzel', serif;
         line-height: 1;
         animation: npcQmBob 2s ease-in-out infinite;
         text-shadow: 0 0 8px currentColor, 0 2px 4px rgba(0,0,0,0.8);
