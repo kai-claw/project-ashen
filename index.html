@@ -419,7 +419,7 @@
       padding-top: 12px;
     }
   </style>
-  <script type="module" crossorigin src="/project-ashen/assets/index-O0H10xbu.js"></script>
+  <script type="module" crossorigin src="/project-ashen/assets/index-DuMgHG_C.js"></script>
 </head>
 <body>
   <div id="hud">
@@ -535,5 +535,33 @@
     </div>
   </div>
   
+  <!-- Phase 44: Loading screen -->
+  <div id="loading-screen" style="
+    position:fixed; inset:0; z-index:9999;
+    background:#0a0a0f;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:16px;
+    transition:opacity 0.5s ease;
+  ">
+    <h1 style="
+      font-family:'Cinzel',Georgia,serif; font-size:40px; color:#DAA520;
+      letter-spacing:6px; margin:0; text-shadow:0 0 30px rgba(218,165,32,0.4);
+    ">PROJECT ASHEN</h1>
+    <p style="
+      font-family:'Cinzel',Georgia,serif; font-size:18px; color:#e0d0b0;
+      letter-spacing:2px; margin:0; opacity:0.7;
+    ">A Souls-like Adventure</p>
+    <div style="
+      width:36px; height:36px; margin-top:20px;
+      border:3px solid rgba(218,165,32,0.2);
+      border-top:3px solid #DAA520;
+      border-radius:50%;
+      animation:ashen-spin 0.9s linear infinite;
+    "></div>
+  </div>
+  <style>
+    @keyframes ashen-spin { to { transform:rotate(360deg); } }
+  </style>
+
 </body>
 </html>
