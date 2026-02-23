@@ -313,13 +313,75 @@ export class Player {
     rightFoot.castShadow = true;
     this.mesh.add(rightFoot);
     
+    // === Phase 45: ENHANCED ARMOR DETAILS ===
+    const detailMat = new THREE.MeshBasicMaterial({ color: 0xbbbbcc }); // Lighter chestplate
+    const darkMat = new THREE.MeshBasicMaterial({ color: 0x666670 }); // Iron gray
+
+    // Chestplate (layered over torso)
+    const chestplateGeo = new THREE.BoxGeometry(0.7, 0.15, 0.5);
+    const chestplate = new THREE.Mesh(chestplateGeo, detailMat);
+    chestplate.position.set(0, 1.2, 0.05);
+    chestplate.castShadow = true;
+    this.mesh.add(chestplate);
+
+    // Shoulder pauldrons
+    const pauldronGeo = new THREE.SphereGeometry(0.15, 10, 8);
+    const leftPauldron = new THREE.Mesh(pauldronGeo, darkMat);
+    leftPauldron.position.set(-0.42, 1.42, 0);
+    leftPauldron.scale.set(1, 0.6, 1);
+    leftPauldron.castShadow = true;
+    this.mesh.add(leftPauldron);
+
+    const rightPauldron = new THREE.Mesh(pauldronGeo, darkMat);
+    rightPauldron.position.set(0.42, 1.42, 0);
+    rightPauldron.scale.set(1, 0.6, 1);
+    rightPauldron.castShadow = true;
+    this.mesh.add(rightPauldron);
+
+    // Cape (dark red, hanging from shoulders)
+    const capeMat = new THREE.MeshBasicMaterial({
+      color: 0x8B0000, side: THREE.DoubleSide, transparent: true, opacity: 0.9,
+    });
+    const capeGeo = new THREE.PlaneGeometry(0.6, 1.0, 4, 6);
+    // Slight backward curve
+    const capeVerts = capeGeo.attributes.position;
+    for (let i = 0; i < capeVerts.count; i++) {
+      const y = capeVerts.getY(i);
+      capeVerts.setZ(i, -0.05 - y * 0.08);
+    }
+    capeGeo.computeVertexNormals();
+    this.cape = new THREE.Mesh(capeGeo, capeMat);
+    this.cape.position.set(0, 1.0, -0.22);
+    this.cape.rotation.x = 0.1;
+    this.cape.castShadow = true;
+    this.mesh.add(this.cape);
+
+    // Belt (dark strip at waist)
+    const beltGeo = new THREE.BoxGeometry(0.72, 0.06, 0.42);
+    const belt = new THREE.Mesh(beltGeo, new THREE.MeshBasicMaterial({ color: 0x4a3a2a }));
+    belt.position.set(0, 0.82, 0);
+    this.mesh.add(belt);
+
+    // Boot cuffs (torus at ankles)
+    const cuffGeo = new THREE.TorusGeometry(0.09, 0.025, 6, 10);
+    const cuffMat = new THREE.MeshBasicMaterial({ color: 0x5a5a60 });
+    const leftCuff = new THREE.Mesh(cuffGeo, cuffMat);
+    leftCuff.position.set(-0.15, 0.12, 0);
+    leftCuff.rotation.x = Math.PI / 2;
+    this.mesh.add(leftCuff);
+    const rightCuff = new THREE.Mesh(cuffGeo, cuffMat);
+    rightCuff.position.set(0.15, 0.12, 0);
+    rightCuff.rotation.x = Math.PI / 2;
+    this.mesh.add(rightCuff);
+
     // Store all fallback parts for visibility toggling
     this.fallbackParts = [
       this.fallbackBody, this.fallbackHead, this.visor,
       leftUpperArm, rightUpperArm, leftForearm, rightForearm,
       leftHand, leftFingers, leftKnuckles, rightHand, rightFingers, rightKnuckles,
       leftUpperLeg, rightUpperLeg, leftLowerLeg, rightLowerLeg,
-      leftFoot, rightFoot
+      leftFoot, rightFoot,
+      chestplate, leftPauldron, rightPauldron, this.cape, belt, leftCuff, rightCuff
     ];
 
     // Reference for damage flash
@@ -464,6 +526,15 @@ export class Player {
     // Update animation mixer
     if (this.animSystem) {
       this.animSystem.update(delta);
+    }
+
+    // Phase 45: Idle breathing + cape flutter
+    this._idleTime = (this._idleTime || 0) + delta;
+    if (this.fallbackBody) {
+      this.fallbackBody.scale.y = 1.0 + Math.sin(this._idleTime * 1.5) * 0.03;
+    }
+    if (this.cape) {
+      this.cape.rotation.x = 0.1 + Math.sin(this._idleTime * 2) * 0.05;
     }
 
     this.stateTimer += delta;

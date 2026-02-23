@@ -592,6 +592,33 @@ export class Enemy {
         break;
     }
     
+    // Phase 45: Visual variety — random tint and scale variation per enemy
+    if (modelType === 'standard') {
+      const tints = [
+        { r: 1.0, g: 1.0, b: 1.0 }, // Normal
+        { r: 1.3, g: 0.9, b: 0.9 }, // Reddish
+        { r: 0.9, g: 1.2, b: 0.9 }, // Greenish
+        { r: 0.95, g: 0.95, b: 1.15 }, // Bluish
+      ];
+      const tint = tints[Math.floor(Math.random() * tints.length)];
+      const scaleVar = 0.9 + Math.random() * 0.2; // 0.9-1.1
+      proceduralModel.scale.multiplyScalar(scaleVar);
+      // Apply tint to body materials
+      proceduralModel.traverse(child => {
+        if (child.isMesh && child.material && child.material.color) {
+          const c = child.material.color;
+          child.material = child.material.clone(); // Don't mutate shared mat
+          child.material.color.setRGB(
+            Math.min(1, c.r * tint.r),
+            Math.min(1, c.g * tint.g),
+            Math.min(1, c.b * tint.b)
+          );
+        }
+      });
+      // Hunched posture
+      proceduralModel.rotation.x = 0.12;
+    }
+
     // Store reference to procedural model
     this.proceduralModel = proceduralModel;
     this.mesh.add(proceduralModel);

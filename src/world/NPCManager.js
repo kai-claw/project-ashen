@@ -227,8 +227,8 @@ export class NPCManager {
         break;
         
       case 'elder':
-        // Walking staff
-        this._addStaff(group, legHeight, bodyHeight, bodyRadius);
+        // Phase 45: Enhanced elder with robe, staff+orb, hood, beard
+        this._addElderDetails(group, legHeight, bodyHeight, bodyRadius);
         break;
         
       default:
@@ -336,6 +336,66 @@ export class NPCManager {
     group.add(top);
   }
   
+  /**
+   * Phase 45: Enhanced elder model — long robe, ornate staff, hood, beard
+   */
+  _addElderDetails(group, legHeight, bodyHeight, bodyRadius) {
+    const robeMat = this._getOrCreateMaterial(0x2E1A47); // Dark purple
+    const woodMat = this._getOrCreateMaterial(0x8B4513);
+
+    // Extended robe (wider box below waist, covers legs)
+    const robeGeo = new THREE.BoxGeometry(bodyRadius * 2.4, bodyHeight * 0.6, bodyRadius * 1.8);
+    const robe = new THREE.Mesh(robeGeo, robeMat);
+    robe.position.set(0, legHeight * 0.5, 0);
+    robe.castShadow = true;
+    group.add(robe);
+
+    // Hood (hemisphere on head)
+    const hoodGeo = new THREE.SphereGeometry(0.24, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.6);
+    const hood = new THREE.Mesh(hoodGeo, robeMat);
+    hood.position.set(0, legHeight + bodyHeight + 0.12, -0.03);
+    hood.castShadow = true;
+    group.add(hood);
+
+    // Beard (inverted cone below chin)
+    const beardMat = this._getOrCreateMaterial(0xAAAAAA);
+    const beardGeo = new THREE.ConeGeometry(0.08, 0.22, 6);
+    const beard = new THREE.Mesh(beardGeo, beardMat);
+    beard.position.set(0, legHeight + bodyHeight - 0.05, bodyRadius + 0.08);
+    beard.rotation.x = Math.PI; // Point downward
+    beard.castShadow = true;
+    group.add(beard);
+
+    // Staff (tall, ornate)
+    const staffLength = 2.0;
+    const staffGeo = new THREE.CylinderGeometry(0.04, 0.04, staffLength, 6);
+    const staff = new THREE.Mesh(staffGeo, woodMat);
+    staff.position.set(bodyRadius + 0.25, staffLength / 2, 0.1);
+    staff.rotation.z = 0.08;
+    staff.castShadow = true;
+    group.add(staff);
+
+    // Amber orb on top of staff
+    const orbMat = this._getOrCreateMaterial(0xDDAA00);
+    const orbGeo = new THREE.SphereGeometry(0.1, 10, 8);
+    const orb = new THREE.Mesh(orbGeo, orbMat);
+    orb.position.set(bodyRadius + 0.25 + staffLength * 0.04, staffLength + 0.08, 0.1);
+    group.add(orb);
+
+    // Staff orb glow light
+    const orbLight = new THREE.PointLight(0xDDAA00, 0.6, 5);
+    orbLight.position.copy(orb.position);
+    group.add(orbLight);
+
+    // Slight forward lean for elderly posture
+    group.children.forEach(child => {
+      if (child !== robe && child !== staff && child !== orb && child !== orbLight) return;
+    });
+    // Apply lean to entire group subtly by tilting the body parts forward
+    // (We offset rotation after creation so existing facing isn't overwritten)
+    group.userData.isElder = true;
+  }
+
   // ========================================
   // PUBLIC API
   // ========================================
@@ -380,11 +440,36 @@ export class NPCManager {
   }
   
   /**
-   * Update NPCs (for future idle animations)
+   * Update NPCs — Phase 45: idle animations (breathing, head bob)
    */
   update(deltaTime) {
-    // Future: add idle animations like head turning, weight shifting
-    // For now, NPCs are static
+    this._elapsed = (this._elapsed || 0) + deltaTime;
+    const t = this._elapsed;
+
+    for (let i = 0; i < this.npcs.length; i++) {
+      const npc = this.npcs[i];
+      const group = npc.mesh;
+      if (!group || !group.children) continue;
+
+      // Each NPC has a phase offset so they don't all sync
+      const offset = i * 1.7;
+
+      // Body breathing (child 0 is the body cylinder)
+      const body = group.children[0];
+      if (body) body.scale.y = 1.0 + Math.sin((t + offset) * 1.5) * 0.025;
+
+      // Head bob (child 3 is the head sphere)
+      const head = group.children[3];
+      if (head && head.userData._baseY === undefined) {
+        head.userData._baseY = head.position.y;
+      }
+      if (head && head.userData._baseY !== undefined) {
+        head.position.y = head.userData._baseY + Math.sin((t + offset) * 2) * 0.015;
+      }
+
+      // Slight body sway
+      group.rotation.y += Math.sin((t + offset) * 0.8) * 0.0002;
+    }
   }
   
   /**
