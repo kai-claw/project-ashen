@@ -214,4 +214,111 @@ export class CombatSounds {
     osc.start(t);
     osc.stop(t + dur + 0.01);
   }
+
+  /* ================================================================
+   *  DODGE — quick airy whoosh (noise through bandpass, fast sweep)
+   * ================================================================ */
+  playDodge() {
+    if (!audioEngine.ready) return;
+    if (!this._cd('dodge', 200)) return;
+
+    const ctx = audioEngine.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.18;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this._noise();
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.5;
+    bp.frequency.setValueAtTime(1500, t);
+    bp.frequency.exponentialRampToValueAtTime(400, t + dur);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.25, t + 0.02);
+    env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    src.connect(bp).connect(env).connect(audioEngine.getCategoryGain('sfx'));
+    src.start(t);
+    src.stop(t + dur + 0.01);
+  }
+
+  /* ================================================================
+   *  BLOCK — dull metallic thud (low osc + filtered noise, shorter than hit)
+   * ================================================================ */
+  playBlock() {
+    if (!audioEngine.ready) return;
+    if (!this._cd('block', 150)) return;
+
+    const ctx = audioEngine.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.08;
+    const dest = audioEngine.getCategoryGain('sfx');
+
+    // Low thud
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + dur);
+
+    const oscG = ctx.createGain();
+    oscG.gain.setValueAtTime(0.3, t);
+    oscG.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    // Metallic noise layer
+    const nSrc = ctx.createBufferSource();
+    nSrc.buffer = this._noise();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2500;
+    bp.Q.value = 3;
+
+    const nG = ctx.createGain();
+    nG.gain.setValueAtTime(0.15, t);
+    nG.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.6);
+
+    osc.connect(oscG).connect(dest);
+    nSrc.connect(bp).connect(nG).connect(dest);
+    osc.start(t); osc.stop(t + dur + 0.01);
+    nSrc.start(t); nSrc.stop(t + dur + 0.01);
+  }
+
+  /* ================================================================
+   *  PLAYER DEATH — deep descending tone + reverb-like tail
+   * ================================================================ */
+  playPlayerDeath() {
+    if (!audioEngine.ready) return;
+
+    const ctx = audioEngine.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.8;
+    const dest = audioEngine.getCategoryGain('sfx');
+
+    // Deep descending tone
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(300, t);
+    osc.frequency.exponentialRampToValueAtTime(50, t + dur);
+
+    const oscG = ctx.createGain();
+    oscG.gain.setValueAtTime(0.25, t);
+    oscG.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    // Low rumble layer
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(80, t);
+    osc2.frequency.exponentialRampToValueAtTime(30, t + dur);
+
+    const osc2G = ctx.createGain();
+    osc2G.gain.setValueAtTime(0.2, t);
+    osc2G.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    osc.connect(oscG).connect(dest);
+    osc2.connect(osc2G).connect(dest);
+    osc.start(t); osc.stop(t + dur + 0.02);
+    osc2.start(t); osc2.stop(t + dur + 0.02);
+  }
 }

@@ -259,7 +259,10 @@ const landmarkManager = new LandmarkManager(scene, world.terrain);
 const grassManager = new GrassManager(scene, world.terrain);
 
 // Phase 41: Init ambient sounds with bonfire position
-ambientSounds.init({ bonfirePosition: world.bonfirePosition });
+ambientSounds.init({ 
+  bonfirePosition: world.bonfirePosition,
+  torchPositions: world._torchPositions || []
+});
 
 // --- Phase 35: Fire Particles & Ambient Effects ---
 const fireParticleManager = new FireParticleManager(scene);
@@ -644,10 +647,11 @@ lootManager.onItemPickup = (itemId, amount) => {
   uiSounds.playItemPickup();
 };
 
-// Wire NPC interaction to quest system
+// Wire NPC interaction to quest system + NPC talk sound
 const originalDialogueStart = dialogueManager.startDialogue.bind(dialogueManager);
 dialogueManager.startDialogue = (npc) => {
   questWorldHooks.onNpcInteraction(npc.id || npc.name, npc);
+  uiSounds.playNPCTalk();
   
   // Check if NPC is a quest giver (Phase 25 - Worker 2)
   if (npcQuestGivers && npcQuestGivers.getNPCById(npc.id || npc.name?.toLowerCase().replace(/\s+/g, '_'))) {
@@ -1132,7 +1136,9 @@ function animate() {
   
   audioManager.updateListener();
 
-  // Phase 41: Ambient sound update (wind, birds, bonfire crackle, footsteps)
+  // Phase 41: Ambient sound update (wind, birds, bonfire crackle, footsteps, crickets)
+  const isNight = timeManager.currentHour >= 20 || timeManager.currentHour < 5;
+  ambientSounds.setTimeOfDay(isNight);
   ambientSounds.update(delta, player.mesh);
 
   floatingText.update(delta);

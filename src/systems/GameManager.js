@@ -792,6 +792,8 @@ export class GameManager {
         this.useStamina(blockCost);
         finalDamage = Math.floor(finalDamage * 0.2);
         postureDmg *= 0.5;
+        // Block impact sound
+        if (this.combatSounds) this.combatSounds.playBlock();
       } else {
         // Guard broken
         this.stamina = 0;
@@ -842,7 +844,9 @@ export class GameManager {
     this.health = 0;
     
     // Play death sound
-    if (this.audioManager) {
+    if (this.combatSounds) {
+      this.combatSounds.playPlayerDeath();
+    } else if (this.audioManager) {
       this.audioManager.play('death', { volume: 0.8 });
     }
 

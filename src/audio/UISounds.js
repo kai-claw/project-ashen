@@ -204,6 +204,146 @@ export class UISounds {
   }
 
   /* ================================================================
+   *  CHEST OPEN — creaky hinge (low noise sweep) + latch click
+   * ================================================================ */
+  playChestOpen() {
+    if (!audioEngine.ready) return;
+    if (!this._cd('chest', 500)) return;
+
+    const ctx = audioEngine.ctx;
+    const t = ctx.currentTime;
+    const dest = audioEngine.getCategoryGain('sfx');
+
+    // Creaky hinge: filtered noise sweep
+    const buf = this._noise();
+    if (buf) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 5;
+      bp.frequency.setValueAtTime(300, t);
+      bp.frequency.linearRampToValueAtTime(800, t + 0.15);
+      bp.frequency.linearRampToValueAtTime(400, t + 0.25);
+
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.15, t);
+      env.gain.linearRampToValueAtTime(0.2, t + 0.1);
+      env.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+      src.connect(bp).connect(env).connect(dest);
+      src.start(t);
+      src.stop(t + 0.35);
+    }
+
+    // Latch click (short high noise pop after hinge)
+    const clickBuf = this._noise();
+    if (clickBuf) {
+      const click = ctx.createBufferSource();
+      click.buffer = clickBuf;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 3000;
+      const cEnv = ctx.createGain();
+      cEnv.gain.setValueAtTime(0, t + 0.12);
+      cEnv.gain.linearRampToValueAtTime(0.25, t + 0.125);
+      cEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+      click.connect(hp).connect(cEnv).connect(dest);
+      click.start(t + 0.12);
+      click.stop(t + 0.16);
+    }
+  }
+
+  /* ================================================================
+   *  NPC TALK — soft chime when opening NPC dialogue
+   * ================================================================ */
+  playNPCTalk() {
+    if (!audioEngine.ready) return;
+    if (!this._cd('npc', 300)) return;
+
+    const ctx = audioEngine.ctx;
+    const t = ctx.currentTime;
+    const dest = audioEngine.getCategoryGain('ui');
+
+    // Gentle two-note chime (lower and warmer than quest accept)
+    const notes = [NOTE.E4, NOTE.G4];
+    notes.forEach((freq, i) => {
+      const start = t + i * 0.08;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.12, start);
+      env.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+
+      osc.connect(env).connect(dest);
+      osc.start(start);
+      osc.stop(start + 0.3);
+    });
+  }
+
+  /* ================================================================
+   *  REST POINT — warm resonant tone when reaching a rest point
+   * ================================================================ */
+  playRestPoint() {
+    if (!audioEngine.ready) return;
+    if (!this._cd('rest', 2000)) return;
+
+    const ctx = audioEngine.ctx;
+    const t = ctx.currentTime;
+    const dur = 1.0;
+    const dest = audioEngine.getCategoryGain('ui');
+
+    // Warm sustained chord (C4 + G4)
+    [NOTE.C4, NOTE.G4].forEach(freq => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, t);
+      env.gain.linearRampToValueAtTime(0.1, t + 0.15);
+      env.gain.setValueAtTime(0.1, t + dur * 0.5);
+      env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+      osc.connect(env).connect(dest);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+    });
+  }
+
+  /* ================================================================
+   *  MENU OPEN — soft low swoosh
+   * ================================================================ */
+  playMenuOpen() {
+    if (!audioEngine.ready) return;
+    if (!this._cd('menuopen', 200)) return;
+
+    const ctx = audioEngine.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.12;
+
+    const buf = this._noise();
+    if (!buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(800, t);
+    lp.frequency.exponentialRampToValueAtTime(200, t + dur);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.12, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    src.connect(lp).connect(env).connect(audioEngine.getCategoryGain('ui'));
+    src.start(t);
+    src.stop(t + dur + 0.01);
+  }
+
+  /* ================================================================
    *  QUEST COMPLETE — descending triumphant chord G5 → E5 → C5
    * ================================================================ */
   playQuestComplete() {

@@ -573,6 +573,11 @@ export class ChestManager {
     this._hideInteractPrompt();
     this.nearbyChest = null;
     
+    // Play chest open sound
+    if (this.lootManager?.gameManager?.uiSounds) {
+      this.lootManager.gameManager.uiSounds.playChestOpen();
+    }
+    
     // Mark as opened for persistence
     this.openedChests[chestData.key] = Date.now();
     this._saveOpenedChests();
