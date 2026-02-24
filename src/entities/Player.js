@@ -112,7 +112,7 @@ export class Player {
     // Directions
     this.moveDir = new THREE.Vector3();
     this.dodgeDir = new THREE.Vector3();
-    this.facingAngle = 0; // Face north (+Z, away from castle, into open world)
+    this.facingAngle = Math.PI; // Phase 46: Face north (+Z), model faces outward through gate
 
     // GLTF model state
     this.modelLoaded = false;

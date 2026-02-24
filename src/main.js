@@ -67,6 +67,7 @@ import { QuestArrow } from './ui/QuestArrow.js';
 import { GameTester } from './systems/GameTester.js';
 import { SettingsUI } from './ui/SettingsUI.js';
 import { BlobShadowManager } from './world/BlobShadowManager.js';
+import { TutorialArrow } from './ui/TutorialArrow.js';
 import { TouchControls } from './ui/TouchControls.js';
 
 // Phase 41: Procedural Audio (Web Audio API — no audio files)
@@ -759,6 +760,18 @@ if (world.npcManager && world.npcManager.npcs) {
   blobShadows.initNPCs(world.npcManager.npcs);
 }
 
+// ========== TUTORIAL ARROW (Phase 46) ==========
+// Point toward Elder Marcus when camera faces away from him
+const tutorialArrow = (() => {
+  // Find the first elder NPC position (or fall back to bonfire area)
+  let elderPos = world.bonfirePosition ? world.bonfirePosition.clone() : new THREE.Vector3(0, 0, -5);
+  if (world.npcManager && world.npcManager.npcs) {
+    const elder = world.npcManager.npcs.find(n => n.type === 'elder');
+    if (elder && elder.position) elderPos = elder.position.clone();
+  }
+  return new TutorialArrow(elderPos);
+})();
+
 // ========== SETTINGS MENU (Phase 42) ==========
 const settingsUI = new SettingsUI();
 gameManager.settingsUI = settingsUI;
@@ -1150,6 +1163,11 @@ function animate() {
   
   // Phase 43: Blob shadows under entities
   blobShadows.update(delta, enemyManager.enemies);
+
+  // Phase 46: Tutorial arrow (dismiss when player faces NPC)
+  if (tutorialArrow && !tutorialArrow.isDismissed) {
+    tutorialArrow.update(delta, camera);
+  }
 
   // Phase 33: NPC quest markers
   npcMarkerManager.update(delta, player.mesh.position);

@@ -373,7 +373,7 @@ export class World {
     const WALL_THICKNESS = 2;
     const TOWER_SIZE = 8;
     const TOWER_HEIGHT = 5; // Reduced from 12 to match lower walls
-    const GATE_WIDTH = 6;
+    const GATE_WIDTH = 8; // Phase 46: widened from 6 for dramatic outward view
     
     // Castle materials — warm sandstone tones with canvas textures (Phase 36)
     const brickTex = TextureFactory.createStoneBrickTexture(256, 256);
@@ -593,6 +593,25 @@ export class World {
     col2.scale.set(0.8, 0.7, 0.8);
     col2.position.set(7, 0.77, 12);
     this.scene.add(col2);
+
+    // Phase 46: Scattered rocks outside gate for visual interest in starting view
+    const rockMat = new THREE.MeshBasicMaterial({ color: 0x6B6358 });
+    const rockDefs = [
+      { pos: [-5, 0, halfD + 12], r: 0.6, sy: 0.5 },
+      { pos: [7, 0, halfD + 18], r: 0.45, sy: 0.4 },
+      { pos: [-3, 0, halfD + 22], r: 0.35, sy: 0.3 },
+      { pos: [4, 0, halfD + 8], r: 0.5, sy: 0.45 },
+    ];
+    for (const rd of rockDefs) {
+      const rGeo = new THREE.DodecahedronGeometry(rd.r, 0);
+      const rock = new THREE.Mesh(rGeo, rockMat);
+      const th = this.terrain ? this.terrain.getTerrainHeight(rd.pos[0], rd.pos[2]) : 0;
+      rock.position.set(rd.pos[0], (isNaN(th) ? 0 : th) + rd.r * rd.sy * 0.5, rd.pos[2]);
+      rock.scale.set(1, rd.sy, 1);
+      rock.rotation.y = Math.random() * Math.PI * 2;
+      rock.castShadow = true;
+      this.scene.add(rock);
+    }
 
     // Atmospheric haze plane at gate opening
     const hazeGeo = new THREE.PlaneGeometry(GATE_WIDTH + 2, WALL_HEIGHT + 2);
